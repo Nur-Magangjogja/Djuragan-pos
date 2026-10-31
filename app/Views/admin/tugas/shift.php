@@ -106,7 +106,7 @@ $sudah_lewat = count(array_filter($baris, static fn ($b) => $b['lewat']));
         <h2><i class="fal fa-broom me-1"></i> Operan otomatis</h2>
         <p class="shift-hint">
             Sistem memeriksa sendiri paling banyak satu kali tiap lima menit, yaitu setiap kali halaman
-            Antrean Tugas atau badge angka dibuka. Kalau hosting punya cron, jalankan
+            layar Tugas CS atau badge angka dibuka. Kalau hosting punya cron, jalankan
             <code>php spark crm:operan</code> setiap menit — hasilnya sama, hanya lebih pasti waktunya.
         </p>
         <p class="shift-cek mb-2">

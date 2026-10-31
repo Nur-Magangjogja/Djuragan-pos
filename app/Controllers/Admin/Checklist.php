@@ -22,6 +22,10 @@ class Checklist extends BaseController
     {
         helper('fungsi');
 
+        // layar tugas lain mengandalkan sapuan ini juga; di sini ia menjaga supaya
+        // sesi yang seharusnya dioper/diingatkan tidak tertahan
+        $this->sapuTugasKalauWaktu();
+
         $model = new ChecklistModel();
         $s     = $this->saring();
         $batas = $this->batas();
@@ -30,7 +34,7 @@ class Checklist extends BaseController
         $page  = max(1, min($page, max(1, (int) ceil($total / $batas))));
 
         return view('admin/checklist/index', [
-            'title'   => 'Checklist Harian',
+            'title'   => 'Cek Toko',
             's'       => $s,
             'baris'   => $model->daftar($s, $batas, ($page - 1) * $batas),
             'total'   => $total,
@@ -61,34 +65,28 @@ class Checklist extends BaseController
         ]);
     }
 
-    /** Buka (atau lanjutkan) sesi satu sasaran pada satu tanggal. */
+    /** Buka (atau lanjutkan) lembar pemeriksaan satu toko pada satu tanggal. */
     public function mulai()
     {
         helper('fungsi');
 
-        $jenis   = (string) $this->request->getPost('jenis') === 'email' ? 'email' : 'toko';
+        // lembar email tidak dibuka dari sini lagi: cek email sekarang murni catatan
+        // lewat menu Cek Email. Sesi email lama tetap bisa dibuka dan dibaca.
+        if ((string) $this->request->getPost('jenis') === 'email') {
+            return redirect()->to(site_url('admin/tugas/email'))
+                ->with('sukses', 'Pemeriksaan email dicatat sebagai catatan biasa, bukan lembar checklist lagi.');
+        }
+
         $tanggal = $this->tanggal((string) $this->request->getPost('tanggal')) ?: date('Y-m-d');
         $model   = new ChecklistModel();
 
-        if ($jenis === 'email') {
-            $akun = mb_substr(trim((string) $this->request->getPost('akun_email')), 0, 120);
+        $toko_id = (int) $this->request->getPost('toko_id');
 
-            if ($akun === '' || ! filter_var($akun, FILTER_VALIDATE_EMAIL)) {
-                return redirect()->back()->with('galat', 'Isi akun email yang benar (mis. halo@toko.com).')->withInput();
-            }
-
-            $toko_id = null;
-        } else {
-            $toko_id = (int) $this->request->getPost('toko_id');
-
-            if ($toko_id < 1 || ! $this->bolehToko($toko_id)) {
-                return redirect()->back()->with('galat', 'Pilih toko yang benar — toko itu bukan milikmu.')->withInput();
-            }
-
-            $akun = null;
+        if ($toko_id < 1 || ! $this->bolehToko($toko_id)) {
+            return redirect()->back()->with('galat', 'Pilih toko yang benar — toko itu bukan milikmu.')->withInput();
         }
 
-        $sesi = $model->mulai($jenis, $toko_id, $akun, $tanggal, (int) session()->get('id'));
+        $sesi = $model->mulai('toko', $toko_id, null, $tanggal, (int) session()->get('id'));
 
         return redirect()->to(site_url('admin/checklist/' . (int) $sesi['run']['id_run']))
             ->with('sukses', $sesi['dibuat'] ? 'Sesi dibuka, tugasnya masuk antrean.' : 'Sesi hari itu sudah pernah dibuka — lanjutkan di sini.');
@@ -285,7 +283,9 @@ class Checklist extends BaseController
         $tanggal = $this->tanggal((string) $this->request->getGet('tanggal'));
 
         return [
-            'jenis'        => array_key_exists($jenis, ChecklistModel::JENIS) ? $jenis : '',
+            // layar ini adalah 'Cek Toko': lembar hari ini saja yang ditampilkan lebih
+            // dulu; lembar email lama masih bisa dibuka lewat penyaring jenis
+            'jenis'        => array_key_exists($jenis, ChecklistModel::JENIS) ? $jenis : 'toko',
             'status'       => in_array($status, ['berjalan', 'selesai'], true) ? $status : '',
             'tanggal'      => $tanggal,
             'toko_id'      => (int) $this->request->getGet('toko'),

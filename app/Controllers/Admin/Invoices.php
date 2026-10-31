@@ -88,7 +88,10 @@ class Invoices extends BaseController
         if ($juragan !== 'semua') {
             $juragans = $juraganModel->where('juragan', $juragan)->findAll();
             if (count($juragans) < 1) {
-                return redirect()->to('/faktur?juragan_notfound=' . $juragan);
+                // '/faktur' nama halaman sistem lama yang tidak lagi punya rute:
+                // tujuannya daftar Tracking Transaksi, lengkap dengan penanda tokonya
+                return redirect()->to(site_url('admin/invoices/lihat/semua/semua')
+                    . '?juragan_notfound=' . rawurlencode((string) $juragan));
             }
             $title      = $juragans[0]->nama_juragan;
             $id_juragan = $juragans[0]->id_juragan;

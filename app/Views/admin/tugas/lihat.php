@@ -11,6 +11,7 @@
  * @var ?array $ulasan baris crm_ulasan nota terkait, atau null
  * @var array $staf    id => nama untuk dropdown penetapan
  * @var bool  $boleh_bagi akun ini admin/superadmin
+ * @var bool  $boleh_kelola akun ini admin/superadmin; yang boleh membatalkan tugas
  * @var array $pilihan label status & prioritas
  */
 
@@ -87,7 +88,7 @@ $jam = static function (?int $detik): string {
 
 <div class="container-xxl tugas-rinci">
 
-    <a class="tugas-kembali mt-4" href="<?= esc(site_url('admin/tugas')) ?>">
+    <a class="tugas-kembali mt-4" href="<?= esc($kembali ?? site_url('admin/tugas')) ?>">
         <i class="fal fa-arrow-alt-left"></i> Kembali ke antrean
     </a>
 
@@ -259,7 +260,7 @@ $jam = static function (?int $detik): string {
                 </form>
             <?php endif; ?>
 
-            <?php if ($terbuka && $milik_saya) : ?>
+            <?php if ($terbuka && $milik_saya && $boleh_kelola) : ?>
                 <form method="post" action="<?= esc(site_url('admin/tugas/status/' . (int) $tugas['id_tugas'])) ?>">
                     <?= csrf_field() ?>
                     <input type="hidden" name="status" value="cancelled">
@@ -285,7 +286,7 @@ $jam = static function (?int $detik): string {
                 </form>
             <?php endif; ?>
 
-            <?php if (! $terbuka) : ?>
+            <?php if (! $terbuka && ($status !== 'cancelled' || $boleh_kelola)) : ?>
                 <form method="post" action="<?= esc(site_url('admin/tugas/status/' . (int) $tugas['id_tugas'])) ?>">
                     <?= csrf_field() ?>
                     <input type="hidden" name="status" value="queued">
@@ -296,6 +297,10 @@ $jam = static function (?int $detik): string {
         </div>
         <p class="small text-muted mb-0 mt-2">
             Tombol hanya muncul untuk transisi yang diizinkan; penolakan terjadi di server, bukan sekadar penyembunyian.
+            <?php if (! $boleh_kelola) : ?>
+                CS tidak membatalkan tugas: kalau peganganmu harus lepas, pakai <strong>Operan</strong> dan tugasnya
+                kembali ke antrean untuk diambil orang lain. Yang membatalkan (pekerjaannya berhenti) hanya Admin.
+            <?php endif; ?>
         </p>
     </div>
 

@@ -36,7 +36,7 @@ class TugasModel extends Model
         'followup_pelanggan' => 'Follow-up pelanggan',
         'reminder_transaksi' => 'Reminder transaksi',
         'checklist_toko'     => 'Checklist toko',
-        'pemeriksaan_email'  => 'Pemeriksaan email',
+        'pemeriksaan_email'  => 'Cek email',
         'lain'               => 'Lainnya',
     ];
 
@@ -49,6 +49,28 @@ class TugasModel extends Model
 
     /** Status yang masih dihitung "belum selesai". */
     public const BELUM_SELESAI = ['queued', 'assigned', 'in_progress', 'waiting'];
+
+    /**
+     * Kelompok pemicu reminder. Tiap pemicu ditulis di `kunci_unik` dengan awalan
+     * itu (mis. `ulasan-42`), jadi satu tugas hanya pernah lahir dari satu pemicu
+     * dan layar bisa memisahkan permintaan ulasan dari penagihan.
+     */
+    public const PEMICU = [
+        'ulasan' => ['ulasan-'],
+        'tagih'  => ['dp-', 'pelunasan-'],
+    ];
+
+    /**
+     * Jenis yang sudah punya submenu sendiri di Tugas CS (WhatsApp, Bintang 5,
+     * Cek Toko, Cek Email). Daftar 'lain-lain' hanya mengurus sisanya, supaya
+     * satu tugas tidak pernah muncul di dua layar atau malah tidak di mana-mana.
+     */
+    public const PUNYA_SUBMENU = [
+        'catatan_wa',
+        'checklist_toko',
+        'pemeriksaan_email',
+        'reminder_transaksi',
+    ];
 
     /** Jeda minimal antar-sapuan operan otomatis, dalam detik. */
     private const JEDA_OPERAN = 300;
@@ -118,6 +140,16 @@ class TugasModel extends Model
         $this->terapkanToko($b, $juragan_ids);
 
         return (int) $b->countAllResults();
+    }
+
+    /**
+     * Tugas satu pemicu reminder yang masih terbuka — dasar badge kategorinya di
+     * sidebar. Pemicunya dikenali dari `kunci_unik`, jadi angka badge tidak pernah
+     * menghitung ulang tugas buatan orang.
+     */
+    public function hitungPemicu(string $pemicu, array $juragan_ids): int
+    {
+        return $this->jumlah(['pemicu' => $pemicu, 'terbuka' => true, 'juragan_ids' => $juragan_ids]);
     }
 
     /**
@@ -331,6 +363,12 @@ class TugasModel extends Model
      *
      * @param array<string, mixed> $s
      */
+    /** Jenis yang tidak punya submenu sendiri — isi daftar "Tugas lain-lain". */
+    public static function jenisLain(): array
+    {
+        return array_diff_key(self::JENIS, array_flip(self::PUNYA_SUBMENU));
+    }
+
     private function bangun(array $s)
     {
         $b = $this->pangkal();
@@ -341,6 +379,14 @@ class TugasModel extends Model
 
         if (! empty($s['jenis'])) {
             $b->where('t.jenis', $s['jenis']);
+        }
+
+        if (! empty($s['jenis_not'])) {
+            $b->whereNotIn('t.jenis', (array) $s['jenis_not']);
+        }
+
+        if (! empty($s['jenis_in'])) {
+            $b->whereIn('t.jenis', (array) $s['jenis_in']);
         }
 
         if (! empty($s['prioritas'])) {
@@ -372,6 +418,26 @@ class TugasModel extends Model
 
         if (! empty($s['antrean'])) {
             $b->where('t.status', 'queued')->where('t.dikerjakan_oleh', null);
+        }
+
+        // satu kelompok status sekaligus, dipakai tab "Sudah Dikerjakan" yang menghitung
+        // selesai dan batal sebagai sama-sama sudah ditangani
+        if (! empty($s['status_in'])) {
+            $b->whereIn('t.status', (array) $s['status_in']);
+        }
+
+        if (! empty($s['pemicu']) && isset(self::PEMICU[$s['pemicu']])) {
+            $b->groupStart();
+
+            foreach (array_values(self::PEMICU[$s['pemicu']]) as $i => $awal) {
+                if ($i === 0) {
+                    $b->like('t.kunci_unik', $awal, 'after');
+                } else {
+                    $b->orLike('t.kunci_unik', $awal, 'after');
+                }
+            }
+
+            $b->groupEnd();
         }
 
         if (! empty($s['pelanggan_id'])) {

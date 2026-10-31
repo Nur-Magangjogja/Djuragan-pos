@@ -112,7 +112,7 @@ $label_status = static function (string $kode) use ($pilihan): string {
     <div class="tugas-head">
         <div class="me-auto">
             <h1 class="h3 mt-5"><i class="fal fa-tasks me-1 text-brand-500"></i> <?= esc($title) ?></h1>
-            <p>Antrean pekerjaan CS: ambil sendiri, atau ditetapkan Admin. Setiap perpindahan tangan tercatat.</p>
+            <p>Sisa pekerjaan yang tidak punya menu sendiri: follow-up pelanggan dan tugas buatan tangan. WhatsApp, Bintang 5, Cek Toko, dan Cek Email ada di submenu masing-masing.</p>
         </div>
         <a class="btn btn-sm btn-outline-secondary rounded-pill" href="<?= esc(site_url('admin/tugas/dasbor')) ?>">
             <i class="fal fa-gauge me-1"></i> Dasbor Kerja

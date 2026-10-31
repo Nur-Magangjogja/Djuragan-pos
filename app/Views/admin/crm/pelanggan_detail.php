@@ -863,7 +863,7 @@
                                                 <span class="<?= $statusBayar[0] ?>"><?= $statusBayar[1] ?></span>
                                             </td>
                                             <td class="text-center">
-                                                <a href="<?= site_url('admin/invoice/lihat/' . $t['id_invoice']) ?>" target="_blank" class="btn btn-sm btn-outline-secondary py-1 px-2" title="Buka Detail Invoice POS">
+                                                <a href="<?= esc(tautan_invoice_notif($t['seri'], '')) ?>" target="_blank" class="btn btn-sm btn-outline-secondary py-1 px-2" title="Buka Detail Invoice POS">
                                                     <i class="fal fa-external-link-alt"></i>
                                                 </a>
                                             </td>

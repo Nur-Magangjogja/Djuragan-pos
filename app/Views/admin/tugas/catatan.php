@@ -10,7 +10,7 @@
  * @var array $toko        id toko => nama
  * @var array $label       master tag pelanggan
  * @var array $pilihan     prioritas
- * @var array $belakangan  10 catatan_wa terakhir buatan akun ini
+ * @var array $belakangan  10 tugas lanjutan terakhir buatan akun ini
  */
 
 $level = (string) session()->get('level');

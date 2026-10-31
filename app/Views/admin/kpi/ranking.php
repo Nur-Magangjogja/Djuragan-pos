@@ -37,21 +37,20 @@ $sel   = static fn (int $n): string => $n === 0 ? '&mdash;' : $angka($n);
 
 // kelompok kolom supaya tabel tidak perlu banyak kolom sekaligus. Kolom Chat,
 // Konversi dan poin broadcast sudah dicabut bersama fitur Live Chat WA / Broadcast.
+// Kolom Nilai dan Lainnya ikut dihapus (31 Oktober 2026): keempat aturannya
+// (nilai_lunas, tindak_lanjut_selesai, aktivitas_crm, pesan_manual) juga tidak
+// dihitung lagi, jadi total POIN di bawah hanya jumlah kolom yang terlihat.
 $kelompok = [
     'Nota'      => ['nota_dibuat'],
     'Lunas'     => ['nota_lunas'],
-    'Nilai'     => ['nilai_lunas'],
     'Produksi'  => ['tahap_produksi', 'foto_progres'],
-    'Lainnya'   => ['tindak_lanjut_selesai', 'aktivitas_crm', 'pesan_manual'],
     'Pengurang' => ['void_salah'],
 ];
 
 $petunjuk = [
     'Nota'      => 'nota dibuat',
     'Lunas'     => 'nota lunas',
-    'Nilai'     => 'nota lunas per Rp 1 juta',
     'Produksi'  => 'tahap produksi dikerjakan + foto progres',
-    'Lainnya'   => 'tindak lanjut, catatan CRM, pesan manual',
     'Pengurang' => 'nota dibatalkan karena kesalahan',
 ];
 
@@ -312,6 +311,8 @@ $kosong    = count($peringkat) - count($bernilai);
                 <p class="small text-muted">
                     Poin yang sama mendapat peringkat yang sama. Nota yang dibatalkan tetap
                     memberi poin pada tahap produksi dan fotonya karena kerjanya memang terjadi.
+                    Angkanya adalah yang berlaku sekarang; Superadmin boleh menggantinya di
+                    halaman Target KPI.
                 </p>
                 <div class="table-responsive">
                     <table class="table table-sm align-middle mb-4">
@@ -336,6 +337,9 @@ $kosong    = count($peringkat) - count($bernilai);
                                     <td class="text-end" data-label="Poin per satuan">
                                         <?= $poin((float) $a['poin']) ?>
                                         <span class="small text-muted"><?= esc($a['satuan']) ?></span>
+                                        <?php if (isset($a['poin_baku']) && abs((float) $a['poin'] - (float) $a['poin_baku']) > 0.001) { ?>
+                                            <div class="small text-muted">bawaan <?= $poin((float) $a['poin_baku']) ?></div>
+                                        <?php } ?>
                                     </td>
                                     <td class="text-end" data-label="Tercatat">
                                         <?= $sel((int) $a['tercatat']) ?>

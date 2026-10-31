@@ -18,7 +18,7 @@ $tiles = [
     ['Pegangan saya', (int) ($ringkas['assigned'] ?? 0) + (int) ($ringkas['in_progress'] ?? 0), 'fa-user-check', 'sudah ada penggarapnya'],
     ['Menunggu pelanggan', (int) ($ringkas['waiting'] ?? 0), 'fa-hourglass-half', 'punya jadwal tindak lanjut'],
     ['Lewat tenggat', (int) ($ringkas['terlambat'] ?? 0), 'fa-triangle-exclamation', 'belum beres tapi sudah telat'],
-    ['Checklist hari ini', (int) $sesi, 'fa-ballot-check', 'sesi yang belum ditutup'],
+    ['Cek Toko hari ini', (int) $sesi, 'fa-ballot-check', 'lembar toko yang belum ditutup'],
 ];
 
 if ($level !== 'cs') {
@@ -88,12 +88,6 @@ if ($level !== 'cs') {
             <h1 class="h3 mt-5"><i class="fal fa-gauge me-1 text-brand-500"></i> <?= esc($title) ?></h1>
             <p><?= $level === 'cs' ? 'Peganganmu hari ini' : 'Kondisi antrean kerja semua CS' ?> &middot; <?= esc(tanggal_rincian($hari)) ?></p>
         </div>
-        <a class="btn btn-sm btn-outline-secondary rounded-pill" href="<?= esc(site_url('admin/tugas')) ?>">
-            <i class="fal fa-list-check me-1"></i> Antrean
-        </a>
-        <a class="btn btn-sm btn-outline-secondary rounded-pill" href="<?= esc(site_url('admin/checklist')) ?>">
-            <i class="fal fa-ballot-check me-1"></i> Checklist
-        </a>
         <?php if ($level !== 'cs') : ?>
             <a class="btn btn-sm btn-outline-secondary rounded-pill" href="<?= esc(site_url('admin/tugas/laporan')) ?>">
                 <i class="fal fa-chart-line me-1"></i> Laporan
@@ -119,7 +113,6 @@ if ($level !== 'cs') {
             <div class="dsb-kartu">
                 <div class="dsb-judul">
                     <i class="fal fa-user-check"></i> Pegangan saya
-                    <a class="ms-auto text-decoration-none" href="<?= esc(site_url('admin/tugas?saya')) ?>">semua</a>
                 </div>
                 <?php if ($pegangan === []) : ?>
                     <div class="dsb-kosong">Tidak ada pekerjaan atas namamu saat ini.</div>
@@ -140,7 +133,6 @@ if ($level !== 'cs') {
             <div class="dsb-kartu">
                 <div class="dsb-judul">
                     <i class="fal fa-inbox"></i> Baru di antrean
-                    <a class="ms-auto text-decoration-none" href="<?= esc(site_url('admin/tugas')) ?>">ambil di sana</a>
                 </div>
                 <?php if ($antrean === []) : ?>
                     <div class="dsb-kosong">Antrean sedang bersih.</div>

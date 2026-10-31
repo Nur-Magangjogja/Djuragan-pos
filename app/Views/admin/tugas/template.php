@@ -64,10 +64,10 @@ $id_edit = $edit !== null ? (int) $edit['id_template'] : 0;
     <div class="tpl-head">
         <div class="me-auto">
             <h1 class="h3 mt-5"><i class="fal fa-layer-group me-1 text-brand-500"></i> <?= esc($title) ?></h1>
-            <p>Pekerjaan yang selalu berulang cukup ditulis sekali di sini, lalu dituang ke antrean untuk satu toko pada satu tanggal.</p>
+            <p>Pekerjaan yang selalu berulang cukup ditulis sekali di sini, lalu dituang ke daftar Tugas lain-lain untuk satu toko pada satu tanggal.</p>
         </div>
         <a class="btn btn-sm btn-outline-secondary rounded-pill" href="<?= esc(site_url('admin/tugas')) ?>">
-            <i class="fal fa-arrow-left me-1"></i> Antrean Tugas
+            <i class="fal fa-arrow-left me-1"></i> Tugas lain-lain
         </a>
         <a class="btn btn-sm btn-outline-secondary rounded-pill" href="<?= esc(site_url('admin/sop')) ?>">
             <i class="fal fa-book-open me-1"></i> Pustaka SOP

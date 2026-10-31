@@ -195,10 +195,47 @@ class Kpi extends BaseController
         return view('admin/kpi/target', [
             'title'    => 'Target KPI',
             'target'   => $model->targetSemua(),
+            'poin'     => $model->poinSemua(),
+            // kotak angka di layar boleh mengetik sejauh yang server terima
+            'batas'    => ['min' => KpiModel::POIN_MIN, 'max' => KpiModel::POIN_MAX],
             'boleh'    => $this->bolehUbah(),
             'kabar'    => (string) session()->getFlashdata('kabar'),
             'pembaru'  => $model->pegawaiPilihan('semua'),
         ]);
+    }
+
+    /**
+     * Simpan poin per aktivitas.
+     *
+     * Sama seperti target: keputusannya manajemen, jadi rutenya khusus Superadmin
+     * dan ini pagar kedua. Slug yang tidak dikenal dibuang, jadi nilai yang
+     * dikirim dari form lama (aturan yang sudah dicabut) tidak pernah masuk setelan.
+     *
+     * @return \CodeIgniter\HTTP\RedirectResponse
+     */
+    public function simpanPoin()
+    {
+        if (! $this->bolehUbah()) {
+            return redirect()->to('admin/kpi');
+        }
+
+        $hasil = (new KpiModel())->simpanPoin(
+            (array) $this->request->getPost('poin'),
+            pengguna_sesi()
+        );
+
+        $kabar = $hasil['diubah'] . ' aturan poin disimpan';
+
+        if ($hasil['lewat'] > 0) {
+            $kabar .= '; ' . $hasil['lewat'] . ' dilewati karena di luar '
+                . KpiModel::POIN_MIN . ' sampai ' . KpiModel::POIN_MAX;
+        }
+
+        if ($hasil['di luar'] > 0) {
+            $kabar .= '; ' . $hasil['di luar'] . ' slug tidak dikenal';
+        }
+
+        return redirect()->to('admin/kpi/target')->with('kabar', $kabar . '.');
     }
 
     /**

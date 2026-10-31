@@ -242,6 +242,20 @@ abstract class BaseController extends Controller
     }
 
     /**
+     * Sapuan berjeda yang menjaga angka antrean tugas: shift yang lewat dioper
+     * otomatis dan reminder yang jatuh tempo dilahirkan. Dipanggil tiap layar
+     * tugas supaya tidak ada submenu yang menunjukkan angka lama sekarang layar
+     * antrean umum tidak lagi jadi tujuan utama.
+     */
+    protected function sapuTugasKalauWaktu(): void
+    {
+        $model = new \App\Models\TugasModel();
+
+        $model->operanShiftKalauWaktu();
+        $model->reminderKalauWaktu($this->tokoBoleh());
+    }
+
+    /**
      * Toko satu-satunya milik akun ini, atau null kalau pegang nol / lebih dari satu.
      * Dipakai untuk membuang pilihan "Semua Juragan": kalau yang dipegang cuma satu
      * toko, orang tidak perlu memilih dan tidak bisa nyasar ke toko lain.

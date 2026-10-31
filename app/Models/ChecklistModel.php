@@ -14,8 +14,8 @@ use CodeIgniter\Model;
 class ChecklistModel extends Model
 {
     public const JENIS = [
-        'toko'  => 'Checklist toko',
-        'email' => 'Pemeriksaan email',
+        'toko'  => 'Cek toko',
+        'email' => 'Lembar email (arsip)',
     ];
 
     public const STATUS = [

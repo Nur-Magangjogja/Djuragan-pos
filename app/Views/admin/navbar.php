@@ -33,8 +33,14 @@ if ($levelSesi === 'superadmin') {
 // toko yang sedang login, jadi angkanya cocok dengan daftar yang akan dibuka.
 helper('fungsi');
 $reminderCount = pengingat_penjahit_jumlah();
-$tugasTerbuka  = (new \App\Models\TugasModel())->hitungTerbuka(juragan_dipakai_sesi());
+$tugasModel    = new \App\Models\TugasModel();
+$lainTerbuka   = $tugasModel->jumlah(['jenis_not' => \App\Models\TugasModel::PUNYA_SUBMENU, 'terbuka' => true, 'juragan_ids' => juragan_dipakai_sesi()]);
+$waTerbuka    = (new \App\Models\TugasWhatsappModel())->hitungTerbuka(juragan_dipakai_sesi());
+$b5Model     = new \App\Models\TugasModel();
+$b5Terbuka    = $b5Model->hitungPemicu('ulasan', juragan_dipakai_sesi()) + $b5Model->hitungPemicu('tagih', juragan_dipakai_sesi());
+$emailTerbuka = (new \App\Models\TugasModel())->jumlah(["jenis" => "pemeriksaan_email", "terbuka" => true, "juragan_ids" => juragan_dipakai_sesi()]);
 $cklTerbuka    = (new \App\Models\ChecklistModel())->hitungTerbuka(juragan_dipakai_sesi(), date('Y-m-d'));
+$tugasTerbuka = $lainTerbuka + $b5Terbuka + $waTerbuka + $cklTerbuka + $emailTerbuka;
 
 // Submenu Transaksi
 // 'invoices' tetap satu halaman dengan 'cod': yang pertama dipakai untuk orderan
@@ -236,26 +242,75 @@ if ($levelSesi === 'superadmin') {
                 </a>
             </li>
             <li class="nav-item">
-                <a class="sidebar-link <?= $isTugasAktif ? 'active' : '' ?>" href="<?= site_url('admin/tugas') ?>"
-                    data-badge-url="<?= site_url('admin/tugas/jumlah') ?>" data-badge-unit="tugas CS yang belum selesai">
+                <a class="sidebar-link <?= $isTugasAktif ? 'active' : '' ?>" data-bs-toggle="collapse" href="#submenuTugas" role="button" aria-expanded="<?= $isTugasAktif ? 'true' : 'false' ?>" aria-controls="submenuTugas">
                     <i class="sidebar-link-icon fal fa-tasks"></i>
                     <span>Tugas CS</span>
                     <?php if ($tugasTerbuka > 0) : ?>
                         <span class="badge rounded-pill bg-danger ms-auto badge-live" title="<?= (int) $tugasTerbuka ?> tugas CS yang belum selesai"><?= (int) $tugasTerbuka ?></span>
                     <?php endif; ?>
+                    <i class="fal fa-chevron-down sidebar-chevron"></i>
                 </a>
+                <div class="collapse <?= $isTugasAktif ? 'show' : '' ?>" id="submenuTugas">
+                    <ul class="sidebar-submenu">
+                        <li class="submenu-item">
+                            <a class="sidebar-submenu-link <?= url_is('admin/tugas/whatsapp*') ? 'active' : '' ?>"
+                                href="<?= site_url('admin/tugas/whatsapp') ?>"
+                                data-badge-url="<?= site_url('admin/tugas/whatsapp/jumlah') ?>" data-badge-unit="reminder WhatsApp yang belum selesai">
+                                <i class="fal fa-comment-dots"></i>
+                                <span>Reminder WhatsApp</span>
+                                <?php if ($waTerbuka > 0) : ?>
+                                    <span class="badge rounded-pill bg-danger ms-auto badge-live" title="<?= (int) $waTerbuka ?> reminder WhatsApp yang belum selesai"><?= (int) $waTerbuka ?></span>
+                                <?php endif; ?>
+                            </a>
+                        </li>
+                        <li class="submenu-item">
+                            <a class="sidebar-submenu-link <?= url_is('admin/tugas/bintang*') ? 'active' : '' ?>"
+                                href="<?= site_url('admin/tugas/bintang') ?>"
+                                data-badge-url="<?= site_url('admin/tugas/bintang/jumlah') ?>" data-badge-unit="reminder Bintang 5 yang belum dikerjakan">
+                                <i class="fal fa-star"></i>
+                                <span>Reminder Bintang 5</span>
+                                <?php if ($b5Terbuka > 0) : ?>
+                                    <span class="badge rounded-pill bg-danger ms-auto badge-live" title="<?= (int) $b5Terbuka ?> reminder Bintang 5 yang belum dikerjakan"><?= (int) $b5Terbuka ?></span>
+                                <?php endif; ?>
+                            </a>
+                        </li>
+                        <li class="submenu-item">
+                            <a class="sidebar-submenu-link <?= $isCklAktif ? 'active' : '' ?>"
+                                href="<?= site_url('admin/checklist') ?>"
+                                data-badge-url="<?= site_url('admin/checklist/jumlah') ?>" data-badge-unit="lembar toko hari ini yang belum ditutup">
+                                <i class="fal fa-ballot-check"></i>
+                                <span>Cek Toko</span>
+                                <?php if ($cklTerbuka > 0) : ?>
+                                    <span class="badge rounded-pill bg-danger ms-auto badge-live" title="<?= (int) $cklTerbuka ?> lembar toko hari ini yang belum ditutup"><?= (int) $cklTerbuka ?></span>
+                                <?php endif; ?>
+                            </a>
+                        </li>
+                        <li class="submenu-item">
+                            <a class="sidebar-submenu-link <?= url_is('admin/tugas/email*') ? 'active' : '' ?>"
+                                href="<?= site_url('admin/tugas/email') ?>"
+                                data-badge-url="<?= site_url('admin/tugas/email/jumlah') ?>" data-badge-unit="catatan cek email yang belum selesai">
+                                <i class="fal fa-envelope"></i>
+                                <span>Cek Email</span>
+                                <?php if ($emailTerbuka > 0) : ?>
+                                    <span class="badge rounded-pill bg-danger ms-auto badge-live" title="<?= (int) $emailTerbuka ?> catatan cek email yang belum selesai"><?= (int) $emailTerbuka ?></span>
+                                <?php endif; ?>
+                            </a>
+                        </li>
+                        <li class="submenu-item">
+                            <a class="sidebar-submenu-link <?= url_is('admin/tugas') ? 'active' : '' ?>"
+                                href="<?= site_url('admin/tugas') ?>"
+                                data-badge-url="<?= site_url('admin/tugas/jumlah') ?>" data-badge-unit="tugas lain-lain yang belum selesai">
+                                <i class="fal fa-layer-group"></i>
+                                <span>Lain-lain</span>
+                                <?php if ($lainTerbuka > 0) : ?>
+                                    <span class="badge rounded-pill bg-danger ms-auto badge-live" title="<?= (int) $lainTerbuka ?> tugas lain-lain yang belum selesai"><?= (int) $lainTerbuka ?></span>
+                                <?php endif; ?>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
             </li>
-            <li class="nav-item">
-                <a class="sidebar-link <?= $isCklAktif ? 'active' : '' ?>" href="<?= site_url('admin/checklist') ?>"
-                    data-badge-url="<?= site_url('admin/checklist/jumlah') ?>" data-badge-unit="sesi checklist hari ini yang belum ditutup">
-                    <i class="sidebar-link-icon fal fa-ballot-check"></i>
-                    <span>Checklist Harian</span>
-                    <?php if ($cklTerbuka > 0) : ?>
-                        <span class="badge rounded-pill bg-danger ms-auto badge-live" title="<?= (int) $cklTerbuka ?> sesi checklist hari ini yang belum ditutup"><?= (int) $cklTerbuka ?></span>
-                    <?php endif; ?>
-                </a>
-            </li>
-            <li class="nav-item">
+                        <li class="nav-item">
                 <a class="sidebar-link <?= $isSopAktif ? 'active' : '' ?>" href="<?= site_url('admin/sop') ?>">
                     <i class="sidebar-link-icon fal fa-book-open"></i>
                     <span>SOP &amp; Panduan</span>

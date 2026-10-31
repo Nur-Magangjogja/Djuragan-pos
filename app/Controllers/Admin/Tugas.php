@@ -65,7 +65,7 @@ class Tugas extends BaseController
         $page = max(1, min($page, max(1, (int) ceil($total / $batas))));
 
         return view('admin/tugas/index', [
-            'title'     => 'Antrean Tugas',
+            'title'     => 'Tugas lain-lain',
             's'         => $s,
             'baris'     => $model->daftar($s, $batas, ($page - 1) * $batas),
             'total'     => $total,
@@ -80,7 +80,7 @@ class Tugas extends BaseController
             'toko'      => $this->tokoId(),
             'staf'      => $this->staf(),
             'pilihan'   => [
-                'jenis'     => TugasModel::JENIS,
+                'jenis'     => TugasModel::jenisLain(),
                 'status'    => TugasModel::STATUS,
                 'prioritas' => TugasModel::PRIORITAS,
             ],
@@ -98,6 +98,7 @@ class Tugas extends BaseController
 
         return view('admin/tugas/lihat', [
             'title'       => 'Tugas #' . $id,
+            'kembali'     => $this->layarAsal((string) $tugas['jenis']),
             'tugas'       => $tugas,
             'riwayat'     => $model->riwayat($id),
             'ulasan'      => (int) $tugas['invoice_id'] > 0
@@ -105,6 +106,9 @@ class Tugas extends BaseController
                 : null,
             'staf'        => $this->staf(),
             'boleh_bagi'  => $this->bolehKelola(),
+            // membatalkan dan membuka kembali tugas yang dibatalkan: Admin saja;
+            // CS tetap boleh melepas pegangannya lewat Operan (kembali ke antrean)
+            'boleh_kelola' => $this->bolehKelola(),
             'pilihan'     => [
                 'jenis'     => TugasModel::JENIS,
                 'status'    => TugasModel::STATUS,
@@ -132,6 +136,12 @@ class Tugas extends BaseController
         if (! $this->validate($aturan)) {
             return redirect()->back()->with('galat', 'Judul wajib diisi (maks 200 karakter) dan tanggal harus benar.')
                 ->withInput();
+        }
+
+        // jenis yang sudah punya submenu dibuat dari layar itu sendiri, supaya satu
+        // tugas tidak pernah lahir di dua tempat dan hilang dari daftar ini
+        if (in_array((string) $this->request->getPost('jenis'), TugasModel::PUNYA_SUBMENU, true)) {
+            return redirect()->back()->with('galat', 'Jenis itu punya menunya sendiri — buat lewat submenu itu.')->withInput();
         }
 
         $juragan = (int) $this->request->getPost('juragan_id');
@@ -172,7 +182,7 @@ class Tugas extends BaseController
             'tenggat'      => (string) $this->request->getPost('tenggat'),
         ], pengguna_sesi());
 
-        return redirect()->to(site_url('admin/tugas/lihat/' . $id))->with('sukses', 'Tugas dibuat.');
+        return redirect()->to(site_url('admin/tugas/' . $id))->with('sukses', 'Tugas dibuat.');
     }
 
     /** CS mengambil satu tugas dari antrean. */
@@ -205,12 +215,23 @@ class Tugas extends BaseController
     /** Mulai, tunggu, selesai, batal, buka kembali — satu jalur untuk semua transisi. */
     public function status(int $id)
     {
-        $this->tugasMilikSaya($id);
+        $tugas = $this->tugasMilikSaya($id);
 
         $baru = (string) $this->request->getPost('status');
 
         if (! array_key_exists($baru, TugasModel::STATUS)) {
             return redirect()->back()->with('galat', 'Status tidak dikenal.');
+        }
+
+        // Membatalkan tugas berarti pekerjaannya berhenti: tidak ada lagi yang
+        // menindaklanjuti pelanggan itu. Itu keputusan Admin, bukan keputusan orang
+        // yang kebetulan sedang memegang tugasnya. CS yang lepas tangan atau
+        // shift-nya habis tidak membatalkan -- dia mengoper, dan tugasnya kembali
+        // ke antrean lewat operan().
+        if (! $this->bolehKelola() && ($baru === 'cancelled' || (string) $tugas['status'] === 'cancelled')) {
+            return redirect()->back()->with('galat', $baru === 'cancelled'
+                ? 'Hanya Admin yang bisa membatalkan tugas. Kalau tugasmu harus lepas, pakai Operan supaya kembali ke antrean.'
+                : 'Hanya Admin yang bisa membuka kembali tugas yang sudah dibatalkan.');
         }
 
         $susul = trim((string) $this->request->getPost('susul'));
@@ -254,7 +275,11 @@ class Tugas extends BaseController
 
         return $this->response->setJSON([
             'status' => 'success',
-            'count'  => $model->hitungTerbuka($this->tokoBoleh()),
+            'count'  => $model->jumlah([
+                'jenis_not'   => TugasModel::PUNYA_SUBMENU,
+                'terbuka'     => true,
+                'juragan_ids' => $this->tokoBoleh(),
+            ]),
         ]);
     }
 
@@ -441,7 +466,7 @@ class Tugas extends BaseController
             'daftar'  => $model->daftar(),
             'edit'    => $edit,
             'item'    => array_slice($item, 0, self::SLOT_ITEM),
-            'pilihan' => ['jenis' => TugasModel::JENIS, 'prioritas' => TugasModel::PRIORITAS],
+            'pilihan' => ['jenis' => TugasModel::jenisLain(), 'prioritas' => TugasModel::PRIORITAS],
             'toko'    => $this->tokoId(),
             'kabar'   => (string) session()->getFlashdata('sukses'),
             'galat'   => (string) session()->getFlashdata('galat'),
@@ -601,7 +626,7 @@ class Tugas extends BaseController
             'label'     => (new CrmModel())->getAllTags(),
             'pilihan'   => ['prioritas' => TugasModel::PRIORITAS],
             'belakangan' => $model->daftar([
-                'jenis'        => 'catatan_wa',
+                'jenis_in'     => ['catatan_wa', 'followup_pelanggan'],
                 'dibuat_oleh'  => (int) pengguna_sesi(),
             ], 10, 0),
             'kabar'     => (string) session()->getFlashdata('sukses'),
@@ -711,10 +736,13 @@ class Tugas extends BaseController
         $id_tugas  = 0;
 
         if ($ada_tugas) {
+            // jenis followup_pelanggan, bukan catatan_wa: layar Reminder WhatsApp
+            // hanya mendaftar tugas yang punya baris crm_tugas_whatsapp, sedangkan
+            // tugas lanjutan dari catatan ini tidak punya — ia masuk layar Lain-lain.
             $id_tugas = $model->buat([
                 'judul'        => $judul,
                 'deskripsi'    => $ringkasan,
-                'jenis'        => 'catatan_wa',
+                'jenis'        => 'followup_pelanggan',
                 'prioritas'    => (string) $this->request->getPost('prioritas'),
                 'pelanggan_id' => $pelanggan,
                 'juragan_id'   => $toko,
@@ -940,7 +968,7 @@ class Tugas extends BaseController
     {
         $ke = $this->request->isAJAX()
             ? $this->response->setJSON(['status' => $hasil['ok'] ? 'success' : 'error', 'message' => $hasil['pesan']])
-            : redirect()->to(site_url('admin/tugas/lihat/' . $id))
+            : redirect()->to(site_url('admin/tugas/' . $id))
                 ->with($hasil['ok'] ? 'sukses' : 'galat', $hasil['pesan']);
 
         return $ke;
@@ -958,6 +986,22 @@ class Tugas extends BaseController
      *
      * @return array<int, string>
      */
+    /**
+     * Submenu tempat tugas ini dikerjakan. Detail tugas bisa dibuka dari mana
+     * saja, tapi tombol kembali tidak boleh mengantar orang ke daftar yang salah.
+     */
+    private function layarAsal(string $jenis): string
+    {
+        $peta = [
+            'catatan_wa'         => 'admin/tugas/whatsapp',
+            'reminder_transaksi' => 'admin/tugas/bintang',
+            'checklist_toko'     => 'admin/checklist',
+            'pemeriksaan_email'  => 'admin/tugas/email',
+        ];
+
+        return site_url($peta[$jenis] ?? 'admin/tugas');
+    }
+
     private function tokoId(): array
     {
         $ids = $this->tokoBoleh();
@@ -1020,6 +1064,7 @@ class Tugas extends BaseController
             'cari'         => mb_substr($cari, 0, 80),
             'nomor'        => mb_substr(trim((string) $this->request->getGet('nomor')), 0, 30),
             'juragan_ids'  => $this->tokoBoleh(),
+            'jenis_not'    => TugasModel::PUNYA_SUBMENU,
         ];
 
         if (array_key_exists($jenis, TugasModel::JENIS)) {
