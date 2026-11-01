@@ -13,6 +13,8 @@
  * @var bool  $boleh_bagi akun ini admin/superadmin
  * @var bool  $boleh_kelola akun ini admin/superadmin; yang boleh membatalkan tugas
  * @var array $pilihan label status & prioritas
+ * @var string $kabar   pesan sukses flash (string kosong kalau tidak ada)
+ * @var string $galat   pesan gagal flash (string kosong kalau tidak ada)
  */
 
 $level    = (string) session()->get('level');

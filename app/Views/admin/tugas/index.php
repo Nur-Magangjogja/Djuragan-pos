@@ -3,16 +3,23 @@
 /**
  * Daftar antrean tugas CS.
  *
- * @var array $s        saringan yang sudah dibersihkan controller
- * @var array $baris    hasil TugasModel::daftar()
- * @var int   $total    jumlah baris sesuai saringan
- * @var int   $page     halaman aktif (berbasis satu)
- * @var int   $batas    baris per halaman
- * @var array $tab      nama tab => label
- * @var array $ringkas  jumlah per status + 'terlambat'
- * @var array $toko     slug => nama toko milik akun ini
- * @var array $staf     id => nama staf yang bisa ditunjuk
- * @var array $pilihan  jenis/status/prioritas untuk filter dan form
+ * Semua variabel di bawah disuntik Admin\Tugas::index() lewat view(); blok @var
+ * ini hanya memberi tahunya ke analyzer, bukan kode yang dijalankan.
+ *
+ * @var string $title      judul halaman
+ * @var array  $s          saringan yang sudah dibersihkan controller
+ * @var array  $baris      hasil TugasModel::daftar()
+ * @var int    $total      jumlah baris sesuai saringan
+ * @var int    $page       halaman aktif (berbasis satu)
+ * @var int    $batas      baris per halaman
+ * @var array  $tab        nama tab => label
+ * @var array  $ringkas    jumlah per status + 'terlambat'
+ * @var int    $milik_saya jumlah tugas terbuka yang dipegang akun ini
+ * @var array  $toko       id => nama toko milik akun ini
+ * @var array  $staf       id => nama staf yang bisa ditunjuk
+ * @var array  $pilihan    jenis/status/prioritas untuk filter dan form
+ * @var string $kabar      pesan sukses flash (string kosong kalau tidak ada)
+ * @var string $galat      pesan gagal flash (string kosong kalau tidak ada)
  */
 
 $level    = (string) session()->get('level');
