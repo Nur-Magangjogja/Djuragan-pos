@@ -1061,10 +1061,6 @@ $kelolaTransaksi = wewenang_sunting_transaksi();
                 <button type="button" class="btn-close ms-auto flex-shrink-0" data-bs-dismiss="modal" aria-label="Tutup"></button>
             </div>
             <div class="modal-body">
-                <div class="bayar-catatan mb-3">
-                    <i class="fal fa-circle-info"></i>
-                    <span>Catatannya permanen: pembayaran yang sudah tersimpan tidak bisa dihapus atau diubah. Yang menilai apakah dananya benar-benar masuk hanya Superadmin.</span>
-                </div>
 
                 <div id="cek" class="daftar-bayar">
                     <div class="text-muted small text-center py-3">memuat pembayaran ...</div>

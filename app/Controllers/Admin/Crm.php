@@ -83,6 +83,10 @@ class Crm extends BaseController
      */
     public function pelanggan_detail(int $id)
     {
+        // tautan nota di daftar tagihan dibangun helper yang sama dengan lonceng
+        // notifikasi, jadi tidak ada dua cara membuka satu nota
+        helper('fungsi');
+
         $pelanggan = $this->crmModel->getPelangganDetail($id);
         if (!$pelanggan) {
             return redirect()->to(site_url('admin/crm/pelanggan'))->with('error', 'Pelanggan tidak ditemukan.');

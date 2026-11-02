@@ -6,10 +6,16 @@
  * Butir tidak pernah dihapus, hanya dimatikan: sesi lama menyimpan teks butirnya
  * sendiri, tapi jejak item_id-nya tetap harus bisa ditelusuri.
  *
+ * Variabel di bawah disuntik Admin\Checklist::aturan() lewat view(); blok @var
+ * ini hanya memberi tahunya ke analyzer, bukan kode yang dijalankan.
+ *
+ * @var string $title  judul halaman
  * @var string $jenis  'toko' atau 'email'
  * @var array  $butir  hasil ChecklistModel::semuaButir()
  * @var array  $toko   id_toko => nama toko milik akun ini
  * @var array  $meta   ChecklistModel::JENIS
+ * @var string $kabar  pesan sukses flash (string kosong kalau tidak ada)
+ * @var string $galat  pesan gagal flash (string kosong kalau tidak ada)
  */
 
 $level = (string) session()->get('level');
@@ -80,10 +86,10 @@ $level = (string) session()->get('level');
     </div>
 
     <?php if ($kabar !== '') : ?>
-        <div class="alert alert-success py-2"><?= esc($kabar) ?></div>
+        <div class="alert alert-success py-2" data-flash><?= esc($kabar) ?></div>
     <?php endif; ?>
     <?php if ($galat !== '') : ?>
-        <div class="alert alert-danger py-2"><?= esc($galat) ?></div>
+        <div class="alert alert-danger py-2" data-flash><?= esc($galat) ?></div>
     <?php endif; ?>
 
     <div class="ckl-tab">

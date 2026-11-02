@@ -3,9 +3,11 @@
 /**
  * Satu sesi checklist: jawab butir satu per satu, lalu akhiri sesinya.
  *
- * @var array $run    hasil ChecklistModel::run()
- * @var array $hasil  hasil ChecklistModel::hasil() (judul ter-snapshot)
- * @var array $status ChecklistModel::STATUS
+ * @var array  $run    hasil ChecklistModel::run()
+ * @var array  $hasil  hasil ChecklistModel::hasil() (judul ter-snapshot)
+ * @var array  $status ChecklistModel::STATUS
+ * @var string $kabar  flashdata sukses dari controller
+ * @var string $galat  flashdata galat dari controller
  */
 
 $level    = (string) session()->get('level');
@@ -92,10 +94,10 @@ foreach ($hasil as $h) {
     </div>
 
     <?php if ($kabar !== '') : ?>
-        <div class="alert alert-success py-2"><?= esc($kabar) ?></div>
+        <div class="alert alert-success py-2" data-flash><?= esc($kabar) ?></div>
     <?php endif; ?>
     <?php if ($galat !== '') : ?>
-        <div class="alert alert-danger py-2"><?= esc($galat) ?></div>
+        <div class="alert alert-danger py-2" data-flash><?= esc($galat) ?></div>
     <?php endif; ?>
 
     <div class="ckl-info">

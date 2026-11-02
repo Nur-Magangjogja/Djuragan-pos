@@ -1,0 +1,42 @@
+/**
+ * Perapian tabel daftar: Reminder WhatsApp, Antrean Tugas, Bintang 5, Cek Toko,
+ * Cek Email, dan Toko Online. Dipakai lewat class `tabel-rapi` pada <table>.
+ *
+ * Semua aturan ditulis TANPA !important supaya:
+ *  - utilitas Bootstrap (.text-end, .text-start, .text-nowrap) tetap menang di
+ *    kolom angka dan kolom aksi;
+ *  - <style> per halaman di section 'css' masih bisa menimpa kalau perlu.
+ */
+
+/* header: satu baris, di tengah, sejajar dengan isi kolomnya */
+.tabel-rapi thead th {
+    text-align: center;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+/* kolom identitas paling kiri dapat bagian terbesar, kolom aksi pas seukuran isinya */
+.tabel-rapi thead th:first-child { width: 36%; }
+.tabel-rapi thead th:last-child { width: 1%; }
+
+.tabel-rapi tbody td { vertical-align: middle; }
+/* kolom aksi ikut di tengah supaya judulnya duduk pas di atas tombolnya */
+.tabel-rapi tbody td:last-child { text-align: center; }
+.tabel-rapi tbody td:not(:first-child):not(:last-child) { text-align: center; }
+
+/* ditulis setelah aturan :last-child di atas supaya baris kepala berkelompok
+   (td colspan yang jadi :first-child sekaligus :last-child) tetap rata kiri */
+.tabel-rapi thead th:first-child,
+.tabel-rapi tbody td:first-child { text-align: left; }
+
+/* blok di dalam kolom tengah tidak direntang selebar sel; ia menciut lalu ditengah */
+.tabel-rapi tbody td:not(:first-child):not(:last-child) > div {
+    width: fit-content;
+    margin-inline: auto;
+}
+
+/* tombol aksi tidak boleh melipat jadi dua baris */
+.tabel-rapi .btn { white-space: nowrap; }
+
+/* kolom aksi di tengah, tapi isian di dalamnya tetap enak dibaca dari kiri */
+.tabel-rapi tbody td:last-child :is(input, textarea, select) { text-align: left; }

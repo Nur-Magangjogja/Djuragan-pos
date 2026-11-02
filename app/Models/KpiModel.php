@@ -22,9 +22,10 @@ use CodeIgniter\Model;
  *   yang boleh dibuka akun yang login. Periode dibaca dari tanggal_pesan, bukan
  *   waktu terakhir diubah, supaya nota tidak pindah periode hanya karena disunting.
  * - Nilai transaksi = barang (order_dibeli) + biaya tambahan (order_biaya: ongkir
- *   positif, diskon/revisi negatif). Rumus ini tidak lagi dipakai indikator KPI:
- *   sejak 29 Oktober 2026 gmv_cs dibaca dari pcs produk katalog (nilaiUnit()), dan
- *   nilai rupiah hanya tersisa di poin 'nilai_lunas' halaman ranking.
+ *   positif, diskon/revisi negatif). Rumus ini tidak dipakai indikator KPI: sejak
+ *   29 Oktober 2026 gmv_cs dibaca dari pcs produk katalog (nilaiUnit()). Rupiahnya
+ *   masih ikut dihitung per pegawai (bahan di payload ranking), tetapi tidak lagi
+ *   tampil di layar dan tidak lagi jadi aturan poin sejak 31 Oktober 2026.
  * - Pcs dihitung dari order_dibeli.qty baris yang punya produk_id; ejaan kode bebas
  *   yang tidak pernah masuk katalog tidak ikut dinilai.
  * - Pengurangan dua kolom INT UNSIGNED SELALU dibungkus CAST(... AS SIGNED); tanpa
@@ -520,21 +521,34 @@ class KpiModel extends Model
      * Aturan poin: satu baris untuk setiap aktivitas yang meninggalkan jejak
      * beserta pelakunya di database.
      *
-     * 'poin' negatif dipakai untuk kerja yang merugikan. 'catatan' muncul di
-     * halaman ranking untuk aturan yang angkanya hari ini masih nol karena
-     * pencatatannya baru dimulai atau tabelnya belum dipakai.
+     * 'poin' di sini adalah bawaan kode, bukan angka final yang dipakai halaman:
+     * Superadmin boleh menggantinya lewat halaman Target, dan angka simpanan itu
+     * yang dibaca perhitungan (lihat poinAktif()). Nilainya disimpan di crm_setting
+     * dengan kunci poin_<slug>.
+     *
+     * Empat aturan sudah dicabut (31 Oktober 2026) atas permintaan manajemen karena
+     * kolomnya dianggap tidak penting di halaman Ranking: nilai_lunas,
+     * tindak_lanjut_selesai, aktivitas_crm, dan pesan_manual. Yang terakhir ikut
+     * berhenti dihitung querynya, jadi poin tidak lagi menelan kerja yang tidak
+     * dibaca siapa-siapa.
+     *
+     * 'catatan' muncul di halaman ranking untuk aturan yang angkanya hari ini masih
+     * nol karena pencatatannya baru dimulai atau tabelnya belum dipakai.
      */
     public const ATURAN_POIN = [
-        'nota_dibuat'           => ['nama' => 'Nota dibuat', 'sumber' => 'order_invoice.user_id', 'satuan' => 'nota', 'poin' => 2],
-        'nota_lunas'            => ['nama' => 'Nota lunas (closing)', 'sumber' => 'order_invoice.status_pembayaran 5/6', 'satuan' => 'nota', 'poin' => 3],
-        'nilai_lunas'           => ['nama' => 'Nilai nota lunas', 'sumber' => 'order_dibeli + order_biaya nota lunas', 'satuan' => 'per Rp 1 juta', 'poin' => 1],
-        'tahap_produksi'        => ['nama' => 'Tahap produksi dikerjakan', 'sumber' => 'order_invoice_status.user_id', 'satuan' => 'catatan tahap', 'poin' => 1, 'catatan' => 'kolom pelaksana baru ada sejak 9 Oktober 2026 dan belum pernah terisi'],
-        'foto_progres'          => ['nama' => 'Foto progres diunggah', 'sumber' => 'order_invoice_foto.user_id', 'satuan' => 'foto', 'poin' => 2, 'catatan' => 'foto yang notanya sudah dihapus permanen tidak bisa dipastikan tokonya, jadi tidak ikut dinilai'],
-        'tindak_lanjut_selesai' => ['nama' => 'Tindak lanjut diselesaikan', 'sumber' => 'order_crm_followup.selesai_oleh', 'satuan' => 'tiket', 'poin' => 6],
-        'aktivitas_crm'         => ['nama' => 'Aktivitas pelanggan dicatat', 'sumber' => 'order_crm_aktivitas.user_id', 'satuan' => 'catatan', 'poin' => 1, 'catatan' => 'catatan CRM tidak terikat satu toko'],
-        'pesan_manual'          => ['nama' => 'Pesan manual terkirim', 'sumber' => 'order_crm_pesan_log manual, status terkirim', 'satuan' => 'pesan', 'poin' => 1],
-        'void_salah'            => ['nama' => 'Nota dibatalkan karena kesalahan', 'sumber' => 'order_invoice.deleted_by + alasan_batal', 'satuan' => 'nota', 'poin' => -5, 'catatan' => 'pembatalan beralasan sah dan data lama tanpa alasan tidak dikurangi poin'],
+        'nota_dibuat'    => ['nama' => 'Nota dibuat', 'sumber' => 'order_invoice.user_id', 'satuan' => 'nota', 'poin' => 2],
+        'nota_lunas'     => ['nama' => 'Nota lunas (closing)', 'sumber' => 'order_invoice.status_pembayaran 5/6', 'satuan' => 'nota', 'poin' => 3],
+        'tahap_produksi' => ['nama' => 'Tahap produksi dikerjakan', 'sumber' => 'order_invoice_status.user_id', 'satuan' => 'catatan tahap', 'poin' => 1, 'catatan' => 'kolom pelaksana baru ada sejak 9 Oktober 2026 dan belum pernah terisi'],
+        'foto_progres'   => ['nama' => 'Foto progres diunggah', 'sumber' => 'order_invoice_foto.user_id', 'satuan' => 'foto', 'poin' => 2, 'catatan' => 'foto yang notanya sudah dihapus permanen tidak bisa dipastikan tokonya, jadi tidak ikut dinilai'],
+        'void_salah'     => ['nama' => 'Nota dibatalkan karena kesalahan', 'sumber' => 'order_invoice.deleted_by + alasan_batal', 'satuan' => 'nota', 'poin' => -5, 'catatan' => 'pembatalan beralasan sah dan data lama tanpa alasan tidak dikurangi poin'],
     ];
+
+    /** Batas nilai poin yang boleh dipasang; di luar ini dianggap salah ketik. */
+    public const POIN_MIN = -100.0;
+    public const POIN_MAX = 100.0;
+
+    /** Awalan kunci crm_setting tempat Superadmin menyimpan poin yang berlaku. */
+    public const POIN_KUNCI = 'poin_';
 
     /**
      * Kerja yang tidak masuk poin karena tabelnya tidak menyimpan pelaku.
@@ -550,6 +564,132 @@ class KpiModel extends Model
     ];
 
     /**
+     * Poin bawaan kode, apa adanya dari ATURAN_POIN.
+     *
+     * @return array<string, float> slug => poin
+     */
+    public function poinBaku(): array
+    {
+        return array_map(static fn ($a) => (float) $a['poin'], self::ATURAN_POIN);
+    }
+
+    /**
+     * Poin yang berlaku: angka yang dipasang Superadmin kalau ada, selain itu
+     * bawaan kode.
+     *
+     * Disimpan di crm_setting (key-value) karena aturannya cuma beberapa baris dan
+     * perubahannya keputusan manajemen, bukan data yang perlu diaudit per periode.
+     * Nilai yang bukan angka (NULL dari reset, atau sisa impor lama) diabaikan,
+     * jadi halaman tetap punya angka walaupun tabel setelannya kosong.
+     *
+     * @return array<string, float> slug => poin berlaku
+     */
+    public function poinAktif(): array
+    {
+        $berlaku = $this->poinBaku();
+        $simpan  = (new PengaturanModel())->banyak(array_map(
+            static fn ($slug) => self::POIN_KUNCI . $slug,
+            array_keys($berlaku)
+        ));
+
+        foreach ($berlaku as $slug => $baku) {
+            $nilai = $simpan[self::POIN_KUNCI . $slug] ?? null;
+
+            if ($nilai !== null && is_numeric($nilai)) {
+                $berlaku[$slug] = round((float) $nilai, 1);
+            }
+        }
+
+        return $berlaku;
+    }
+
+    /**
+     * Daftar aturan untuk editor poin di halaman Target: bawaan, berlaku, dan
+     * apakah sudah dikustomisasi. Tidak menyentuh tabel kerja sama sekali, jadi
+     * halaman Target tetap ringan walau periode yang dibuka panjang.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function poinSemua(): array
+    {
+        $aktif = $this->poinAktif();
+        $isi   = [];
+
+        foreach (self::ATURAN_POIN as $slug => $aturan) {
+            // array_merge, bukan operator '+': kunci 'poin' sudah ada di $aturan
+            // (bawaan kode), dan '+' tidak menimpa kunci yang sudah ada
+            $isi[] = array_merge($aturan, [
+                'slug'      => $slug,
+                'poin'      => $aktif[$slug],
+                'poin_baku' => (float) $aturan['poin'],
+                'kustom'    => abs($aktif[$slug] - (float) $aturan['poin']) > 0.001,
+            ]);
+        }
+
+        return $isi;
+    }
+
+    /**
+     * Simpan poin per aktivitas.
+     *
+     * Kolom yang dibiarkan kosong, atau diisi sama persis dengan bawaan kode,
+     * menghapus kunci simpanannya: angka yang berlaku kembali ke ATURAN_POIN.
+     * Dengan begitu tabel setelan tidak mengumpul nilai yang sebenarnya tidak
+     * membedakan apa-apa, dan upgrade bawaan di kode nanti tetap sampai ke layar.
+     *
+     * @param array<string, mixed> $poin slug => nilai mentah dari form
+     * @return array{diubah: int, lewat: int, di luar: int}
+     */
+    public function simpanPoin(array $poin, ?int $user): array
+    {
+        $setelan = new PengaturanModel();
+        $baku    = $this->poinBaku();
+        $diubah  = 0;
+        $lewat   = 0;
+        $keluar  = 0;
+
+        foreach ($poin as $slug => $nilai) {
+            $slug = (string) $slug;
+
+            if (! array_key_exists($slug, $baku)) {
+                $keluar++;
+
+                continue;
+            }
+
+            $bersih = trim((string) $nilai);
+
+            if ($bersih === '' || ! is_numeric($bersih)) {
+                $setelan->tulis(self::POIN_KUNCI . $slug, null);
+                $diubah++;
+
+                continue;
+            }
+
+            $angka = round((float) $bersih, 1);
+
+            if ($angka < self::POIN_MIN || $angka > self::POIN_MAX) {
+                $lewat++;
+
+                continue;
+            }
+
+            $setelan->tulis(
+                self::POIN_KUNCI . $slug,
+                abs($angka - $baku[$slug]) < 0.001 ? null : (string) $angka
+            );
+
+            $diubah++;
+        }
+
+        log_message('info', 'Poin KPI diubah oleh user ' . ($user ?? 0) . ': ' . $diubah . ' aturan disimpan, '
+            . $lewat . ' dilewati (di luar ' . self::POIN_MIN . '..' . self::POIN_MAX . '), '
+            . $keluar . ' slug tidak dikenal.');
+
+        return ['diubah' => $diubah, 'lewat' => $lewat, 'di luar' => $keluar];
+    }
+
+    /**
      * Peringkat karyawan dari poin aktivitas pada periode terpilih.
      *
      * Hitungannya memakai query per pegawai yang sama dengan kartu KPI, jadi
@@ -561,6 +701,7 @@ class KpiModel extends Model
     {
         $catatan = $this->catatanAktivitas($s);
         $orang   = $this->pegawaiDetil($s['peran']);
+        $berlaku = $this->poinAktif();
 
         if (! empty($s['user_id'])) {
             $orang = array_intersect_key($orang, [(int) $s['user_id'] => 1]);
@@ -575,7 +716,7 @@ class KpiModel extends Model
             foreach (self::ATURAN_POIN as $slug => $aturan) {
                 $n          = (int) ($catatan[$id][$slug] ?? 0);
                 $jumlah[$slug] = $n;
-                $poin[$slug]   = round($n * (float) $aturan['poin'], 1);
+                $poin[$slug]   = round($n * ($berlaku[$slug] ?? 0.0), 1);
                 $total        += $poin[$slug];
             }
 
@@ -622,6 +763,7 @@ class KpiModel extends Model
     public function aturanPoin(array $s): array
     {
         $catatan = $this->catatanAktivitas($s);
+        $berlaku = $this->poinAktif();
 
         $hasil = [];
         foreach (self::ATURAN_POIN as $slug => $aturan) {
@@ -630,10 +772,14 @@ class KpiModel extends Model
                 $tercatat += (int) ($baris[$slug] ?? 0);
             }
 
-            $hasil[] = $aturan + [
+            $hasil[] = array_merge($aturan, [
                 'slug'         => $slug,
                 'tercatat'     => $tercatat,
-            ];
+                // yang ditampilkan angka yang berlaku, bukan bawaan kode: pembaca
+                // popup harus melihat dasar hitung gaji yang sebenarnya
+                'poin'         => $berlaku[$slug] ?? (float) $aturan['poin'],
+                'poin_baku'    => (float) $aturan['poin'],
+            ]);
         }
 
         return $hasil;
@@ -669,30 +815,20 @@ class KpiModel extends Model
             $catatan[$id] = [
                 'nota_dibuat' => (int) $b['jumlah_order'],
                 'nota_lunas'  => (int) $b['lunas'],
-                // poin nilai diberikan per Rp 1 juta penuh, recehannya tidak dihitung
-                'nilai_lunas' => (int) floor(max(0.0, (float) $b['gmv']) / 1000000),
+                // gmv dan unit ikut dibawa untuk kolom catatan halaman ranking;
+                // keduanya bukan aturan poin lagi sejak nilai nota dicabut dari poin
                 'gmv'         => (float) $b['gmv'],
                 'unit'        => (int) $b['unit'],
             ];
         }
 
-        $sumber = [
-            'tindak_lanjut_selesai' => fn (array $b) => (int) $b['contoh'],
-            'void_salah'            => fn (array $b) => (int) $b['salah'],
-        ];
-
-        foreach ($sumber as $slug => $ambil) {
-            $peta = match ($slug) {
-                'tindak_lanjut_selesai' => $this->resolusiPerPegawai($s),
-                default                 => $this->voidPerPegawai($s),
-            };
-
-            foreach ($peta as $id => $baris) {
-                if ($id === 0) {
-                    continue;
-                }
-                $catatan[$id][$slug] = $ambil($baris);
+        // satu-satunya pengurang: nota yang dibatalkan karena kesalahan
+        foreach ($this->voidPerPegawai($s) as $id => $baris) {
+            if ($id === 0) {
+                continue;
             }
+
+            $catatan[$id]['void_salah'] = (int) $baris['salah'];
         }
 
         foreach ($this->jejakLain($s) as $slug => $perPegawai) {
@@ -705,12 +841,13 @@ class KpiModel extends Model
     }
 
     /**
-     * Aktivitas di luar nota: tahap produksi, foto, pesan manual dan catatan CRM.
-     * Semuanya dihitung dari kolom pelakunya sendiri.
+     * Aktivitas di luar nota yang tetap dihitung poin: tahap produksi dan foto
+     * progres. Keduanya dihitung dari kolom pelakunya sendiri.
      *
-     * Tahap produksi dan foto ikut menilai nota yang kemudian dibatalkan:
-     * kerjanya memang terjadi. Catatan CRM tidak punya kaitan toko, jadi
-     * saringan toko tidak berlaku di sana dan itu ditulis di halaman ranking.
+     * Tahap produksi dan foto ikut menilai nota yang kemudian dibatalkan: kerjanya
+     * memang terjadi. Pesan manual dan catatan CRM pernah dihitung di sini tetapi
+     * keduanya dicabut dari poin (31 Oktober 2026), jadi querynya tidak dijalankan
+     * lagi -- ranking tidak boleh membayar kerja yang tidak ditampilkan.
      *
      * @return array<string, array<int, int>>
      */
@@ -730,17 +867,6 @@ class KpiModel extends Model
                 . $this->sambungkan('f') . ' JOIN ' . $this->t('invoice') . ' o ON o.id_invoice = f.invoice_id'
                 . ' WHERE f.created_at BETWEEN :awal_unix: AND :akhir_unix:' . $toko . $level
                 . $this->klausulPelaku($s, 'f.user_id') . ' GROUP BY f.user_id',
-
-            'pesan_manual' => 'SELECT g.user_id user_id, COUNT(1) jumlah FROM ' . $this->t('crm_pesan_log') . ' g'
-                . $this->sambungkan('g')
-                . " WHERE g.tipe_pesan = 'manual' AND g.status = 'terkirim'"
-                . ' AND g.created_at BETWEEN :awal_unix: AND :akhir_unix:' . $level
-                . $this->klausulPelaku($s, 'g.user_id') . ' GROUP BY g.user_id',
-
-            'aktivitas_crm' => 'SELECT a.user_id user_id, COUNT(1) jumlah FROM ' . $this->t('crm_aktivitas') . ' a'
-                . $this->sambungkan('a')
-                . ' WHERE a.created_at BETWEEN :awal_unix: AND :akhir_unix:' . $level
-                . $this->klausulPelaku($s, 'a.user_id') . ' GROUP BY a.user_id',
         ];
 
         $hasil = [];

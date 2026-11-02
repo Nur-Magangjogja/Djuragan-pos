@@ -3,9 +3,15 @@
 /**
  * Daftar SOP.
  *
- * @var list<array<string, mixed>> $baris
- * @var array<int, string>         $untuk
- * @var bool                       $kelola
+ * @var string                    $title           judul halaman
+ * @var list<array<string, mixed>> $baris          baris hasil query
+ * @var string                    $cari            kata kunci pencarian
+ * @var string                    $kategori        kelompok terpilih
+ * @var array<int, string>        $daftar_kategori daftar kelompok yang pernah dipakai
+ * @var array<string, string>     $untuk           peta kode -> label peran
+ * @var bool                      $kelola          apakah boleh mengelola
+ * @var string                    $kabar           pesan sukses flash
+ * @var string                    $galat           pesan gagal flash
  */
 
 $level = (string) session()->get('level');
@@ -62,10 +68,10 @@ $level = (string) session()->get('level');
     </div>
 
     <?php if ($kabar !== '') : ?>
-        <div class="alert alert-success py-2"><?= esc($kabar) ?></div>
+        <div class="alert alert-success py-2" data-flash><?= esc($kabar) ?></div>
     <?php endif; ?>
     <?php if ($galat !== '') : ?>
-        <div class="alert alert-danger py-2"><?= esc($galat) ?></div>
+        <div class="alert alert-danger py-2" data-flash><?= esc($galat) ?></div>
     <?php endif; ?>
 
     <form class="sop-saring" method="get" action="<?= esc(site_url('admin/sop')) ?>">

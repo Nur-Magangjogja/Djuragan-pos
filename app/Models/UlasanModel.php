@@ -37,6 +37,33 @@ class UlasanModel extends Model
         return $baris ?: null;
     }
 
+    /**
+     * Status ulasan per nota untuk daftar: satu query, bukan satu per baris.
+     * Ulasan yang sudah diterima menang atas baris 'diminta' — catatan diterima
+     * bisa ber-platform berbeda, sedangkan 'diminta' selalu tanpa platform.
+     *
+     * @return array<int, array<string, mixed>> invoice_id => baris ulasan
+     */
+    public function untukInvoiceList(array $invoice_ids): array
+    {
+        if ($invoice_ids === []) {
+            return [];
+        }
+
+        $peta = [];
+
+        foreach ($this->db->table('crm_ulasan')->whereIn('invoice_id', array_map('intval', $invoice_ids))
+            ->get()->getResultArray() as $u) {
+            $id = (int) $u['invoice_id'];
+
+            if (! isset($peta[$id]) || (string) $u['status'] === 'diterima') {
+                $peta[$id] = $u;
+            }
+        }
+
+        return $peta;
+    }
+
     /** Catat bahwa CS sudah meminta ulasan. Barisnya diperbarui kalau sudah pernah ada. */
     public function minta(int $invoice_id, ?int $tugas_id, ?int $oleh, string $platform = ''): int
     {

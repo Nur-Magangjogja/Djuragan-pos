@@ -3,10 +3,21 @@
 /**
  * Daftar sesi checklist (toko harian + pemeriksaan email).
  *
- * @var array $baris  hasil ChecklistModel::daftar()
- * @var array $s      saringan yang sudah dibersihkan controller
- * @var array $jenis  ChecklistModel::JENIS
- * @var array $toko   id_toko => nama toko yang boleh diakses akun ini
+ * Semua variabel di bawah disuntik Admin\Checklist::index() lewat view() (extract),
+ * jadi analyzer tidak bisa menelusurinya dari file ini. Blok @var di bawah hanya
+ * memberi tahunya ke Intelephense, bukan kode yang dijalankan.
+ *
+ * @var string $title      judul halaman
+ * @var array  $baris      hasil ChecklistModel::daftar()
+ * @var array  $s          saringan yang sudah dibersihkan controller
+ * @var array  $jenis      ChecklistModel::JENIS
+ * @var array  $toko       id_toko => nama toko yang boleh diakses akun ini
+ * @var bool   $kelola     akun ini admin/superadmin
+ * @var string $kabar      pesan sukses flash (string kosong kalau tidak ada)
+ * @var string $galat      pesan gagal flash (string kosong kalau tidak ada)
+ * @var int    $total      jumlah sesi sesuai saringan
+ * @var int    $page       halaman aktif (berbasis satu)
+ * @var int    $batas      baris per halaman
  */
 
 $level   = (string) session()->get('level');
@@ -60,11 +71,20 @@ $tanya = static function (array $ubah): string {
     .table.ckl-daftar { margin: 0; }
     .ckl-daftar th { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: #667085; background: #f9fafb; }
     .ckl-daftar td { vertical-align: middle; font-size: .86rem; }
+    .ckl-daftar thead th:first-child { width: 34%; }
     .ckl-nama { font-weight: 700; color: #0f172a; text-decoration: none; display: block; }
     .ckl-nama:hover { color: #da251d; }
     .ckl-sub { font-size: .76rem; color: #64748b; display: flex; flex-wrap: wrap; gap: .2rem .6rem; margin-top: .1rem; }
     .ckl-kosong { padding: 2.6rem 1rem; text-align: center; color: #94a3b8; }
     .ckl-kosong i { font-size: 2rem; display: block; margin-bottom: .5rem; }
+
+    /* baris kepala per toko: pemisah visual antara kelompok, bukan kolom baru */
+    .ckl-daftar tr.ckl-grup td {
+        background: #f6f8fb; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #eef1f6;
+        font-size: .78rem; color: #334155; letter-spacing: .01em; padding: .5rem .9rem;
+    }
+    .ckl-daftar tr.ckl-grup strong { font-size: .82rem; color: #0f172a; }
+    .ckl-angka { margin-left: .5rem; font-size: .72rem; color: #64748b; }
 
     .pil-ckl { display: inline-block; padding: .18rem .6rem; border-radius: 999px; font-size: .72rem; font-weight: 700; white-space: nowrap; }
     .c-berjalan { background: #fef3e2; color: #b45309; }
@@ -87,7 +107,7 @@ $tanya = static function (array $ubah): string {
     <div class="ckl-head">
         <div class="me-auto">
             <h1 class="h3 mt-5"><i class="fal fa-ballot-check me-1 text-brand-500"></i> <?= esc($title) ?></h1>
-            <p>Pemeriksaan rutin toko dan kotak email. Satu sasaran satu lembar per tanggal &mdash; sesinya otomatis jadi tugas di antrean CS.</p>
+            <p>Lembar pemeriksaan rutin tiap toko yang jadi delegasimu. Satu toko satu lembar per tanggal &mdash; sesinya otomatis jadi tugas di antrean, jadi &quot;sudah dicek hari ini atau belum&quot; terlihat dari satu tempat.</p>
         </div>
         <?php if ($kelola) : ?>
             <a class="btn btn-sm btn-outline-secondary rounded-pill" href="<?= esc(site_url('admin/checklist/aturan')) ?>">
@@ -97,26 +117,17 @@ $tanya = static function (array $ubah): string {
     </div>
 
     <?php if ($kabar !== '') : ?>
-        <div class="alert alert-success py-2"><?= esc($kabar) ?></div>
+        <div class="alert alert-success py-2" data-flash><?= esc($kabar) ?></div>
     <?php endif; ?>
     <?php if ($galat !== '') : ?>
-        <div class="alert alert-danger py-2"><?= esc($galat) ?></div>
+        <div class="alert alert-danger py-2" data-flash><?= esc($galat) ?></div>
     <?php endif; ?>
 
     <?php if ($toko !== []) : ?>
         <div class="ckl-kartu">
             <div class="ckl-judul">Buka lembar hari ini</div>
             <?= form_open('admin/checklist/mulai', ['class' => 'ckl-buka']) ?>
-                <div class="lapangan">
-                    <label for="jenis-buka">Jenis</label>
-                    <select class="form-select form-select-sm" id="jenis-buka" name="jenis"
-                        onchange="var t=document.getElementById('lapangan-toko'),m=document.getElementById('lapangan-email');
-                                   t.style.display=this.value==='toko'?'':'none';m.style.display=this.value==='email'?'':'none';">
-                        <?php foreach ($jenis as $kode => $nama) : ?>
-                            <option value="<?= esc($kode) ?>"><?= esc($nama) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
+                <input type="hidden" name="jenis" value="toko">
                 <div class="lapangan" id="lapangan-toko">
                     <label for="toko-buka">Toko</label>
                     <select class="form-select form-select-sm" id="toko-buka" name="toko_id">
@@ -124,11 +135,6 @@ $tanya = static function (array $ubah): string {
                             <option value="<?= (int) $id_toko ?>"><?= esc($nama_t) ?></option>
                         <?php endforeach; ?>
                     </select>
-                </div>
-                <div class="lapangan" id="lapangan-email" style="display:none">
-                    <label for="akun-buka">Akun email</label>
-                    <input type="email" class="form-control form-control-sm" id="akun-buka" name="akun_email"
-                        maxlength="120" placeholder="halo@toko.com">
                 </div>
                 <div class="lapangan">
                     <label for="tanggal-buka">Tanggal</label>
@@ -197,6 +203,26 @@ $tanya = static function (array $ubah): string {
             </div>
         </form>
 
+        <?php
+        // satu kelompok per toko yang didelegasikan: orang membaca tokonya dulu,
+        // baru lembar apa yang sudah dibuka di toko itu. Sesi email lama dan toko
+        // yang tidak lagi termasuk delegasi dikumpulkan di kelompok terakhir supaya
+        // data lama tetap bisa dibuka.
+        $grup = [];
+
+        foreach ($baris as $r) {
+            $grup[(int) ($r['toko_id'] ?? 0)][] = $r;
+        }
+
+        $sisa = [];
+
+        foreach ($grup as $id_toko => $isi) {
+            if (! isset($toko[(int) $id_toko])) {
+                $sisa = array_merge($sisa, $isi);
+                unset($grup[$id_toko]);
+            }
+        }
+        ?>
         <?php if ($baris === []) : ?>
             <div class="ckl-kosong">
                 <i class="fal fa-circle-check text-success"></i>
@@ -204,7 +230,7 @@ $tanya = static function (array $ubah): string {
             </div>
         <?php else : ?>
             <div class="table-responsive">
-                <table class="table table-hover align-middle ckl-daftar">
+                <table class="table table-hover align-middle ckl-daftar tabel-rapi">
                     <thead>
                         <tr>
                             <th>Sesi</th>
@@ -212,11 +238,20 @@ $tanya = static function (array $ubah): string {
                             <th>Progres</th>
                             <th>Dikerjakan</th>
                             <th>Status</th>
-                            <th class="text-end">Aksi</th>
+                            <th class="text-center">Aksi</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($baris as $r) : ?>
+                        <?php foreach ($toko as $id_toko => $nama_t) : ?>
+                            <?php $isi = $grup[(int) $id_toko] ?? []; ?>
+                            <tr class="ckl-grup">
+                                <td colspan="6">
+                                    <i class="fal fa-store"></i>
+                                    <strong><?= esc($nama_t) ?></strong>
+                                    <span class="ckl-angka"><?= count($isi) ?> lembar di halaman ini</span>
+                                </td>
+                            </tr>
+                            <?php foreach ($isi as $r) : ?>
                             <?php
                             $butir = max(1, (int) $r['jumlah_butir']);
                             $beres = $butir - (int) $r['jumlah_belum'];
@@ -258,14 +293,61 @@ $tanya = static function (array $ubah): string {
                                 <td>
                                     <span class="pil-ckl c-<?= esc($r['status']) ?>"><?= $r['status'] === 'selesai' ? 'Selesai' : 'Berjalan' ?></span>
                                 </td>
-                                <td class="text-end">
+                                <td class="text-center">
                                     <a class="btn btn-sm btn-link text-decoration-none"
                                         href="<?= esc(site_url('admin/checklist/' . (int) $r['id_run'])) ?>">
                                         <?= $r['status'] === 'selesai' ? 'Lihat' : 'Isi' ?>
                                     </a>
                                 </td>
                             </tr>
+                            <?php endforeach; ?>
                         <?php endforeach; ?>
+
+                        <?php if ($sisa !== []) : ?>
+                            <tr class="ckl-grup">
+                                <td colspan="6">
+                                    <i class="fal fa-inbox"></i>
+                                    <strong>Lembar lain</strong>
+                                    <span class="ckl-angka">email lama atau toko yang tidak lagi jadi delegasi</span>
+                                </td>
+                            </tr>
+                            <?php foreach ($sisa as $r) : ?>
+                                <?php
+                                $butir2 = max(1, (int) $r['jumlah_butir']);
+                                $beres2 = $butir2 - (int) $r['jumlah_belum'];
+                                ?>
+                                <tr>
+                                    <td>
+                                        <a class="ckl-nama" href="<?= esc(site_url('admin/checklist/' . (int) $r['id_run'])) ?>">
+                                            <?= $r['jenis'] === 'email'
+                                ? 'Email ' . esc($r['akun_email'] ?: '(akun tidak tercatat)')
+                                : esc($r['nama_juragan'] ?: 'Toko #' . (int) $r['toko_id']) ?>
+                                        </a>
+                                        <div class="ckl-sub">
+                                            <span><?= esc($jenis[$r['jenis']] ?? $r['jenis']) ?></span>
+                                            <span>#<?= (int) $r['id_run'] ?></span>
+                                        </div>
+                                    </td>
+                                    <td class="text-nowrap"><?= esc(tanggal_rincian((string) $r['tanggal'])) ?></td>
+                                    <td>
+                                        <div class="ckl-meter">
+                                            <div class="batang"><i class="isi" style="width: <?= (int) round($beres2 * 100 / $butir2) ?>%"></i></div>
+                                            <span><?= $beres2 ?>/<?= (int) $r['jumlah_butir'] ?></span>
+                                        </div>
+                                    </td>
+                                    <td class="text-muted"><?= $r['nama_dikerjakan'] ? esc($r['nama_dikerjakan']) : 'belum ada' ?></td>
+                                    <td>
+                                        <span class="pil-ckl c-<?= esc($r['status']) ?>"><?= $r['status'] === 'selesai' ? 'Selesai' : 'Berjalan' ?></span>
+                                    </td>
+                                    <td class="text-center">
+                                        <a class="btn btn-sm btn-link text-decoration-none"
+                                            href="<?= esc(site_url('admin/checklist/' . (int) $r['id_run'])) ?>">
+                                            <?= $r['status'] === 'selesai' ? 'Lihat' : 'Isi' ?>
+                                        </a>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
                     </tbody>
                 </table>
             </div>

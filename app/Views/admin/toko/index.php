@@ -3,6 +3,10 @@
 /**
  * Daftar toko online.
  *
+ * Variabel di bawah disuntik Admin\Toko::index() lewat view() (extract), jadi analyzer
+ * tidak menelusurinya dari file ini. Blok @var hanya memberi tahunya ke Intelephense.
+ *
+ * @var string $title   judul halaman
  * @var array $s        saringan aktif
  * @var array $baris    hasil TokoOnlineModel::daftar()
  * @var int   $total    jumlah baris
@@ -11,6 +15,8 @@
  * @var array $toko     id juragan => nama
  * @var array $platform daftar marketplace
  * @var bool  $kelola   akun ini boleh mengelola toko?
+ * @var string $kabar   pesan sukses flash (string kosong kalau tidak ada)
+ * @var string $galat   pesan gagal flash (string kosong kalau tidak ada)
  */
 ?>
 <?= $this->extend('template/main') ?>
@@ -60,8 +66,8 @@
         <?php endif; ?>
     </div>
 
-    <?php if ($kabar !== '') : ?><div class="alert alert-success py-2"><?= esc($kabar) ?></div><?php endif; ?>
-    <?php if ($galat !== '') : ?><div class="alert alert-danger py-2"><?= esc($galat) ?></div><?php endif; ?>
+    <?php if ($kabar !== '') : ?><div class="alert alert-success py-2" data-flash><?= esc($kabar) ?></div><?php endif; ?>
+    <?php if ($galat !== '') : ?><div class="alert alert-danger py-2" data-flash><?= esc($galat) ?></div><?php endif; ?>
 
     <form class="toko-saring" method="get" action="<?= esc(site_url('admin/toko')) ?>">
         <div class="lapangan">
@@ -112,7 +118,7 @@
                 Belum ada toko online yang dicatat di sini.</div>
         <?php else : ?>
             <div class="table-responsive">
-                <table class="table table-hover align-middle t-table">
+                <table class="table table-hover align-middle t-table tabel-rapi">
                     <thead>
                         <tr>
                             <th>Toko</th>
@@ -120,7 +126,7 @@
                             <th>Platform</th>
                             <th>CS</th>
                             <th>Status</th>
-                            <th class="text-end">Aksi</th>
+                            <th class="text-center">Aksi</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -149,7 +155,7 @@
                                         <?= (int) $t['aktif'] === 1 ? 'aktif' : 'nonaktif' ?>
                                     </span>
                                 </td>
-                                <td class="text-end">
+                                <td class="text-center">
                                     <?php if ($kelola) : ?>
                                         <div class="d-inline-flex gap-1">
                                             <a class="btn btn-sm btn-outline-secondary rounded-pill"

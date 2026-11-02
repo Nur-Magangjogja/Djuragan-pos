@@ -384,6 +384,46 @@
 }
 
 /* chevron-up */
+.fal.fa-star::before {
+  content: "\f005";
+}
+
+/* star */
+.fal.fa-inbox::before {
+  content: "\f01c";
+}
+
+/* inbox */
+.fal.fa-comment-dots::before {
+  content: "\f4ad";
+}
+
+/* comment-dots */
+.fal.fa-phone-alt::before {
+  content: "\f879";
+}
+
+/* phone-alt */
+.fal.fa-user-check::before {
+  content: "\f4fc";
+}
+
+/* user-check */
+.fal.fa-exclamation-triangle::before {
+  content: "\f071";
+}
+
+/* triangle-exclamation */
+.fal.fa-circle-check::before {
+  content: "\f058";
+}
+
+/* circle-check */
+.fal.fa-envelope::before {
+  content: "\f0e0";
+}
+
+/* envelope */
 
 /* ------------------------------------------------------------------
    Wadah pilihan bergulir — pemilih juragan di Pengaturan > Pengguna.

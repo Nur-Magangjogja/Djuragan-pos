@@ -3,6 +3,9 @@
 /**
  * Layar Jam shift CS.
  *
+ * @var string $title   judul halaman dari controller
+ * @var string $kabar   flashdata sukses, string kosong kalau tidak ada
+ * @var string $galat   flashdata gagal, string kosong kalau tidak ada
  * @var string $tanggal hari yang sedang diatur
  * @var array  $baris   satu baris per staf aktif: id, nama, level, mulai, selesai, sudah, lewat
  * @var array  $operan  waktu + jumlah sapuan operan otomatis terakhir
@@ -51,10 +54,10 @@ $sudah_lewat = count(array_filter($baris, static fn ($b) => $b['lewat']));
     <h1 class="h3 mt-2"><i class="fal fa-clock me-1 text-brand-500"></i> <?= esc($title) ?></h1>
 
     <?php if ($kabar !== '') : ?>
-        <div class="alert alert-success py-2"><?= esc($kabar) ?></div>
+        <div class="alert alert-success py-2" data-flash><?= esc($kabar) ?></div>
     <?php endif; ?>
     <?php if ($galat !== '') : ?>
-        <div class="alert alert-danger py-2"><?= esc($galat) ?></div>
+        <div class="alert alert-danger py-2" data-flash><?= esc($galat) ?></div>
     <?php endif; ?>
 
     <div class="shift-kotak">
@@ -106,7 +109,7 @@ $sudah_lewat = count(array_filter($baris, static fn ($b) => $b['lewat']));
         <h2><i class="fal fa-broom me-1"></i> Operan otomatis</h2>
         <p class="shift-hint">
             Sistem memeriksa sendiri paling banyak satu kali tiap lima menit, yaitu setiap kali halaman
-            Antrean Tugas atau badge angka dibuka. Kalau hosting punya cron, jalankan
+            layar Tugas CS atau badge angka dibuka. Kalau hosting punya cron, jalankan
             <code>php spark crm:operan</code> setiap menit — hasilnya sama, hanya lebih pasti waktunya.
         </p>
         <p class="shift-cek mb-2">

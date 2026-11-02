@@ -4,11 +4,13 @@
  * Panel CS sebuah toko online: siapa yang menanganinya dan sudah sejauh mana
  * ia mengenal tokonya.
  *
- * @var array $toko   baris toko
- * @var array $daftar  baris crm_toko_akses + nama staf
- * @var array $staf    id => nama CS yang belum ditautkan
- * @var array $status  label status pengenalan
- * @var bool  $kelola  akun ini Admin/Superadmin?
+ * @var array  $toko    baris toko
+ * @var array  $daftar  baris crm_toko_akses + nama staf
+ * @var array  $staf    id => nama CS yang belum ditautkan
+ * @var array  $status  label status pengenalan
+ * @var bool   $kelola  akun ini Admin/Superadmin?
+ * @var string $kabar   pesan sukses flash (string kosong kalau tidak ada)
+ * @var string $galat   pesan gagal flash (string kosong kalau tidak ada)
  */
 ?>
 <?= $this->extend('template/main') ?>
@@ -50,8 +52,8 @@
         <?php endif; ?>
     </p>
 
-    <?php if ($kabar !== '') : ?><div class="alert alert-success py-2"><?= esc($kabar) ?></div><?php endif; ?>
-    <?php if ($galat !== '') : ?><div class="alert alert-danger py-2"><?= esc($galat) ?></div><?php endif; ?>
+    <?php if ($kabar !== '') : ?><div class="alert alert-success py-2" data-flash><?= esc($kabar) ?></div><?php endif; ?>
+    <?php if ($galat !== '') : ?><div class="alert alert-danger py-2" data-flash><?= esc($galat) ?></div><?php endif; ?>
 
     <div class="c-kotak">
         <h2><i class="fal fa-users me-1"></i> CS yang memegang toko ini</h2>

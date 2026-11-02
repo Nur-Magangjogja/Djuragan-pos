@@ -125,7 +125,7 @@ class TugasTemplateModel extends Model
             $tugas = $model->buatUnik([
                 'judul'       => (string) $item['judul'],
                 'deskripsi'   => (string) ($item['deskripsi'] ?? ''),
-                'jenis'       => (string) $item['jenis'],
+                'jenis'       => $this->jenisSah((string) $item['jenis']),
                 'prioritas'   => (string) $item['prioritas'],
                 'sumber'      => 'sistem',
                 'kunci_unik'  => 'tpl-' . $id_template . '-' . (int) $item['id_item'] . '-' . ($toko_id ?: 0) . '-' . $tanggal_dasar,
@@ -143,7 +143,6 @@ class TugasTemplateModel extends Model
     /** Buang item kosong dan rapikan nilainya sebelum disimpan. */
     private function bersihkanItem(array $items): array
     {
-        $jenis  = array_keys(TugasModel::JENIS);
         $bersih = [];
 
         foreach ($items as $item) {
@@ -156,13 +155,24 @@ class TugasTemplateModel extends Model
             $bersih[] = [
                 'judul'        => mb_substr($judul, 0, 200),
                 'deskripsi'    => trim((string) ($item['deskripsi'] ?? '')) === '' ? null : mb_substr((string) $item['deskripsi'], 0, 2000),
-                'jenis'        => in_array((string) ($item['jenis'] ?? 'lain'), $jenis, true) ? (string) $item['jenis'] : 'lain',
+                'jenis'        => $this->jenisSah((string) ($item['jenis'] ?? 'lain')),
                 'prioritas'    => array_key_exists((string) ($item['prioritas'] ?? 'normal'), TugasModel::PRIORITAS) ? (string) $item['prioritas'] : 'normal',
                 'tenggat_hari' => max(0, min(365, (int) ($item['tenggat_hari'] ?? 1))),
             ];
         }
 
         return $bersih;
+    }
+
+    /**
+     * Jenis yang boleh dituangkan templat: hanya yang punya layar daftar umum.
+     * Jenis milik submenu (catatan WhatsApp, reminder transaksi, checklist toko,
+     * pemeriksaan email) lahir dari layar masing-masing beserta data sampingannya,
+     * jadi kalau templat membuatnya tugas itu tidak tampil di layar mana pun.
+     */
+    private function jenisSah(string $jenis): string
+    {
+        return array_key_exists($jenis, TugasModel::jenisLain()) ? $jenis : 'lain';
     }
 
     private function p(string $tabel): string

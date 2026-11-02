@@ -3,8 +3,14 @@
 /**
  * Pengenalan toko untuk CS: daftar toko yang ia pegang + status pengenalannya.
  *
- * @var array $toko   hasil TokoOnlineModel::milikUser()
- * @var array $status TokoOnlineModel::PENGENALAN
+ * Semua variabel di bawah disuntik Admin\Toko::pengenalan() lewat view(); keterangan
+ * tipe hanya untuk analyzer, bukan kode yang dijalankan.
+ *
+ * @var string $title  judul halaman
+ * @var array  $toko   hasil TokoOnlineModel::milikUser()
+ * @var array  $status TokoOnlineModel::PENGENALAN
+ * @var string $kabar  pesan sukses flash (string kosong kalau tidak ada)
+ * @var string $galat  pesan gagal flash (string kosong kalau tidak ada)
  */
 $belum = count(array_filter($toko, static fn ($t) => ($t['pengenalan_saya'] ?? 'belum') !== 'sudah'));
 ?>
@@ -40,8 +46,8 @@ $belum = count(array_filter($toko, static fn ($t) => ($t['pengenalan_saya'] ?? '
         Pemeriksaan harian tetap jalan walau tokonya sudah dipahami.
     </p>
 
-    <?php if ($kabar !== '') : ?><div class="alert alert-success py-2"><?= esc($kabar) ?></div><?php endif; ?>
-    <?php if ($galat !== '') : ?><div class="alert alert-danger py-2"><?= esc($galat) ?></div><?php endif; ?>
+    <?php if ($kabar !== '') : ?><div class="alert alert-success py-2" data-flash><?= esc($kabar) ?></div><?php endif; ?>
+    <?php if ($galat !== '') : ?><div class="alert alert-danger py-2" data-flash><?= esc($galat) ?></div><?php endif; ?>
 
     <?php if ($toko === []) : ?>
         <div class="p-kotak text-muted">Belum ada toko online yang ditautkan ke akunmu. Minta Admin menautkannya lewat halaman Toko Online.</div>

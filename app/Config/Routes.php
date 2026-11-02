@@ -151,6 +151,8 @@ $routes->group('admin', static function ($routes) {
             // target dipasang sebelum rute detail supaya 'target' tidak dikira indikator
             $routes->get('target', 'Admin\Kpi::target');
             $routes->post('target', 'Admin\Kpi::simpanTarget');
+            // poin aktivitas ikut keputusan manajemen: layar yang sama, form terpisah
+            $routes->post('poin', 'Admin\Kpi::simpanPoin');
         });
 
         $routes->get('ranking', 'Admin\Kpi::ranking');
@@ -200,6 +202,45 @@ $routes->group('admin', static function ($routes) {
         $routes->get('/', 'Admin\Tugas::index', ['as' => 'hal.tugas']);
         $routes->get('jumlah', 'Admin\Tugas::jumlah');
         $routes->get('dasbor', 'Admin\Tugas::dasbor');
+
+        // kategori 1 dari empat kategori Tugas CS: percakapan WhatsApp yang perlu
+        // ditindaklanjuti. CS mengambil sendiri (guard anti-ganda di database),
+        // melepas tangan kalau tidak lanjut, dan menandai selesai. Daftar nomor
+        // pengirim beserta siapa yang boleh memakainya diatur Admin/Superadmin.
+        $routes->group('whatsapp', static function ($routes) {
+            $routes->get('/', 'Admin\Whatsapp::index');
+            $routes->get('jumlah', 'Admin\Whatsapp::jumlah');
+            $routes->post('simpan', 'Admin\Whatsapp::simpan');
+            $routes->post('ambil/(:num)', 'Admin\Whatsapp::ambil/$1');
+            $routes->post('lepas/(:num)', 'Admin\Whatsapp::lepas/$1');
+            $routes->post('selesai/(:num)', 'Admin\Whatsapp::selesai/$1');
+
+            $routes->group('', ['filter' => 'auth:admin,superadmin'], static function ($routes) {
+                $routes->get('nomor', 'Admin\Whatsapp::nomor');
+                $routes->post('nomor', 'Admin\Whatsapp::simpanNomor');
+                $routes->post('nomor-aktif', 'Admin\Whatsapp::aktifNomor');
+            });
+        });
+        // kategori 2: permintaan ulasan dari nota yang sudah selesai + lunas. Tab
+        // ketiga menampung penagihan (DP belum dikonfirmasi / pelunasan mendekati
+        // tenggat) supaya pekerjaan uang tetap punya satu layar sendiri.
+        $routes->group('bintang', static function ($routes) {
+            $routes->get('/', 'Admin\Bintang::index');
+            $routes->get('jumlah', 'Admin\Bintang::jumlah');
+            $routes->post('ambil/(:num)', 'Admin\Bintang::ambil/$1');
+            $routes->post('lepas/(:num)', 'Admin\Bintang::lepas/$1');
+            $routes->post('selesai/(:num)', 'Admin\Bintang::selesai/$1');
+        });
+        // kategori 4: catatan cek email. Bukan pemeriksaan akun — hanya catatan apa
+        // yang dilihat di kotak masuk, masuk ke mesin tugas yang sama.
+        $routes->group('email', static function ($routes) {
+            $routes->get('/', 'Admin\Email::index');
+            $routes->get('jumlah', 'Admin\Email::jumlah');
+            $routes->post('simpan', 'Admin\Email::simpan');
+            $routes->post('ambil/(:num)', 'Admin\Email::ambil/$1');
+            $routes->post('lepas/(:num)', 'Admin\Email::lepas/$1');
+            $routes->post('selesai/(:num)', 'Admin\Email::selesai/$1');
+        });
         $routes->get('cari-pelanggan', 'Admin\Tugas::cariPelanggan');
         $routes->get('catatan', 'Admin\Tugas::catatan');
         $routes->post('catatan', 'Admin\Tugas::simpanCatatan');

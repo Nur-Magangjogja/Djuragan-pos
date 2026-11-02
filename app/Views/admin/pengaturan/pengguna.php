@@ -122,10 +122,10 @@ $per_halaman = (int) config('Pager')->perPage;
     <h1 class="h3 mt-5">Pengaturan Pengguna</h1>
 
     <?php if ($sukses !== null) { ?>
-        <div class="alert alert-success py-2"><?= esc($sukses) ?></div>
+        <div class="alert alert-success py-2" data-flash><?= esc($sukses) ?></div>
     <?php } ?>
     <?php if ($gagal !== null) { ?>
-        <div class="alert alert-danger py-2"><?= esc($gagal) ?></div>
+        <div class="alert alert-danger py-2" data-flash><?= esc($gagal) ?></div>
     <?php } ?>
     <?php if ($dari_sunting && $errors !== []) { ?>
         <div class="alert alert-danger py-2">
