@@ -3,10 +3,21 @@
 /**
  * Daftar sesi checklist (toko harian + pemeriksaan email).
  *
- * @var array $baris  hasil ChecklistModel::daftar()
- * @var array $s      saringan yang sudah dibersihkan controller
- * @var array $jenis  ChecklistModel::JENIS
- * @var array $toko   id_toko => nama toko yang boleh diakses akun ini
+ * Semua variabel di bawah disuntik Admin\Checklist::index() lewat view() (extract),
+ * jadi analyzer tidak bisa menelusurinya dari file ini. Blok @var di bawah hanya
+ * memberi tahunya ke Intelephense, bukan kode yang dijalankan.
+ *
+ * @var string $title      judul halaman
+ * @var array  $baris      hasil ChecklistModel::daftar()
+ * @var array  $s          saringan yang sudah dibersihkan controller
+ * @var array  $jenis      ChecklistModel::JENIS
+ * @var array  $toko       id_toko => nama toko yang boleh diakses akun ini
+ * @var bool   $kelola     akun ini admin/superadmin
+ * @var string $kabar      pesan sukses flash (string kosong kalau tidak ada)
+ * @var string $galat      pesan gagal flash (string kosong kalau tidak ada)
+ * @var int    $total      jumlah sesi sesuai saringan
+ * @var int    $page       halaman aktif (berbasis satu)
+ * @var int    $batas      baris per halaman
  */
 
 $level   = (string) session()->get('level');
@@ -60,6 +71,7 @@ $tanya = static function (array $ubah): string {
     .table.ckl-daftar { margin: 0; }
     .ckl-daftar th { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: #667085; background: #f9fafb; }
     .ckl-daftar td { vertical-align: middle; font-size: .86rem; }
+    .ckl-daftar thead th:first-child { width: 34%; }
     .ckl-nama { font-weight: 700; color: #0f172a; text-decoration: none; display: block; }
     .ckl-nama:hover { color: #da251d; }
     .ckl-sub { font-size: .76rem; color: #64748b; display: flex; flex-wrap: wrap; gap: .2rem .6rem; margin-top: .1rem; }
@@ -105,10 +117,10 @@ $tanya = static function (array $ubah): string {
     </div>
 
     <?php if ($kabar !== '') : ?>
-        <div class="alert alert-success py-2"><?= esc($kabar) ?></div>
+        <div class="alert alert-success py-2" data-flash><?= esc($kabar) ?></div>
     <?php endif; ?>
     <?php if ($galat !== '') : ?>
-        <div class="alert alert-danger py-2"><?= esc($galat) ?></div>
+        <div class="alert alert-danger py-2" data-flash><?= esc($galat) ?></div>
     <?php endif; ?>
 
     <?php if ($toko !== []) : ?>
@@ -218,7 +230,7 @@ $tanya = static function (array $ubah): string {
             </div>
         <?php else : ?>
             <div class="table-responsive">
-                <table class="table table-hover align-middle ckl-daftar">
+                <table class="table table-hover align-middle ckl-daftar tabel-rapi">
                     <thead>
                         <tr>
                             <th>Sesi</th>
@@ -226,7 +238,7 @@ $tanya = static function (array $ubah): string {
                             <th>Progres</th>
                             <th>Dikerjakan</th>
                             <th>Status</th>
-                            <th class="text-end">Aksi</th>
+                            <th class="text-center">Aksi</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -281,7 +293,7 @@ $tanya = static function (array $ubah): string {
                                 <td>
                                     <span class="pil-ckl c-<?= esc($r['status']) ?>"><?= $r['status'] === 'selesai' ? 'Selesai' : 'Berjalan' ?></span>
                                 </td>
-                                <td class="text-end">
+                                <td class="text-center">
                                     <a class="btn btn-sm btn-link text-decoration-none"
                                         href="<?= esc(site_url('admin/checklist/' . (int) $r['id_run'])) ?>">
                                         <?= $r['status'] === 'selesai' ? 'Lihat' : 'Isi' ?>
@@ -327,7 +339,7 @@ $tanya = static function (array $ubah): string {
                                     <td>
                                         <span class="pil-ckl c-<?= esc($r['status']) ?>"><?= $r['status'] === 'selesai' ? 'Selesai' : 'Berjalan' ?></span>
                                     </td>
-                                    <td class="text-end">
+                                    <td class="text-center">
                                         <a class="btn btn-sm btn-link text-decoration-none"
                                             href="<?= esc(site_url('admin/checklist/' . (int) $r['id_run'])) ?>">
                                             <?= $r['status'] === 'selesai' ? 'Lihat' : 'Isi' ?>

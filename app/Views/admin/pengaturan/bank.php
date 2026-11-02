@@ -86,10 +86,10 @@ $sunting_err = $validation->hasError('sunting_nama_bank') || $validation->hasErr
     <div class="row">
         <div class="col-12 mb-3">
             <?php if (($sukses ?? null) !== null) { ?>
-                <div class="alert alert-success py-2"><?= esc($sukses) ?></div>
+                <div class="alert alert-success py-2" data-flash><?= esc($sukses) ?></div>
             <?php } ?>
             <?php if (($gagal ?? null) !== null) { ?>
-                <div class="alert alert-danger py-2"><?= esc($gagal) ?></div>
+                <div class="alert alert-danger py-2" data-flash><?= esc($gagal) ?></div>
             <?php } ?>
 
             <div class="card">

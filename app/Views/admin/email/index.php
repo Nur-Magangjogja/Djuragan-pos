@@ -3,10 +3,22 @@
 /**
  * Daftar Cek Email: catatan hasil melihat kotak masuk, per toko.
  *
+ * Semua variabel di bawah disuntik Admin\Email::index() lewat view() (extract),
+ * jadi analyzer tidak bisa menelusurinya dari file ini. Blok @var di bawah hanya
+ * memberi tahunya ke IntelliJ/Intelephense, bukan kode yang dijalankan.
+ *
+ * @var string $title      judul halaman
+ * @var array<string, mixed> $s   saringan yang sudah dibersihkan controller
  * @var list<array<string, mixed>> $baris
- * @var array<string, string>      $tab   kunci => label
- * @var array<string, int>         $angka kunci => jumlah baris
- * @var array<int, string>         $toko
+ * @var int    $total      jumlah baris sesuai saringan
+ * @var int    $page       halaman aktif (berbasis satu)
+ * @var int    $batas      baris per halaman
+ * @var array<string, string>    $tab   kunci => label
+ * @var array<string, int>       $angka kunci => jumlah baris
+ * @var array<int, string>       $toko
+ * @var int    $milik      id akun yang sedang login
+ * @var string $kabar      pesan sukses flash (string kosong kalau tidak ada)
+ * @var string $galat      pesan gagal flash (string kosong kalau tidak ada)
  */
 
 $level    = (string) session()->get('level');
@@ -60,6 +72,7 @@ $tanya = static function (array $ubah): string {
     .table.em-daftar { margin: 0; }
     .em-daftar th { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: #667085; background: #f9fafb; }
     .em-daftar td { vertical-align: middle; font-size: .86rem; }
+    .em-daftar thead th:first-child { width: 46%; }
     .em-catatan { color: #0f172a; font-size: .88rem; }
     .em-sub { font-size: .76rem; color: #64748b; display: flex; flex-wrap: wrap; gap: .2rem .6rem; margin-top: .12rem; }
     .em-kosong { padding: 2.6rem 1rem; text-align: center; color: #94a3b8; }
@@ -95,8 +108,8 @@ $tanya = static function (array $ubah): string {
         </div>
     </div>
 
-    <?php if ($kabar !== '') : ?><div class="alert alert-success py-2"><?= esc($kabar) ?></div><?php endif; ?>
-    <?php if ($galat !== '') : ?><div class="alert alert-danger py-2"><?= esc($galat) ?></div><?php endif; ?>
+    <?php if ($kabar !== '') : ?><div class="alert alert-success py-2" data-flash><?= esc($kabar) ?></div><?php endif; ?>
+    <?php if ($galat !== '') : ?><div class="alert alert-danger py-2" data-flash><?= esc($galat) ?></div><?php endif; ?>
 
     <?php if ($toko !== []) : ?>
         <?= form_open('admin/tugas/email/simpan', ['class' => 'em-buat']) ?>
@@ -181,13 +194,13 @@ $tanya = static function (array $ubah): string {
             </div>
         <?php else : ?>
             <div class="table-responsive">
-                <table class="table table-hover align-middle em-daftar">
+                <table class="table table-hover align-middle em-daftar tabel-rapi">
                     <thead>
                         <tr>
                             <th>Catatan</th>
                             <th>Tenggat</th>
                             <th>Penanggung jawab</th>
-                            <th class="text-end">Aksi</th>
+                            <th class="text-center">Aksi</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -224,8 +237,8 @@ $tanya = static function (array $ubah): string {
                                         <span class="text-muted">belum diambil</span>
                                     <?php endif; ?>
                                 </td>
-                                <td class="text-end">
-                                    <div class="em-aksi flex-wrap">
+                                <td class="text-center">
+                                    <div class="em-aksi">
                                         <?php if ($st === 'queued') : ?>
                                             <form method="post" action="<?= esc(site_url('admin/tugas/email/ambil/' . $id)) ?>">
                                                 <?= csrf_field() ?>

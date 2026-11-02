@@ -3,9 +3,16 @@
 /**
  * Satu dokumen SOP: isinya untuk dibaca, bentuknya untuk Admin.
  *
- * @var array<string, mixed> $sop
- * @var array<int, string>   $untuk
- * @var bool                 $kelola
+ * Semua variabel di bawah disuntik Admin\Sop::lihat() lewat view() (extract), jadi
+ * analyzer tidak menelusurinya dari file ini. Blok @var hanya memberi tahunya ke
+ * Intelephense, bukan kode yang dijalankan.
+ *
+ * @var string                     $title  judul halaman
+ * @var array<string, mixed>       $sop    isi dokumen
+ * @var array<string, string>      $untuk  kode => label peran
+ * @var bool                       $kelola akun ini boleh menulis SOP?
+ * @var string                     $kabar  pesan sukses flash (string kosong kalau tidak ada)
+ * @var string                     $galat  pesan gagal flash (string kosong kalau tidak ada)
  */
 
 $level  = (string) session()->get('level');
@@ -51,10 +58,10 @@ $dibaca = static function ($detik): string {
     </div>
 
     <?php if ($kabar !== '') : ?>
-        <div class="alert alert-success py-2"><?= esc($kabar) ?></div>
+        <div class="alert alert-success py-2" data-flash><?= esc($kabar) ?></div>
     <?php endif; ?>
     <?php if ($galat !== '') : ?>
-        <div class="alert alert-danger py-2"><?= esc($galat) ?></div>
+        <div class="alert alert-danger py-2" data-flash><?= esc($galat) ?></div>
     <?php endif; ?>
 
     <div class="sop-kartu">

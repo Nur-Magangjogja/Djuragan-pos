@@ -3,11 +3,14 @@
 /**
  * Kelola templat tugas: daftar, editor butir, dan tombol tuang ke antrean.
  *
- * @var list<array<string, mixed>> $daftar
+ * @var string                     $title   judul halaman
+ * @var list<array<string, mixed>> $daftar  hasil TugasTemplateModel::daftar()
  * @var array<string, mixed>|null  $edit
- * @var list<array<string, mixed>> $item  selalu 8 baris (yang kosong dibuang model)
+ * @var list<array<string, mixed>> $item    selalu 8 baris (yang kosong dibuang model)
  * @var array<string, array>       $pilihan
  * @var array<int, string>         $toko
+ * @var string                     $kabar   pesan sukses flash (string kosong kalau tidak ada)
+ * @var string                     $galat   pesan gagal flash (string kosong kalau tidak ada)
  */
 
 $level   = (string) session()->get('level');
@@ -78,10 +81,10 @@ $id_edit = $edit !== null ? (int) $edit['id_template'] : 0;
     </div>
 
     <?php if ($kabar !== '') : ?>
-        <div class="alert alert-success py-2"><?= esc($kabar) ?></div>
+        <div class="alert alert-success py-2" data-flash><?= esc($kabar) ?></div>
     <?php endif; ?>
     <?php if ($galat !== '') : ?>
-        <div class="alert alert-danger py-2"><?= esc($galat) ?></div>
+        <div class="alert alert-danger py-2" data-flash><?= esc($galat) ?></div>
     <?php endif; ?>
 
     <div class="tpl-kartu">

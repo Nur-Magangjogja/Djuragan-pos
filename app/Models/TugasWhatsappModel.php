@@ -22,12 +22,22 @@ class TugasWhatsappModel extends Model
         'lainnya'          => 'Tindak Lanjut Lainnya',
     ];
 
-    /** Tab layar. nilainya dipakai sebagai filter, labelnya dipakai di layar. */
+    /**
+     * Tab layar. nilainya dipakai sebagai filter, labelnya dipakai di layar.
+     *
+     * 'tak_selesai' hanya dibuka Admin/Superadmin: isinya alasan orang melepas
+     * tugas yang sudah ada di tangannya, jadi itu bahan pemantauan, bukan bahan
+     * yang diungkit antar-CS.
+     */
     public const TAB = [
-        'belum'   => 'Belum Diambil',
-        'proses'  => 'Sedang Diproses',
-        'selesai' => 'Sudah Diselesaikan',
+        'belum'       => 'Belum Diambil',
+        'proses'      => 'Sedang Diproses',
+        'selesai'     => 'Sudah Diselesaikan',
+        'tak_selesai' => 'Tidak Jadi Dikerjakan',
     ];
+
+    /** Kejadian yang berarti "sudah di tangan, tapi tidak sampai selesai". */
+    public const JEJAK_TAK_SELESAI = ['operan_manual', 'operan_otomatis', 'dibatalkan'];
 
     /**
      * Simpan tugas WA baru (antrean + baris khusus WA) dalam satu transaksi.
@@ -153,6 +163,150 @@ class TugasWhatsappModel extends Model
     public function jumlah(array $s): int
     {
         return (int) $this->bangun($s)->countAllResults();
+    }
+
+    /**
+     * Tab "Tidak Jadi Dikerjakan": satu baris per momen seorang CS melepas tugas WA
+     * yang sudah ada di tangannya, atau Admin membatalkannya.
+     *
+     * Yang dibaca adalah riwayat append-only (`crm_tugas_event`), bukan kondisi tugas
+     * hari ini. Alasannya: satu reminder bisa berpindah tangan tiga kali, dan Admin
+     * yang ingin tahu "kenapa tidak selesai" harus membaca ketiga alasan itu beserta
+     * orangnya — sementara baris `crm_tugas` hanya pernah menyimpan penggarap
+     * terakhir, itu pun dikosongkan lagi saat tugas dioperkan.
+     *
+     * @param array<string, mixed> $s
+     * @return list<array<string, mixed>>
+     */
+    public function takSelesai(array $s, int $limit = 25, int $offset = 0): array
+    {
+        // daftar kolom ditulis mentah (select false): sama seperti di bangun(),
+        // kolomnya berkualifikasi alias dan CI4 akan menempelkan DBPrefix ke
+        // alias tersebut kalau ikut di-escape
+        return $this->bangunJejak($s)
+            ->select('e.id_event, e.tugas_id, e.jenis, e.status_lama, e.status_baru, e.alasan,'
+                . ' e.catatan AS catatan_lepas, e.created_at AS dilepas_at,'
+                . ' t.judul, t.deskripsi, t.status, t.prioritas, t.tenggat, t.juragan_id, t.pelanggan_id,'
+                . ' t.dibuat_oleh, t.dikerjakan_oleh, t.selesai_oleh, t.selesai_at, t.alasan_batal,'
+                . ' w.tindak_lanjut, w.nomor_ke, w.nomor_dari,'
+                . ' p.nama_pelanggan, j.nama_juragan, du.name AS nama_dibuat, su.name AS nama_selesai, '
+                . self::lepas('t.dikerjakan_oleh', 'COALESCE(e.user_id, e.dari_user_id, t.dikerjakan_oleh)') . ' AS id_lepas, '
+                . self::lepas('ku.name', 'COALESCE(au.name, ad.name, ku.name)') . ' AS nama_lepas, '
+                . self::lepas('ku.level', 'COALESCE(au.level, ad.level, ku.level)') . ' AS level_lepas', false)
+            ->orderBy('e.id_event', 'DESC')
+            ->get($limit, $offset)
+            ->getResultArray();
+    }
+
+    /** @param array<string, mixed> $s */
+    public function takSelesaiJumlah(array $s): int
+    {
+        return (int) $this->bangunJejak($s)->countAllResults();
+    }
+
+    /**
+     * Ekspresi SQL "orang yang mengambil tugas ini tapi tidak menyelesaikannya".
+     * Penggarap pada baris tugas tidak bisa dipercaya: kolomnya dikosongkan saat
+     * tugas dioper dan sudah berganti orang kalau tugasnya diambil lagi. Jadi
+     * dibaca dari kejadiannya — pelepasan manual menulis user_id, operan otomatis
+     * hanya dari_user_id, sedangkan pembatalan meninggalkan penggarap lamanya di
+     * baris tugas (karena itu kolomnya dipilih per jenis kejadian).
+     *
+     * @param string $saatBatal kolom penggarap lama, dipakai saat tugas dibatalkan
+     * @param string $saatOper  kandidat saat tugas dioperkan
+     */
+    private static function lepas(string $saatBatal, string $saatOper): string
+    {
+        return "CASE WHEN e.jenis = 'dibatalkan' AND t.dikerjakan_oleh IS NOT NULL"
+            . " THEN {$saatBatal} ELSE {$saatOper} END";
+    }
+
+    /**
+     * Rekap per orang pada saringan yang sama, supaya Admin melihat polanya dulu
+     * sebelum membaca satu-satu. Nama dibungkus MAX() karena hanya kolom yang
+     * dikelompokkan yang boleh muncul telanjang di SELECT.
+     *
+     * @param array<string, mixed> $s
+     * @return list<array<string, mixed>>
+     */
+    public function takSelesaiPerOrang(array $s): array
+    {
+        $siapa   = self::lepas('t.dikerjakan_oleh', 'COALESCE(e.user_id, e.dari_user_id, t.dikerjakan_oleh)');
+        $namanya = self::lepas('ku.name', 'COALESCE(au.name, ad.name, ku.name)');
+
+        return $this->bangunJejak($s)
+            ->select($siapa . ' AS pemegang, MAX(' . $namanya . ') AS nama, COUNT(*) AS n', false)
+            ->groupBy($siapa, false)
+            ->orderBy('n', 'DESC')
+            ->get(12)
+            ->getResultArray();
+    }
+
+    /**
+     * Dasar kedua metode di atas: riwayat pelepasan/pembatalan yang sudah dibatasi
+     * ke tugas WhatsApp dan ke orang yang benar-benar pernah memegangnya.
+     *
+     * `status_lama` ikut disaring karena ketiga jenis kejadian itu bisa saja lahir
+     * dari tugas yang masih di antrean (Admin membatalkan reminder yang belum
+     * diambil siapa pun) — dan itu bukan cerita tab ini.
+     *
+     * @param array<string, mixed> $s
+     */
+    private function bangunJejak(array $s)
+    {
+        $b = $this->db->table('crm_tugas_event e')
+            ->join('crm_tugas t', 't.id_tugas = e.tugas_id')
+            ->join('crm_tugas_whatsapp w', 'w.tugas_id = t.id_tugas')
+            ->join('pelanggan p', 'p.id_pelanggan = t.pelanggan_id', 'left')
+            ->join('juragan j', 'j.id_juragan = t.juragan_id', 'left')
+            ->join('user du', 'du.id = t.dibuat_oleh', 'left')
+            ->join('user ku', 'ku.id = t.dikerjakan_oleh', 'left')
+            ->join('user su', 'su.id = t.selesai_oleh', 'left')
+            // dua tabel user untuk pelaku: pelepasan manual menulis user_id,
+            // operan otomatis hanya menulis dari_user_id (tidak ada yang klik apa-apa)
+            ->join('user au', 'au.id = e.user_id', 'left')
+            ->join('user ad', 'ad.id = e.dari_user_id', 'left')
+            ->whereIn('e.jenis', self::JEJAK_TAK_SELESAI)
+            ->whereIn('e.status_lama', ['assigned', 'in_progress', 'waiting']);
+
+        if (! empty($s['tindak_lanjut'])) {
+            $b->where('w.tindak_lanjut', (string) $s['tindak_lanjut']);
+        }
+
+        if (! empty($s['juragan_id'])) {
+            $b->where('t.juragan_id', (int) $s['juragan_id']);
+        }
+
+        // "hanya punyaku" di tab ini berarti akulah yang menulis alasannya
+        if (! empty($s['milik_saya'])) {
+            $b->groupStart()->where('e.user_id', (int) $s['milik_saya'])
+                ->orWhere('e.dari_user_id', (int) $s['milik_saya'])->groupEnd();
+        }
+
+        if (! empty($s['nomor'])) {
+            $c = WaNomorModel::rapikanNomor((string) $s['nomor']);
+            $b->groupStart()->like('w.nomor_ke', $c, 'both')->orLike('w.nomor_dari', $c, 'both')->groupEnd();
+        }
+
+        if (! empty($s['cari'])) {
+            $cari = (string) $s['cari'];
+            $b->groupStart()->like('t.judul', $cari)->orLike('e.alasan', $cari)
+                ->orLike('e.catatan', $cari)->groupEnd();
+        }
+
+        if (! empty($s['dari'])) {
+            $b->where('e.created_at >=', (int) strtotime((string) $s['dari'] . ' 00:00:00'));
+        }
+
+        if (! empty($s['sampai'])) {
+            $b->where('e.created_at <=', (int) strtotime((string) $s['sampai'] . ' 23:59:59'));
+        }
+
+        if (! empty($s['juragan_ids'])) {
+            $b->groupStart()->where('t.juragan_id IS NULL')->orWhereIn('t.juragan_id', array_map('intval', $s['juragan_ids']))->groupEnd();
+        }
+
+        return $b;
     }
 
     /** Angka badge menu: tugas WA yang belum selesai dalam cakupan akun ini. */

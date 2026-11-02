@@ -3,12 +3,23 @@
 /**
  * Daftar Reminder Bintang 5: permintaan ulasan + tab penagihan.
  *
+ * Semua variabel di bawah disuntik Admin\Bintang::index() lewat view(); blok @var
+ * ini hanya memberi tahunya ke analyzer, bukan kode yang dijalankan.
+ *
+ * @var string $title      judul halaman
+ * @var array  $s          saringan yang sudah dibersihkan controller
  * @var list<array<string, mixed>> $baris
  * @var array<int, array<string, mixed>> $ulasan  invoice_id => baris crm_ulasan
+ * @var int    $total      jumlah baris sesuai saringan
+ * @var int    $page       halaman aktif (berbasis satu)
+ * @var int    $batas      baris per halaman
  * @var array<string, string>      $tab    kunci => label
  * @var array<string, int>         $angka  kunci => jumlah baris
  * @var array<int, string>         $toko
  * @var array<int, list<string>>   $platform juragan_id => platform aktif toko itu
+ * @var int    $milik      id akun yang sedang login
+ * @var string $kabar      pesan sukses flash (string kosong kalau tidak ada)
+ * @var string $galat      pesan gagal flash (string kosong kalau tidak ada)
  */
 
 $level    = (string) session()->get('level');
@@ -105,8 +116,8 @@ $tanya = static function (array $ubah): string {
         <?php endif; ?>
     </div>
 
-    <?php if ($kabar !== '') : ?><div class="alert alert-success py-2"><?= esc($kabar) ?></div><?php endif; ?>
-    <?php if ($galat !== '') : ?><div class="alert alert-danger py-2"><?= esc($galat) ?></div><?php endif; ?>
+    <?php if ($kabar !== '') : ?><div class="alert alert-success py-2" data-flash><?= esc($kabar) ?></div><?php endif; ?>
+    <?php if ($galat !== '') : ?><div class="alert alert-danger py-2" data-flash><?= esc($galat) ?></div><?php endif; ?>
 
     <div class="b5-tab">
         <?php foreach ($tab as $kode => $nama) : ?>

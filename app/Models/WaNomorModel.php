@@ -59,12 +59,16 @@ class WaNomorModel extends Model
         return $baris ?: null;
     }
 
-    /** Nomor kembar di toko yang sama ditolak sebelum sempat menabrak unique key. */
+    /**
+     * Nomor kembar di toko yang sama ditolak sebelum sempat menabrak unique key.
+     * Yang dibandingkan selalu nomor hasil perapian, karena kolom `nomor` juga
+     * disimpan seragam: input "0896..." dan "62896..." adalah nomor yang sama.
+     */
     public function kembar(int $juragan_id, string $nomor, int $selain = 0): bool
     {
         $b = $this->db->table('crm_wa_nomor')
             ->where('juragan_id', $juragan_id)
-            ->where('nomor', $nomor);
+            ->where('nomor', self::rapikanNomor($nomor));
 
         if ($selain > 0) {
             $b->where('id_nomor !=', $selain);

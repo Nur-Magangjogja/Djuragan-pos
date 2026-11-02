@@ -20,6 +20,8 @@
     <meta name="format-detection" content="telephone=no">
     <link rel="stylesheet" href="<?= vite('resources/scss/style.scss') ?>?v=<?= (int) @filemtime(FCPATH . 'assets/css/style.css') ?>">
     <link rel="stylesheet" href="<?= base_url('assets/css/tailwind.css') ?>?v=<?= (int) @filemtime(FCPATH . 'assets/css/tailwind.css') ?>">
+    <!-- perapian bersama untuk tabel daftar (class `tabel-rapi` di <table>) -->
+    <link rel="stylesheet" href="<?= base_url('assets/css/tabel-rapi.css') ?>?v=<?= (int) @filemtime(FCPATH . 'assets/css/tabel-rapi.css') ?>">
 
     <?= $this->renderSection('css') ?>
 

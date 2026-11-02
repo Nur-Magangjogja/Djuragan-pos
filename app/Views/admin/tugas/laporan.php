@@ -3,12 +3,21 @@
 /**
  * Laporan aktivitas tugas (Admin & Superadmin).
  *
+ * Semua variabel di bawah disuntik Admin\Tugas::laporan() lewat bahanLaporan();
+ * blok @var ini hanya memberi tahunya ke analyzer, bukan kode yang dijalankan.
+ *
+ * @var string $title      judul halaman
  * @var array<string, mixed> $s        saringan yang sudah dibersihkan (ts + tanggal teks)
- * @var list<array>          $baris    kejadian pada rentang ini
+ * @var list<array<string, mixed>> $baris    kejadian pada rentang ini
+ * @var int    $total      jumlah kejadian sesuai saringan
+ * @var int    $page       halaman aktif (berbasis satu)
+ * @var int    $batas      baris per halaman
  * @var array<string, int>   $perjenis jumlah per jenis kejadian
- * @var list<array>          $beban    rekap per orang
+ * @var list<array<string, mixed>> $beban    rekap per orang
  * @var array<int, string>   $pegawai  orang yang bisa disaring
- * @var array<string, string> $meta
+ * @var array{jenis_event: array<string, string>} $meta  label per jenis kejadian
+ * @var string $kabar      pesan sukses flash (string kosong kalau tidak ada)
+ * @var string $galat      pesan gagal flash (string kosong kalau tidak ada)
  */
 
 $tanya_csv = static function (array $tambah = []): string {
@@ -79,8 +88,8 @@ $dibaca = static function ($detik): string {
         </a>
     </div>
 
-    <?php if ($kabar !== '') : ?><div class="alert alert-success py-2"><?= esc($kabar) ?></div><?php endif; ?>
-    <?php if ($galat !== '') : ?><div class="alert alert-danger py-2"><?= esc($galat) ?></div><?php endif; ?>
+    <?php if ($kabar !== '') : ?><div class="alert alert-success py-2" data-flash><?= esc($kabar) ?></div><?php endif; ?>
+    <?php if ($galat !== '') : ?><div class="alert alert-danger py-2" data-flash><?= esc($galat) ?></div><?php endif; ?>
 
     <form class="lp-saring" method="get" action="<?= esc(site_url('admin/tugas/laporan')) ?>">
         <div class="lapangan">
@@ -134,7 +143,7 @@ $dibaca = static function ($detik): string {
             <div class="lp-kosong">Tidak ada tugas yang dipegang orang pada rentang ini.</div>
         <?php else : ?>
             <div class="table-responsive">
-                <table class="table table-hover lp-tabel">
+                <table class="table table-hover lp-tabel tabel-rapi">
                     <thead>
                         <tr>
                             <th>Orang</th><th class="text-end">Dipegang</th><th class="text-end">Terbuka</th>

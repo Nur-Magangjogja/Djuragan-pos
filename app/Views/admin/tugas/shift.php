@@ -3,6 +3,9 @@
 /**
  * Layar Jam shift CS.
  *
+ * @var string $title   judul halaman dari controller
+ * @var string $kabar   flashdata sukses, string kosong kalau tidak ada
+ * @var string $galat   flashdata gagal, string kosong kalau tidak ada
  * @var string $tanggal hari yang sedang diatur
  * @var array  $baris   satu baris per staf aktif: id, nama, level, mulai, selesai, sudah, lewat
  * @var array  $operan  waktu + jumlah sapuan operan otomatis terakhir
@@ -51,10 +54,10 @@ $sudah_lewat = count(array_filter($baris, static fn ($b) => $b['lewat']));
     <h1 class="h3 mt-2"><i class="fal fa-clock me-1 text-brand-500"></i> <?= esc($title) ?></h1>
 
     <?php if ($kabar !== '') : ?>
-        <div class="alert alert-success py-2"><?= esc($kabar) ?></div>
+        <div class="alert alert-success py-2" data-flash><?= esc($kabar) ?></div>
     <?php endif; ?>
     <?php if ($galat !== '') : ?>
-        <div class="alert alert-danger py-2"><?= esc($galat) ?></div>
+        <div class="alert alert-danger py-2" data-flash><?= esc($galat) ?></div>
     <?php endif; ?>
 
     <div class="shift-kotak">

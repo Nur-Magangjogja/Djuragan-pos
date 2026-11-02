@@ -9,6 +9,7 @@ use App\Models\TugasModel;
 use App\Models\TugasWhatsappModel;
 use App\Models\UserModel;
 use App\Models\WaNomorModel;
+use CodeIgniter\Database\Exceptions\DatabaseException;
 use CodeIgniter\Exceptions\PageNotFoundException;
 
 /**
@@ -31,19 +32,25 @@ class Whatsapp extends BaseController
         $model  = new TugasWhatsappModel();
         $s      = $this->saring();
         $batas  = $this->batas();
-        $total  = $model->jumlah($s);
+        // tab alasan dibaca dari riwayat, bukan dari daftar tugas: querynya sendiri,
+        // tapi saringan, pagination, dan cakupan tokonya tetap sama
+        $jejak  = $s['tab'] === 'tak_selesai';
+        $total  = $jejak ? $model->takSelesaiJumlah($s) : $model->jumlah($s);
         $page   = max(1, min($this->halaman(), max(1, (int) ceil($total / $batas))));
-        $tab    = array_merge([array_key_first(TugasWhatsappModel::TAB) => 0], $this->hitungTab());
+        $tab    = array_merge([array_key_first($this->daftarTab()) => 0], $this->hitungTab());
 
         return view('admin/whatsapp/index', [
             'title'   => 'Reminder WhatsApp',
             's'       => $s,
-            'baris'   => $model->daftar($s, $batas, ($page - 1) * $batas),
+            'baris'   => $jejak
+                ? $model->takSelesai($s, $batas, ($page - 1) * $batas)
+                : $model->daftar($s, $batas, ($page - 1) * $batas),
             'total'   => $total,
             'page'    => $page,
             'batas'   => $batas,
-            'tab'     => TugasWhatsappModel::TAB,
+            'tab'     => $this->daftarTab(),
             'angka'   => $tab,
+            'rekap'   => $jejak ? $model->takSelesaiPerOrang($s) : [],
             'tindak'  => TugasWhatsappModel::TINDAK,
             'prioritas' => TugasModel::PRIORITAS,
             'toko'    => $this->tokoPeta(),
@@ -168,12 +175,13 @@ class Whatsapp extends BaseController
         $model = new WaNomorModel();
 
         return view('admin/whatsapp/nomor', [
-            'title'   => 'Nomor WhatsApp Penugasan',
-            'daftar'  => $model->semua(['juragan_ids' => $this->tokoBoleh()]),
-            'toko'    => $this->tokoPeta(),
-            'pegawai' => $this->stafCs(),
-            'kabar'   => (string) session()->getFlashdata('sukses'),
-            'galat'   => (string) session()->getFlashdata('galat'),
+            'title'      => 'Nomor WhatsApp Penugasan',
+            'daftar'     => $model->semua(['juragan_ids' => $this->tokoBoleh()]),
+            'toko'       => $this->tokoPeta(),
+            'pegawai'    => $this->stafCs(),
+            'kabar'      => (string) session()->getFlashdata('sukses'),
+            'galat'      => (string) session()->getFlashdata('galat'),
+            'peringatan' => (string) session()->getFlashdata('peringatan'),
         ]);
     }
 
@@ -195,21 +203,32 @@ class Whatsapp extends BaseController
         }
 
         if ($model->kembar($toko, $nomor, $id)) {
-            return redirect()->back()->with('galat', 'Nomor itu sudah terdaftar di toko ini.')->withInput();
+            return redirect()->back()->with('peringatan', 'Nomor ini sudah ada di Djuragan terpilih.')->withInput();
         }
 
         if ($id > 0 && $model->satu($id) === null) {
             throw PageNotFoundException::forPageNotFound();
         }
 
-        $model->simpan([
-            'juragan_id' => $toko,
-            'label'      => (string) $this->request->getPost('label'),
-            'nomor'      => $nomor,
-            'user_id'    => (int) $this->request->getPost('user_id'),
-            'aktif'      => (int) $this->request->getPost('aktif'),
-            'catatan'    => (string) $this->request->getPost('catatan'),
-        ], (int) session()->get('id'), $id);
+        try {
+            $model->simpan([
+                'juragan_id' => $toko,
+                'label'      => (string) $this->request->getPost('label'),
+                'nomor'      => $nomor,
+                'user_id'    => (int) $this->request->getPost('user_id'),
+                'aktif'      => (int) $this->request->getPost('aktif'),
+                'catatan'    => (string) $this->request->getPost('catatan'),
+            ], (int) session()->get('id'), $id);
+        } catch (DatabaseException $tabrakan) {
+            // dua layar menyimpan nomor yang sama hampir berbarengan: pemeriksaan
+            // di atas lolos keduanya, kunci unik (juragan_id, nomor) yang jadi
+            // hakim terakhir. Yang keluar tetap peringatan, bukan halaman error.
+            if ($tabrakan->getCode() !== 1062) {
+                throw $tabrakan;
+            }
+
+            return redirect()->back()->with('peringatan', 'Nomor ini sudah ada di Djuragan terpilih.')->withInput();
+        }
 
         return redirect()->to(site_url('admin/tugas/whatsapp/nomor'))->with('sukses', 'Nomor disimpan.');
     }
@@ -237,11 +256,31 @@ class Whatsapp extends BaseController
         $s     = $this->saring();
         $angka = [];
 
-        foreach (array_keys(TugasWhatsappModel::TAB) as $tab) {
-            $angka[$tab] = $model->jumlah(array_merge($s, ['tab' => $tab]));
+        foreach (array_keys($this->daftarTab()) as $tab) {
+            $angka[$tab] = $tab === 'tak_selesai'
+                ? $model->takSelesaiJumlah($s)
+                : $model->jumlah(array_merge($s, ['tab' => $tab]));
         }
 
         return $angka;
+    }
+
+    /**
+     * Tab yang boleh dibuka akun ini. CS tidak punya layar yang mengungkit
+     * pelepasan orang lain, jadi tab alasannya dilepas dari daftar — dan `saring()`
+     * menolak nilainya juga kalau ada yang mengetik manual di URL.
+     *
+     * @return array<string, string>
+     */
+    private function daftarTab(): array
+    {
+        $tab = TugasWhatsappModel::TAB;
+
+        if (! $this->bolehKelola()) {
+            unset($tab['tak_selesai']);
+        }
+
+        return $tab;
     }
 
     /** @return array<string, mixed> */
@@ -251,11 +290,13 @@ class Whatsapp extends BaseController
         $tindak = (string) $this->request->getGet('tindak');
 
         return [
-            'tab'           => array_key_exists($tab, TugasWhatsappModel::TAB) ? $tab : 'belum',
+            'tab'           => in_array($tab, array_keys($this->daftarTab()), true) ? $tab : 'belum',
             'tindak_lanjut' => array_key_exists($tindak, TugasWhatsappModel::TINDAK) ? $tindak : '',
             'juragan_id'    => (int) $this->request->getGet('toko'),
             'nomor'         => trim((string) $this->request->getGet('nomor')),
             'cari'          => trim((string) $this->request->getGet('cari')),
+            'dari'          => $this->tanggal((string) $this->request->getGet('dari')),
+            'sampai'        => $this->tanggal((string) $this->request->getGet('sampai')),
             'milik_saya'    => $this->request->getGet('saya') === '1' ? (int) session()->get('id') : 0,
             'juragan_ids'   => $this->tokoBoleh(),
         ];

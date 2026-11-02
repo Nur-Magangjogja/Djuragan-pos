@@ -4,7 +4,10 @@
  * Detail satu tugas: siapa yang memegang, apa yang harus dikerjakan, dan seluruh
  * riwayat perpindahan tangan. Aksi yang muncul hanya yang merupakan transisi sah —
  * daftar lengkapnya ada di TugasModel::TRANSISI, jadi layar tidak pernah memberi
- * tombol yang akan ditolak server.
+ * tombol yang akan ditolak server. Semua aksi berupa deretan tombol di bagian
+ * awal halaman — tiap tombol membuka modal konfirmasi berisi kolom isian yang
+ * diperlukan (Hasil untuk Selesai, Alasan + Catatan penerus untuk Operan), jadi
+ * isi halaman tetap informasi tugas + riwayat yang digulir di dalam kotaknya.
  *
  * @var array $tugas   satu baris hasil TugasModel::satu()
  * @var array $riwayat baris crm_tugas_event + nama aktor
@@ -28,6 +31,14 @@ $terbuka   = in_array($status, ['queued', 'assigned', 'in_progress', 'waiting'],
 $milik_saya = $penggarap === $saya;
 $pegang     = $status === 'queued';
 $terlambat  = $terbuka && $tenggat !== '' && $tenggat < $hari_ini;
+
+/* satu sumber kebenaran untuk tombol mana yang muncul DAN modal mana yang
+   ikut dirender — syaratnya sama, jadi tidak ada tombol tanpa form */
+$bisa_kerjakan = $milik_saya && in_array($status, ['assigned', 'waiting'], true);
+$bisa_selesai  = $milik_saya && in_array($status, ['assigned', 'in_progress', 'waiting'], true);
+$bisa_batal    = $terbuka && $milik_saya && $boleh_kelola;
+$bisa_buka     = ! $terbuka && ($status !== 'cancelled' || $boleh_kelola);
+$ada_aksi      = $pegang || $bisa_kerjakan || $bisa_selesai || $bisa_batal || $boleh_bagi || $bisa_buka;
 
 $label = static function (string $kode) use ($pilihan): string {
     return $pilihan['status'][$kode] ?? $kode;
@@ -72,14 +83,21 @@ $jam = static function (?int $detik): string {
     .s-cancelled { background: #fdf1f0; color: #b81c16; }
     .lewat { color: #b81c16; }
 
-    .tugas-aksi { display: flex; flex-wrap: wrap; gap: .5rem; }
-    .tugas-aksi form { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem;
-        background: #f9fafb; border: 1px solid #eaecf0; border-radius: 12px; padding: .5rem .6rem; }
-    .tugas-aksi label { font-size: .7rem; font-weight: 700; text-transform: uppercase; color: #667085; }
-    .tugas-aksi .form-control, .tugas-aksi .form-select { min-width: 140px; }
+    /* deretan tombol aksi ditaruh di paling atas, tepat di bawah judul. Tidak ada
+       form yang dipajang di halaman: tiap tombol membuka modal konfirmasi kecil,
+       jadi isi halaman tetap informasi tugas + riwayat */
+    .tugas-aksi { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin: -.35rem 0 1.1rem; }
+    .tugas-isian { display: grid; gap: .7rem; }
+    .tugas-isian label { font-size: .7rem; font-weight: 700; text-transform: uppercase;
+        letter-spacing: .04em; color: #667085; margin: 0 0 .18rem; }
+    .tugas-isian p { font-size: .82rem; color: #64748b; margin: 0; }
 
-    .tugas-riwayat { width: 100%; font-size: .82rem; }
-    .tugas-riwayat th { font-size: .7rem; text-transform: uppercase; letter-spacing: .05em; color: #667085; }
+    /* riwayat bisa memanjang terus; yang digulir cuma isi tabelnya, judul
+       kolomnya tinggal di atas (border-collapse dipisah supaya sticky jalan) */
+    .riwayat-gulir { max-height: 320px; overflow: auto; }
+    .tugas-riwayat { width: 100%; font-size: .82rem; border-collapse: separate; border-spacing: 0; }
+    .tugas-riwayat th { font-size: .7rem; text-transform: uppercase; letter-spacing: .05em; color: #667085;
+        position: sticky; top: 0; z-index: 1; background: #fff; }
     .tugas-riwayat td, .tugas-riwayat th { padding: .5rem .35rem; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
     .tugas-riwayat .panah { color: #94a3b8; }
 </style>
@@ -100,10 +118,48 @@ $jam = static function (?int $detik): string {
     </div>
 
     <?php if ($kabar !== '') : ?>
-        <div class="alert alert-success py-2"><?= esc($kabar) ?></div>
+        <div class="alert alert-success py-2" data-flash><?= esc($kabar) ?></div>
     <?php endif; ?>
     <?php if ($galat !== '') : ?>
-        <div class="alert alert-danger py-2"><?= esc($galat) ?></div>
+        <div class="alert alert-danger py-2" data-flash><?= esc($galat) ?></div>
+    <?php endif; ?>
+
+    <?php if ($ada_aksi) : ?>
+        <div class="tugas-aksi">
+            <?php if ($pegang) : ?>
+                <button type="button" class="btn btn-sm btn-primary rounded-pill"
+                    data-bs-toggle="modal" data-bs-target="#mt-ambil"><i class="fal fa-hand me-1"></i> Ambil tugas</button>
+            <?php endif; ?>
+
+            <?php if ($bisa_kerjakan) : ?>
+                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill"
+                    data-bs-toggle="modal" data-bs-target="#mt-kerjakan">Kerjakan</button>
+            <?php endif; ?>
+
+            <?php if ($bisa_selesai) : ?>
+                <button type="button" class="btn btn-sm btn-success rounded-pill"
+                    data-bs-toggle="modal" data-bs-target="#mt-selesai"><i class="fal fa-check me-1"></i> Selesai</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill"
+                    data-bs-toggle="modal" data-bs-target="#mt-susul"><i class="fal fa-clock me-1"></i> Susulkan</button>
+                <button type="button" class="btn btn-sm btn-outline-dark rounded-pill"
+                    data-bs-toggle="modal" data-bs-target="#mt-operan"><i class="fal fa-people-arrows me-1"></i> Lepas / Operan</button>
+            <?php endif; ?>
+
+            <?php if ($bisa_batal) : ?>
+                <button type="button" class="btn btn-sm btn-outline-danger rounded-pill"
+                    data-bs-toggle="modal" data-bs-target="#mt-batal">Batalkan</button>
+            <?php endif; ?>
+
+            <?php if ($boleh_bagi) : ?>
+                <button type="button" class="btn btn-sm btn-dark rounded-pill"
+                    data-bs-toggle="modal" data-bs-target="#mt-tetapkan"><i class="fal fa-user-tag me-1"></i> Tetapkan ke</button>
+            <?php endif; ?>
+
+            <?php if ($bisa_buka) : ?>
+                <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill"
+                    data-bs-toggle="modal" data-bs-target="#mt-buka"><i class="fal fa-redo me-1"></i> Buka kembali</button>
+            <?php endif; ?>
+        </div>
     <?php endif; ?>
 
     <div class="tugas-kotak">
@@ -214,140 +270,274 @@ $jam = static function (?int $detik): string {
     <?php endif; ?>
 
     <div class="tugas-kotak">
-        <h2><i class="fal fa-bolt me-1"></i> Aksi</h2>
-        <div class="tugas-aksi">
-
-            <?php if ($pegang) : ?>
-                <form method="post" action="<?= esc(site_url('admin/tugas/ambil/' . (int) $tugas['id_tugas'])) ?>">
-                    <?= csrf_field() ?>
-                    <button type="submit" class="btn btn-sm btn-primary rounded-pill"><i class="fal fa-hand me-1"></i> Ambil tugas</button>
-                </form>
-            <?php endif; ?>
-
-            <?php if ($milik_saya && in_array($status, ['assigned', 'waiting'], true)) : ?>
-                <form method="post" action="<?= esc(site_url('admin/tugas/status/' . (int) $tugas['id_tugas'])) ?>">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="status" value="in_progress">
-                    <button type="submit" class="btn btn-sm btn-outline-primary rounded-pill">Kerjakan</button>
-                </form>
-            <?php endif; ?>
-
-            <?php if ($milik_saya && in_array($status, ['assigned', 'in_progress', 'waiting'], true)) : ?>
-                <form method="post" action="<?= esc(site_url('admin/tugas/status/' . (int) $tugas['id_tugas'])) ?>">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="status" value="completed">
-                    <label for="selesai-catatan">Hasil</label>
-                    <input type="text" class="form-control form-control-sm" id="selesai-catatan" name="catatan"
-                        placeholder="apa yang sudah dilakukan" maxlength="500">
-                    <button type="submit" class="btn btn-sm btn-success rounded-pill">Selesai</button>
-                </form>
-
-                <form method="post" action="<?= esc(site_url('admin/tugas/status/' . (int) $tugas['id_tugas'])) ?>">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="status" value="waiting">
-                    <label for="tahan">Susulkan</label>
-                    <input type="date" class="form-control form-control-sm" id="tahan" name="susul" required>
-                    <button type="submit" class="btn btn-sm btn-outline-secondary rounded-pill">Menunggu respons</button>
-                </form>
-
-                <form method="post" action="<?= esc(site_url('admin/tugas/operan/' . (int) $tugas['id_tugas'])) ?>">
-                    <?= csrf_field() ?>
-                    <label for="operan-alasan">Alasan</label>
-                    <input type="text" class="form-control form-control-sm" id="operan-alasan" name="alasan" required
-                        placeholder="shift habis / operan ke CS lain" maxlength="255">
-                    <label for="operan-catatan">Catatan penerus</label>
-                    <input type="text" class="form-control form-control-sm" id="operan-catatan" name="catatan"
-                        placeholder="sudah sampai mana" maxlength="500">
-                    <button type="submit" class="btn btn-sm btn-outline-dark rounded-pill"><i class="fal fa-people-arrows me-1"></i> Operan</button>
-                </form>
-            <?php endif; ?>
-
-            <?php if ($terbuka && $milik_saya && $boleh_kelola) : ?>
-                <form method="post" action="<?= esc(site_url('admin/tugas/status/' . (int) $tugas['id_tugas'])) ?>">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="status" value="cancelled">
-                    <label for="batal-alasan">Alasan batal</label>
-                    <input type="text" class="form-control form-control-sm" id="batal-alasan" name="alasan" required maxlength="255">
-                    <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill">Batalkan</button>
-                </form>
-            <?php endif; ?>
-
-            <?php if ($boleh_bagi) : ?>
-                <form method="post" action="<?= esc(site_url('admin/tugas/tetapkan/' . (int) $tugas['id_tugas'])) ?>">
-                    <?= csrf_field() ?>
-                    <label for="bagi">Tetapkan ke</label>
-                    <select class="form-select form-select-sm" id="bagi" name="dikerjakan_oleh" required>
-                        <?php foreach ($staf as $id_staf => $nama_staf) : ?>
-                            <option value="<?= (int) $id_staf ?>" <?= $penggarap === (int) $id_staf ? 'selected' : '' ?>>
-                                <?= esc($nama_staf) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                    <input type="text" class="form-control form-control-sm" name="alasan" placeholder="alasan" maxlength="255">
-                    <button type="submit" class="btn btn-sm btn-dark rounded-pill">Tetapkan</button>
-                </form>
-            <?php endif; ?>
-
-            <?php if (! $terbuka && ($status !== 'cancelled' || $boleh_kelola)) : ?>
-                <form method="post" action="<?= esc(site_url('admin/tugas/status/' . (int) $tugas['id_tugas'])) ?>">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="status" value="queued">
-                    <button type="submit" class="btn btn-sm btn-outline-secondary rounded-pill"><i class="fal fa-redo me-1"></i> Buka kembali</button>
-                </form>
-            <?php endif; ?>
-
-        </div>
-        <p class="small text-muted mb-0 mt-2">
-            Tombol hanya muncul untuk transisi yang diizinkan; penolakan terjadi di server, bukan sekadar penyembunyian.
-            <?php if (! $boleh_kelola) : ?>
-                CS tidak membatalkan tugas: kalau peganganmu harus lepas, pakai <strong>Operan</strong> dan tugasnya
-                kembali ke antrean untuk diambil orang lain. Yang membatalkan (pekerjaannya berhenti) hanya Admin.
-            <?php endif; ?>
-        </p>
-    </div>
-
-    <div class="tugas-kotak">
         <h2><i class="fal fa-history me-1"></i> Riwayat</h2>
         <?php if ($riwayat === []) : ?>
             <p class="text-muted mb-0">Belum ada aktivitas tercatat.</p>
         <?php else : ?>
-            <table class="tugas-riwayat">
-                <thead>
-                    <tr>
-                        <th>Waktu</th>
-                        <th>Aktivitas</th>
-                        <th>Perubahan</th>
-                        <th>Oleh</th>
-                        <th>Catatan</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($riwayat as $e) : ?>
+            <div class="riwayat-gulir">
+                <table class="tugas-riwayat">
+                    <thead>
                         <tr>
-                            <td class="text-nowrap"><?= esc($jam((int) $e['created_at'])) ?></td>
-                            <td class="fw-bold"><?= esc($e['jenis']) ?></td>
-                            <td>
-                                <?php if ($e['status_lama'] || $e['status_baru']) : ?>
-                                    <?= esc($e['status_lama'] ?: '-') ?>
-                                    <span class="panah"><i class="fal fa-arrow-alt-right"></i></span>
-                                    <?= esc($e['status_baru'] ?: '-') ?>
-                                <?php else : ?>
-                                    -
-                                <?php endif; ?>
-                            </td>
-                            <td><?= esc($e['nama_aktor'] ?? '-') ?></td>
-                            <td class="text-muted">
-                                <?= esc($e['alasan'] ?? '') ?>
-                                <?= ! empty($e['alasan']) && ! empty($e['catatan']) ? ' &middot; ' : '' ?>
-                                <?= esc($e['catatan'] ?? '') ?>
-                            </td>
+                            <th>Waktu</th>
+                            <th>Aktivitas</th>
+                            <th>Perubahan</th>
+                            <th>Oleh</th>
+                            <th>Catatan</th>
                         </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($riwayat as $e) : ?>
+                            <tr>
+                                <td class="text-nowrap"><?= esc($jam((int) $e['created_at'])) ?></td>
+                                <td class="fw-bold"><?= esc($e['jenis']) ?></td>
+                                <td>
+                                    <?php if ($e['status_lama'] || $e['status_baru']) : ?>
+                                        <?= esc($e['status_lama'] ?: '-') ?>
+                                        <span class="panah"><i class="fal fa-arrow-alt-right"></i></span>
+                                        <?= esc($e['status_baru'] ?: '-') ?>
+                                    <?php else : ?>
+                                        -
+                                    <?php endif; ?>
+                                </td>
+                                <td><?= esc($e['nama_aktor'] ?? '-') ?></td>
+                                <td class="text-muted">
+                                    <?= esc($e['alasan'] ?? '') ?>
+                                    <?= ! empty($e['alasan']) && ! empty($e['catatan']) ? ' &middot; ' : '' ?>
+                                    <?= esc($e['catatan'] ?? '') ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
         <?php endif; ?>
     </div>
 
 </div>
+
+<?= $this->endSection() ?>
+
+<?= $this->section('modal') ?>
+
+<?php if ($pegang) : ?>
+    <div class="modal fade" id="mt-ambil" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form method="post" action="<?= esc(site_url('admin/tugas/ambil/' . (int) $tugas['id_tugas'])) ?>">
+                    <?= csrf_field() ?>
+                    <div class="modal-header">
+                        <h5 class="modal-title">Ambil tugas ini</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+                    </div>
+                    <div class="modal-body tugas-isian">
+                        <p>Tugas keluar dari antrean dan pindah ke peganganmu — yang terlambat akan diberi tahu bahwa tugasnya sudah ada yang ambil.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-sm btn-link text-decoration-none" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" class="btn btn-sm btn-primary">Ambil tugas</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+<?php endif; ?>
+
+<?php if ($bisa_kerjakan) : ?>
+    <div class="modal fade" id="mt-kerjakan" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form method="post" action="<?= esc(site_url('admin/tugas/status/' . (int) $tugas['id_tugas'])) ?>">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="status" value="in_progress">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Mulai kerjakan</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+                    </div>
+                    <div class="modal-body tugas-isian">
+                        <p>Status berubah menjadi <strong>Sedang dikerjakan</strong>.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-sm btn-link text-decoration-none" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" class="btn btn-sm btn-primary">Kerjakan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+<?php endif; ?>
+
+<?php if ($bisa_selesai) : ?>
+    <div class="modal fade" id="mt-selesai" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form method="post" action="<?= esc(site_url('admin/tugas/status/' . (int) $tugas['id_tugas'])) ?>">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="status" value="completed">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Selesaikan tugas</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+                    </div>
+                    <div class="modal-body tugas-isian">
+                        <div>
+                            <label for="selesai-catatan">Hasil</label>
+                            <input type="text" class="form-control form-control-sm" id="selesai-catatan" name="catatan"
+                                placeholder="apa yang sudah dilakukan" maxlength="500">
+                        </div>
+                        <p class="text-muted">Tertulis di riwayat sebagai hasil kerja kamu.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-sm btn-link text-decoration-none" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" class="btn btn-sm btn-success">Selesai</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="mt-susul" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form method="post" action="<?= esc(site_url('admin/tugas/status/' . (int) $tugas['id_tugas'])) ?>">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="status" value="waiting">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Susulkan tugas</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+                    </div>
+                    <div class="modal-body tugas-isian">
+                        <div>
+                            <label for="tahan">Tanggal susul</label>
+                            <input type="date" class="form-control form-control-sm" id="tahan" name="susul" required>
+                        </div>
+                        <p class="text-muted">Status menjadi <strong><?= esc($label('waiting')) ?></strong>; tugas tetap di peganganmu dan muncul lagi saat tanggal susul tiba.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-sm btn-link text-decoration-none" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" class="btn btn-sm btn-dark">Menunggu respons</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="mt-operan" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form method="post" action="<?= esc(site_url('admin/tugas/operan/' . (int) $tugas['id_tugas'])) ?>">
+                    <?= csrf_field() ?>
+                    <div class="modal-header">
+                        <h5 class="modal-title">Lepas tangan &mdash; operan</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+                    </div>
+                    <div class="modal-body tugas-isian">
+                        <div>
+                            <label for="operan-alasan">Alasan <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control form-control-sm" id="operan-alasan" name="alasan" required
+                                placeholder="shift habis / operan ke CS lain" maxlength="255">
+                        </div>
+                        <div>
+                            <label for="operan-catatan">Catatan penerus</label>
+                            <input type="text" class="form-control form-control-sm" id="operan-catatan" name="catatan"
+                                placeholder="sudah sampai mana" maxlength="500">
+                        </div>
+                        <p class="text-muted">Tugas kembali ke antrean untuk diambil orang lain. <?php if (! $boleh_kelola) : ?>CS tidak membatalkan pekerjaan — yang membatalkan hanya Admin.<?php endif; ?></p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-sm btn-link text-decoration-none" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" class="btn btn-sm btn-dark">Operan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+<?php endif; ?>
+
+<?php if ($bisa_batal) : ?>
+    <div class="modal fade" id="mt-batal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form method="post" action="<?= esc(site_url('admin/tugas/status/' . (int) $tugas['id_tugas'])) ?>">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="status" value="cancelled">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Batalkan tugas</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+                    </div>
+                    <div class="modal-body tugas-isian">
+                        <div>
+                            <label for="batal-alasan">Alasan batal <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control form-control-sm" id="batal-alasan" name="alasan" required maxlength="255">
+                        </div>
+                        <p class="text-muted">Pekerjaannya berhenti, bukan sekadar lepas tangan. Untuk serahkan ke orang lain pakai <strong>Lepas / Operan</strong>.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-sm btn-link text-decoration-none" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" class="btn btn-sm btn-danger">Ya, batalkan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+<?php endif; ?>
+
+<?php if ($boleh_bagi) : ?>
+    <div class="modal fade" id="mt-tetapkan" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form method="post" action="<?= esc(site_url('admin/tugas/tetapkan/' . (int) $tugas['id_tugas'])) ?>">
+                    <?= csrf_field() ?>
+                    <div class="modal-header">
+                        <h5 class="modal-title">Tetapkan ke orang lain</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+                    </div>
+                    <div class="modal-body tugas-isian">
+                        <div>
+                            <label for="bagi">Penggarap</label>
+                            <select class="form-select form-select-sm" id="bagi" name="dikerjakan_oleh" required>
+                                <?php foreach ($staf as $id_staf => $nama_staf) : ?>
+                                    <option value="<?= (int) $id_staf ?>" <?= $penggarap === (int) $id_staf ? 'selected' : '' ?>>
+                                        <?= esc($nama_staf) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="tetapkan-alasan">Alasan</label>
+                            <input type="text" class="form-control form-control-sm" id="tetapkan-alasan" name="alasan" maxlength="255">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-sm btn-link text-decoration-none" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" class="btn btn-sm btn-dark">Tetapkan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+<?php endif; ?>
+
+<?php if ($bisa_buka) : ?>
+    <div class="modal fade" id="mt-buka" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form method="post" action="<?= esc(site_url('admin/tugas/status/' . (int) $tugas['id_tugas'])) ?>">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="status" value="queued">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Buka kembali tugas</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+                    </div>
+                    <div class="modal-body tugas-isian">
+                        <p>Tugas kembali ke antrean tanpa penggarap, jadi siapa pun yang berhak bisa mengambilnya lagi.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-sm btn-link text-decoration-none" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" class="btn btn-sm btn-dark">Buka kembali</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+<?php endif; ?>
 
 <?= $this->endSection() ?>

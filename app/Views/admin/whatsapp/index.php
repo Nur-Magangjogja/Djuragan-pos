@@ -3,16 +3,34 @@
 /**
  * Daftar Reminder WhatsApp: tiga tab status + form buat tugas baru.
  *
+ * Semua variabel di bawah disuntik Admin\Whatsapp::index() lewat view() (extract),
+ * jadi analyzer tidak bisa menelusurinya dari file ini. Blok @var di bawah hanya
+ * memberi tahunya ke IntelliJ/Intelephense, bukan kode yang dijalankan.
+ *
+ * @var string $title      judul halaman
+ * @var array  $s          saringan yang sudah dibersihkan controller
  * @var list<array<string, mixed>> $baris
+ * @var int    $total      jumlah baris sesuai saringan
+ * @var int    $page       halaman aktif (berbasis satu)
+ * @var int    $batas      baris per halaman
  * @var array<string, string>      $tab     kunci => label
  * @var array<string, int>         $angka   kunci => jumlah baris
+ * @var list<array<string, mixed>> $rekap   jumlah pelepasan per orang (hanya tab tak_selesai)
  * @var array<string, string>      $tindak  kunci => label jenis tindak lanjut
+ * @var array<string, string>      $prioritas kunci => label prioritas
  * @var array<int, string>         $toko
  * @var list<array<string, mixed>> $nomor   nomor pengirim yang boleh dipakai akun ini
+ * @var int    $milik      id akun yang sedang login
+ * @var bool   $kelola     akun ini admin/superadmin
+ * @var string $kabar      pesan sukses flash (string kosong kalau tidak ada)
+ * @var string $galat      pesan gagal flash (string kosong kalau tidak ada)
  */
 
 $level    = (string) session()->get('level');
 $hari_ini = date('Y-m-d');
+
+// kolom "Role" pada tab "Tidak Jadi Dikerjakan": level akun yang memegang tugasnya
+$role = ['cs' => 'CS', 'admin' => 'Admin', 'superadmin' => 'Superadmin'];
 
 $peta_nomor = [];
 
@@ -62,6 +80,38 @@ $tanya = static function (array $ubah): string {
     .wa-saring label { font-size: .7rem; font-weight: 700; color: #667085; text-transform: uppercase; letter-spacing: .04em; }
     .wa-saring .form-control, .wa-saring .form-select { max-width: 190px; }
 
+    /* Yang boleh tergulir cuma isi tabel. Deretan tab + saringan menempel di atas
+       (.wa-lekat) dan kepala kolom ikut menempel di dalam wadah gulirnya
+       (.wa-gulir), jadi baris yang jalan tidak pernah menutupi pilihan tab.
+       Di bawah 992px dibiarkan seperti dulu: halaman yang digulir, sebab di layar
+       kecil blok saringan sudah makan separuh tinggi layar kalau ikut menempel. */
+    .wa-halaman { --wa-atas: 290px; }
+    .wa-lekat { background: #f9fafb; }
+    .wa-gulir .table { border-collapse: separate; border-spacing: 0; }
+    /* separate di atas bukan hiasan: dengan border-collapse: collapse, garis kepala
+       tabel ikut hilang saat baris bergerak (perilaku sticky yang diketahui). */
+    .wa-gulir thead th { position: sticky; top: 0; z-index: 2; }
+    /* .table-responsive menata tinggi gulir mendatar (7px); gulir tegak yang baru
+       ini diberi ukuran yang sama supaya tidak terlihat dua jenis scrollbar */
+    .wa-gulir::-webkit-scrollbar { width: 7px; }
+
+    @media (min-width: 992px) {
+        .wa-lekat {
+            position: sticky; top: 0; z-index: 1025;
+            padding-top: .3rem; margin-top: -.3rem;
+        }
+        .wa-gulir {
+            /* 290px = judul + tab + saringan + pager; kalau perkiraan meleset,
+               tab dan saringan masih menempel, hanya sisanya yang ikut tergulir */
+            max-height: calc(100vh - var(--wa-atas));
+            max-height: calc(100dvh - var(--wa-atas));
+            min-height: 180px;
+            overflow: auto;
+            /* mentok gulir di tabel tidak boleh membuat halaman di belakangnya ikut bergerak */
+            overscroll-behavior: contain;
+        }
+    }
+
     .wa-kartu {
         background: #fff; border: 1px solid #e2e8f0; border-radius: 1.15rem;
         box-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 8px 24px -12px rgba(15, 23, 42, .12);
@@ -70,9 +120,14 @@ $tanya = static function (array $ubah): string {
     .table.wa-daftar { margin: 0; }
     .wa-daftar th { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: #667085; background: #f9fafb; }
     .wa-daftar td { vertical-align: middle; font-size: .86rem; }
+    .wa-daftar thead th:first-child { width: 40%; }
     .wa-nama { font-weight: 700; color: #0f172a; text-decoration: none; display: block; }
     .wa-nama:hover { color: #da251d; }
     .wa-sub { font-size: .76rem; color: #64748b; display: flex; flex-wrap: wrap; gap: .2rem .6rem; margin-top: .12rem; }
+    /* catatan dipotong dua baris supaya tinggi baris tabel seragam;
+       teks lengkapnya tetap terbaca di halaman rinci tugas */
+    .wa-catatan { font-size: .76rem; color: #64748b; margin-top: .3rem; display: -webkit-box;
+        -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     .wa-nomor { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .78rem; color: #334155; }
     .wa-kosong { padding: 2.6rem 1rem; text-align: center; color: #94a3b8; }
     .wa-kosong i { font-size: 2rem; display: block; margin-bottom: .5rem; }
@@ -88,10 +143,32 @@ $tanya = static function (array $ubah): string {
     .pil-orang { display: inline-block; padding: .16rem .55rem; border-radius: 999px; font-size: .7rem; font-weight: 700; background: #e6f4fb; color: #0369a1; }
     .pil-buat { background: #f4f6f9; color: #475569; }
 
+    /* Tabel jejak: lebar kolom dipatok supaya isian panjang tidak mendorong
+       tabel melebar; alasan tidak lagi dipajang di sel — ia dibuka lewat tombol
+       Alasan di kolom paling kanan, dan waktu muat satu baris supaya sejajar. */
+    .wa-daftar.tabel-jejak { table-layout: fixed; min-width: 860px; }
+    .tabel-jejak thead th:first-child { width: auto; }
+    /* tabel-rapi mematok kolom terakhir ke 1%; di layout tetap itu bikin tombol
+       Alasan tercekik, jadi lebarnya ditentukan di sini */
+    .tabel-jejak thead th:last-child { width: 9%; }
+    .tabel-jejak td { overflow-wrap: anywhere; }
+    .tabel-jejak .k-reminder { width: 22%; }
+    .tabel-jejak .k-nomor { width: 11%; }
+    .tabel-jejak .k-tindak { width: 10%; }
+    .tabel-jejak .k-role { width: 8%; }
+    .tabel-jejak .k-orang { width: 15%; }
+    .tabel-jejak .k-waktu { width: 17%; }
+    .tabel-jejak .k-aksi { width: 9%; }
+    .pil-role { display: inline-block; padding: .16rem .5rem; border-radius: .45rem; font-size: .66rem;
+        font-weight: 800; text-transform: uppercase; letter-spacing: .04em; background: #f1f5f9; color: #475569; }
+    .r-cs { background: #e6f4fb; color: #0369a1; }
+    .r-admin { background: #fef3e2; color: #b45309; }
+    .r-superadmin { background: #fdf1f0; color: #b81c16; }
+    .wa-waktu { font-size: .76rem; color: #475569; white-space: nowrap; }
+
     .wa-teenggat { font-size: .76rem; white-space: nowrap; }
     .lewat { color: #b81c16; font-weight: 700; }
     .wa-aksi { display: inline-flex; gap: .3rem; align-items: center; justify-content: flex-end; }
-    .wa-form-lepas { margin-top: .4rem; }
     .wa-pager { padding: .8rem 1rem; background: #fff; border-top: 1px solid #eaecf0; }
 
     .wa-cari { position: relative; }
@@ -126,71 +203,73 @@ $tanya = static function (array $ubah): string {
         </button>
     </div>
 
-    <?php if ($kabar !== '') : ?><div class="alert alert-success py-2"><?= esc($kabar) ?></div><?php endif; ?>
-    <?php if ($galat !== '') : ?><div class="alert alert-danger py-2"><?= esc($galat) ?></div><?php endif; ?>
+    <?php if ($kabar !== '') : ?><div class="alert alert-success py-2" data-flash><?= esc($kabar) ?></div><?php endif; ?>
+    <?php if ($galat !== '') : ?><div class="alert alert-danger py-2" data-flash><?= esc($galat) ?></div><?php endif; ?>
 
-    <div class="wa-tab">
-        <?php foreach ($tab as $kode => $nama) : ?>
-            <a class="<?= $s['tab'] === $kode ? 'aktif' : '' ?>" href="<?= esc($tanya(['tab' => $kode])) ?>">
-                <?= esc($nama) ?>
-                <?php if (($angka[$kode] ?? 0) > 0) : ?><span><?= (int) $angka[$kode] ?></span><?php endif; ?>
+    <div class="wa-lekat">
+        <div class="wa-tab">
+            <?php foreach ($tab as $kode => $nama) : ?>
+                <a class="<?= $s['tab'] === $kode ? 'aktif' : '' ?>" href="<?= esc($tanya(['tab' => $kode])) ?>">
+                    <?= esc($nama) ?>
+                    <?php if (($angka[$kode] ?? 0) > 0) : ?><span><?= (int) $angka[$kode] ?></span><?php endif; ?>
+                </a>
+            <?php endforeach; ?>
+            <a class="<?= (int) $s['milik_saya'] === $milik ? 'aktif' : '' ?>"
+                href="<?= esc($tanya(['saya' => (int) $s['milik_saya'] === $milik ? '' : '1'])) ?>">
+                <i class="fal fa-user"></i> Hanya punyaku
             </a>
-        <?php endforeach; ?>
-        <a class="<?= (int) $s['milik_saya'] === $milik ? 'aktif' : '' ?>"
-            href="<?= esc($tanya(['saya' => (int) $s['milik_saya'] === $milik ? '' : '1'])) ?>">
-            <i class="fal fa-user"></i> Hanya punyaku
-        </a>
-    </div>
+        </div>
 
-    <form class="wa-saring" method="get" action="<?= esc(site_url('admin/tugas/whatsapp')) ?>">
-        <input type="hidden" name="tab" value="<?= esc($s['tab']) ?>">
-        <input type="hidden" name="saya" value="<?= (int) $s['milik_saya'] === $milik ? '1' : '' ?>">
-        <div class="lapangan">
-            <label for="cari">Cari</label>
-            <input type="search" class="form-control form-control-sm" id="cari" name="cari" value="<?= esc($s['cari']) ?>"
-                placeholder="judul atau catatan">
-        </div>
-        <div class="lapangan">
-            <label for="nomor">Nomor WA</label>
-            <input type="search" class="form-control form-control-sm" id="nomor" name="nomor" value="<?= esc($s['nomor']) ?>"
-                placeholder="0812...">
-        </div>
-        <div class="lapangan">
-            <label for="tindak">Tindak lanjut</label>
-            <select class="form-select form-select-sm" id="tindak" name="tindak">
-                <option value="">Semua jenis</option>
-                <?php foreach ($tindak as $kode => $nama) : ?>
-                    <option value="<?= esc($kode) ?>" <?= $s['tindak_lanjut'] === $kode ? 'selected' : '' ?>><?= esc($nama) ?></option>
-                <?php endforeach; ?>
-            </select>
-        </div>
-        <?php if (count($toko) > 1) : ?>
+        <form class="wa-saring" method="get" action="<?= esc(site_url('admin/tugas/whatsapp')) ?>">
+            <input type="hidden" name="tab" value="<?= esc($s['tab']) ?>">
+            <input type="hidden" name="saya" value="<?= (int) $s['milik_saya'] === $milik ? '1' : '' ?>">
             <div class="lapangan">
-                <label for="toko">Toko</label>
-                <select class="form-select form-select-sm" id="toko" name="toko">
-                    <option value="">Semua toko</option>
-                    <?php foreach ($toko as $id_toko => $nama_t) : ?>
-                        <option value="<?= (int) $id_toko ?>" <?= (int) $s['juragan_id'] === (int) $id_toko ? 'selected' : '' ?>><?= esc($nama_t) ?></option>
+                <label for="cari">Cari</label>
+                <input type="search" class="form-control form-control-sm" id="cari" name="cari" value="<?= esc($s['cari']) ?>"
+                    placeholder="judul atau catatan">
+            </div>
+            <div class="lapangan">
+                <label for="nomor">Nomor WA</label>
+                <input type="search" class="form-control form-control-sm" id="nomor" name="nomor" value="<?= esc($s['nomor']) ?>"
+                    placeholder="0812...">
+            </div>
+            <div class="lapangan">
+                <label for="tindak">Tindak lanjut</label>
+                <select class="form-select form-select-sm" id="tindak" name="tindak">
+                    <option value="">Semua jenis</option>
+                    <?php foreach ($tindak as $kode => $nama) : ?>
+                        <option value="<?= esc($kode) ?>" <?= $s['tindak_lanjut'] === $kode ? 'selected' : '' ?>><?= esc($nama) ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
-        <?php endif; ?>
-        <div class="lapangan">
-            <label for="batas">Baris</label>
-            <select class="form-select form-select-sm" id="batas" name="batas">
-                <?php foreach ([10, 25, 50] as $n) : ?>
-                    <option value="<?= $n ?>" <?= $batas === $n ? 'selected' : '' ?>><?= $n ?></option>
-                <?php endforeach; ?>
-            </select>
-        </div>
-        <div class="lapangan">
-            <label>&nbsp;</label>
-            <div class="wa-aksi">
-                <button type="submit" class="btn btn-sm btn-dark"><i class="fal fa-search"></i> Cari</button>
-                <a class="btn btn-sm btn-link text-decoration-none" href="<?= esc(site_url('admin/tugas/whatsapp')) ?>">Ulangi</a>
+            <?php if (count($toko) > 1) : ?>
+                <div class="lapangan">
+                    <label for="toko">Toko</label>
+                    <select class="form-select form-select-sm" id="toko" name="toko">
+                        <option value="">Semua toko</option>
+                        <?php foreach ($toko as $id_toko => $nama_t) : ?>
+                            <option value="<?= (int) $id_toko ?>" <?= (int) $s['juragan_id'] === (int) $id_toko ? 'selected' : '' ?>><?= esc($nama_t) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            <?php endif; ?>
+            <div class="lapangan">
+                <label for="batas">Baris</label>
+                <select class="form-select form-select-sm" id="batas" name="batas">
+                    <?php foreach ([10, 25, 50] as $n) : ?>
+                        <option value="<?= $n ?>" <?= $batas === $n ? 'selected' : '' ?>><?= $n ?></option>
+                    <?php endforeach; ?>
+                </select>
             </div>
-        </div>
-    </form>
+            <div class="lapangan">
+                <label>&nbsp;</label>
+                <div class="wa-aksi">
+                    <button type="submit" class="btn btn-sm btn-dark"><i class="fal fa-search"></i> Cari</button>
+                    <a class="btn btn-sm btn-link text-decoration-none" href="<?= esc(site_url('admin/tugas/whatsapp')) ?>">Ulangi</a>
+                </div>
+            </div>
+        </form>
+    </div>
 
     <div class="wa-kartu">
         <?php if ($baris === []) : ?>
@@ -198,9 +277,76 @@ $tanya = static function (array $ubah): string {
                 <i class="fal fa-circle-check text-success"></i>
                 <?php if ($s['tab'] === 'belum') : ?>Tidak ada reminder menunggu. Buat lewat tombol kanan atas.<?php else : ?>Kosong di tab ini.<?php endif; ?>
             </div>
+        <?php elseif ($s['tab'] === 'tak_selesai') : ?>
+            <?php if ($rekap !== []) : ?>
+                <div class="alert alert-light border d-flex flex-wrap align-items-center gap-2 py-2 small mb-2">
+                    <span class="fw-bold"><i class="fal fa-chart-simple me-1"></i>Paling sering lepas tangan:</span>
+                    <?php foreach ($rekap as $r) : ?>
+                        <span class="pil-orang"><i class="fal fa-user me-1"></i><?= esc($r['nama'] ?: '(akun dihapus)') ?> &middot; <?= (int) $r['n'] ?>x</span>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+            <div class="table-responsive wa-gulir">
+                <table class="table table-hover align-middle wa-daftar tabel-rapi tabel-jejak">
+                    <colgroup>
+                        <col class="k-reminder"><col class="k-nomor"><col class="k-tindak">
+                        <col class="k-role"><col class="k-orang"><col class="k-waktu"><col class="k-aksi">
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th>Reminder</th>
+                            <th>Nomor</th>
+                            <th>Tindak lanjut</th>
+                            <th>Role</th>
+                            <th>Yang Lepas</th>
+                            <th>Waktu</th>
+                            <th class="text-center">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($baris as $w) : ?>
+                            <?php
+                            $status   = (string) $w['status'];
+                            $alasan   = trim((string) ($w['alasan'] ?: $w['catatan_lepas']));
+                            $siapa    = trim((string) $w['nama_lepas']);
+                            $levelLepas = (string) $w['level_lepas'];
+                            $otomatis = (string) $w['jenis'] === 'operan_otomatis';
+                            ?>
+                            <tr>
+                                <td>
+                                    <a class="wa-nama" href="<?= esc(site_url('admin/tugas/' . (int) $w['tugas_id'])) ?>"><?= esc($w['judul']) ?></a>
+                                    <div class="wa-sub">
+                                        <span>#<?= (int) $w['tugas_id'] ?></span>
+                                        <?php if ($w['nama_pelanggan']) : ?><span><i class="fal fa-user"></i> <?= esc($w['nama_pelanggan']) ?></span><?php endif; ?>
+                                        <?php if ($w['nama_juragan']) : ?><span><i class="fal fa-store"></i> <?= esc($w['nama_juragan']) ?></span><?php endif; ?>
+                                        <span class="pil-status s-<?= esc($status) ?>"><?= esc(\App\Models\TugasModel::STATUS[$status] ?? $status) ?></span>
+                                    </div>
+                                </td>
+                                <td><div class="wa-nomor"><?= esc($w['nomor_ke'] ?: '-') ?></div></td>
+                                <td><span class="pil-tindak"><?= esc($tindak[$w['tindak_lanjut']] ?? $w['tindak_lanjut']) ?></span></td>
+                                <td><?= $siapa === '' ? '<span class="text-muted">-</span>' : '<span class="pil-role r-' . esc($levelLepas) . '">' . esc($role[$levelLepas] ?? ucfirst($levelLepas)) . '</span>' ?></td>
+                                <td>
+                                    <?= $siapa === '' ? '<span class="text-muted">(akun dihapus)</span>' : '<span class="pil-orang"><i class="fal fa-user"></i> ' . esc($siapa) . '</span>' ?>
+                                    <?php if ($otomatis) : ?>
+                                        <div class="wa-sub">dioper otomatis, shift habis</div>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="wa-waktu"><?= esc(date('d M Y H:i', (int) $w['dilepas_at'])) ?></td>
+                                <td class="text-center">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill" data-bs-toggle="modal"
+                                        data-bs-target="#mtWaAlasan" role="button" data-alasan="<?= esc($alasan, 'attr') ?>"
+                                        data-siapa="<?= esc($siapa === '' ? '(akun dihapus)' : $siapa, 'attr') ?>"
+                                        data-judul="<?= esc($w['judul'], 'attr') ?>"
+                                        data-waktu="<?= esc(date('d M Y H:i', (int) $w['dilepas_at']), 'attr') ?>"
+                                        data-taut="<?= esc(site_url('admin/tugas/' . (int) $w['tugas_id']), 'attr') ?>">Alasan</button>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
         <?php else : ?>
-            <div class="table-responsive">
-                <table class="table table-hover align-middle wa-daftar">
+            <div class="table-responsive wa-gulir">                <table class="table table-hover align-middle wa-daftar tabel-rapi">
                     <thead>
                         <tr>
                             <th>Reminder</th>
@@ -208,7 +354,7 @@ $tanya = static function (array $ubah): string {
                             <th>Tindak lanjut</th>
                             <th>Tenggat</th>
                             <th>Penanggung jawab</th>
-                            <th class="text-end">Aksi</th>
+                            <th class="text-center">Aksi</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -231,15 +377,11 @@ $tanya = static function (array $ubah): string {
                                         <span class="pil-buat pil-orang">dibuat: <?= esc($w['nama_dibuat'] ?: '?') ?></span>
                                     </div>
                                     <?php if ($w['deskripsi']) : ?>
-                                        <div class="wa-sub mt-1"><?= nl2br(esc(mb_substr((string) $w['deskripsi'], 0, 160))) ?></div>
+                                        <div class="wa-catatan"><?= nl2br(esc(mb_substr((string) $w['deskripsi'], 0, 160))) ?></div>
                                     <?php endif; ?>
                                 </td>
                                 <td>
                                     <div class="wa-nomor"><?= esc($w['nomor_ke'] ?: '-') ?></div>
-                                    <div class="wa-sub">
-                                        <span>dari <?= esc($w['nomor_dari'] ?: '-') ?></span>
-                                        <?php if ($w['label_nomor']) : ?><span><?= esc($w['label_nomor']) ?></span><?php endif; ?>
-                                    </div>
                                 </td>
                                 <td><span class="pil-tindak"><?= esc($tindak[$w['tindak_lanjut']] ?? $w['tindak_lanjut']) ?></span></td>
                                 <td class="wa-teenggat <?= $terlambat ? 'lewat' : '' ?>">
@@ -256,35 +398,25 @@ $tanya = static function (array $ubah): string {
                                         <span class="text-muted">belum diambil</span>
                                     <?php endif; ?>
                                 </td>
-                                <td class="text-end">
-                                    <div class="wa-aksi flex-wrap">
+                                <td class="text-center">
+                                    <div class="wa-aksi">
                                         <?php if ($status === 'queued') : ?>
                                             <form method="post" action="<?= esc(site_url('admin/tugas/whatsapp/ambil/' . (int) $w['tugas_id'])) ?>">
                                                 <?= csrf_field() ?>
                                                 <button type="submit" class="btn btn-sm btn-outline-primary rounded-pill">Ambil Tugas</button>
                                             </form>
                                         <?php elseif ($punya && $buka) : ?>
-                                            <form method="post" action="<?= esc(site_url('admin/tugas/whatsapp/selesai/' . (int) $w['tugas_id'])) ?>">
-                                                <?= csrf_field() ?>
-                                                <input type="hidden" name="catatan" value="selesai dari daftar reminder">
-                                                <button type="submit" class="btn btn-sm btn-success rounded-pill">Selesai</button>
-                                            </form>
-                                            <a class="btn btn-sm btn-link text-decoration-none" data-bs-toggle="collapse"
-                                                href="#lepas-<?= (int) $w['tugas_id'] ?>" role="button">Lepas</a>
+                                            <button type="button" class="btn btn-sm btn-success rounded-pill" data-bs-toggle="modal"
+                                                data-bs-target="#mtWaSelesai" data-tugas="<?= (int) $w['tugas_id'] ?>"
+                                                data-judul="<?= esc($w['judul'], 'attr') ?>" role="button">Selesai</button>
+                                            <button type="button" class="btn btn-sm btn-link text-decoration-none" data-bs-toggle="modal"
+                                                data-bs-target="#mtWaLepas" data-tugas="<?= (int) $w['tugas_id'] ?>"
+                                                data-judul="<?= esc($w['judul'], 'attr') ?>" role="button">Lepas</button>
                                         <?php else : ?>
                                             <a class="btn btn-sm btn-link text-decoration-none"
                                                 href="<?= esc(site_url('admin/tugas/' . (int) $w['tugas_id'])) ?>">Riwayat</a>
                                         <?php endif; ?>
                                     </div>
-                                    <?php if ($punya && $buka) : ?>
-                                        <div class="collapse" id="lepas-<?= (int) $w['tugas_id'] ?>">
-                                            <?= form_open('admin/tugas/whatsapp/lepas/' . (int) $w['tugas_id'], ['class' => 'wa-form-lepas']) ?>
-                                                <input type="text" class="form-control form-control-sm" name="alasan" maxlength="255"
-                                                    placeholder="alasan dilepas (wajib)" required>
-                                                <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill mt-1">Kembalikan ke antrean</button>
-                                            <?= form_close() ?>
-                                        </div>
-                                    <?php endif; ?>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -329,11 +461,8 @@ $tanya = static function (array $ubah): string {
                     <div class="col-6">
                         <label class="form-label small fw-bold" for="wa-nomor-dari">Nomor WhatsApp Pengirim</label>
                         <select class="form-select form-select-sm" id="wa-nomor-dari" name="nomor_id">
-                            <option value="0">Belum ditentukan / nomor lain</option>
+                            <option value="0">Belum ditentukan (Bisa dilewati)</option>
                         </select>
-                        <div class="form-text small">
-                            Daftar nomor diisi Admin di menu Delegasi Nomor. Kalau kosong, CS tetap bisa mencatat remindernya.
-                        </div>
                     </div>
                 </div>
 
@@ -392,6 +521,86 @@ $tanya = static function (array $ubah): string {
     </div>
 </div>
 
+<!-- modal aksi baris: satu pasang dipakai bersama semua baris, kolom isinya
+     diisi dari tombol yang diklik (lihat bagian js) -->
+<div class="modal fade" id="mtWaSelesai" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form id="formWaSelesai" method="post" action="" data-base="<?= esc(site_url('admin/tugas/whatsapp/selesai/')) ?>">
+                <?= csrf_field() ?>
+                <div class="modal-header">
+                    <h5 class="modal-title">Selesaikan reminder</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="wa-modal-judul small text-muted mb-3"></p>
+                    <label class="form-label small fw-bold" for="wa-selesai-catatan">Hasil</label>
+                    <textarea class="form-control form-control-sm" id="wa-selesai-catatan" name="catatan" rows="3"
+                        maxlength="500" placeholder="apa yang sudah dilakukan"></textarea>
+                    <div class="form-text small">Tertulis di riwayat tugas sebagai hasil kerja kamu.</div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-sm btn-link text-decoration-none" data-bs-dismiss="modal">Batal</button>
+                    <button type="submit" class="btn btn-sm btn-success">Selesai</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="mtWaLepas" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form id="formWaLepas" method="post" action="" data-base="<?= esc(site_url('admin/tugas/whatsapp/lepas/')) ?>">
+                <?= csrf_field() ?>
+                <div class="modal-header">
+                    <h5 class="modal-title">Lepas reminder</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="wa-modal-judul small text-muted mb-3"></p>
+                    <label class="form-label small fw-bold" for="wa-lepas-alasan">Alasan <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control form-control-sm" id="wa-lepas-alasan" name="alasan" required
+                        maxlength="255" placeholder="shift habis / operan ke CS lain">
+                    <label class="form-label small fw-bold mt-2" for="wa-lepas-catatan">Catatan penerus</label>
+                    <textarea class="form-control form-control-sm" id="wa-lepas-catatan" name="catatan" rows="3"
+                        maxlength="500" placeholder="sudah sampai mana"></textarea>
+                    <div class="form-text small">Tugas kembali ke antrean supaya bisa diambil orang lain.</div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-sm btn-link text-decoration-none" data-bs-dismiss="modal">Batal</button>
+                    <button type="submit" class="btn btn-sm btn-danger">Kembalikan ke antrean</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- satu modal alasan untuk seluruh baris tabel jejak; isinya diambil dari
+     tombol yang diklik (lihat bagian js) -->
+<div class="modal fade" id="mtWaAlasan" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Alasan lepas tangan</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+            </div>
+            <div class="modal-body">
+                <p class="wa-alasan-judul small text-muted mb-2"></p>
+                <p class="wa-alasan-isi mb-2" style="white-space: pre-line"></p>
+                <p class="small text-muted mb-0">
+                    <i class="fal fa-user me-1"></i><span class="wa-alasan-siapa"></span>
+                    &middot; <i class="fal fa-clock me-1"></i><span class="wa-alasan-waktu"></span>
+                </p>
+            </div>
+            <div class="modal-footer">
+                <a class="wa-alasan-taut btn btn-sm btn-link text-decoration-none" href="#">Lihat riwayat tugas</a>
+                <button type="button" class="btn btn-sm btn-dark" data-bs-dismiss="modal">Tutup</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <?= $this->endSection() ?>
 
 <?= $this->section('js') ?>
@@ -409,7 +618,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
         var bebas = document.createElement('option');
         bebas.value = '0';
-        bebas.textContent = 'Belum ditentukan / nomor lain';
+        // tanpa nomor terdaftar opsi inilah jawabannya, jadi tulisannya jujur
+        // boleh dilewati; begitu ada pilihan, ia turun jadi penuntun supaya CS
+        // memilih dengan sadar, bukan lolos tanpa sengaja
+        bebas.textContent = daftar.length === 0 ? 'Belum ditentukan (Bisa dilewati)' : 'Pilih Nomor';
         pilihNomor.appendChild(bebas);
 
         daftar.forEach(function(n) {
@@ -470,6 +682,51 @@ document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener('click', function(e) {
         if (!saran.contains(e.target) && e.target !== kolom) saran.classList.remove('tampil');
     });
+
+    // satu pasang modal untuk semua baris: tujuan kirim dan judul reminder
+    // diambil dari tombol yang diklik, jadi tidak ada puluhan modal tersembunyi
+    ['mtWaSelesai', 'mtWaLepas'].forEach(function (id) {
+        var modal = document.getElementById(id);
+
+        if (! modal) {
+            return;
+        }
+
+        modal.addEventListener('show.bs.modal', function (event) {
+            var pemicu = event.relatedTarget;
+
+            if (! pemicu) {
+                return;
+            }
+
+            var form = modal.querySelector('form');
+            form.action = form.dataset.base + pemicu.dataset.tugas;
+            modal.querySelector('.wa-modal-judul').textContent = pemicu.dataset.judul || '';
+            form.reset();
+        });
+    });
+
+    // tombol "Alasan" di tabel jejak: isi modal diambil dari atribut data
+    // tombol yang diklik, dan textContent dipakai supaya teks alasan mentah
+    // tidak pernah dianggap markup
+    var modalAlasan = document.getElementById('mtWaAlasan');
+
+    if (modalAlasan) {
+        modalAlasan.addEventListener('show.bs.modal', function (event) {
+            var pemicu = event.relatedTarget;
+
+            if (! pemicu) {
+                return;
+            }
+
+            var d = pemicu.dataset;
+            modalAlasan.querySelector('.wa-alasan-judul').textContent = d.judul || '';
+            modalAlasan.querySelector('.wa-alasan-isi').textContent = d.alasan || 'Tanpa alasan tercatat.';
+            modalAlasan.querySelector('.wa-alasan-siapa').textContent = d.siapa || '-';
+            modalAlasan.querySelector('.wa-alasan-waktu').textContent = d.waktu || '';
+            modalAlasan.querySelector('.wa-alasan-taut').href = d.taut || '#';
+        });
+    }
 });
 </script>
 <?= $this->endSection() ?>

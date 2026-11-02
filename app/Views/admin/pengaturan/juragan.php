@@ -80,10 +80,10 @@ $chip = static function (string $label, array $daftar): void { ?>
     <h1 class="h3 mt-5">Pengaturan Juragan</h1>
 
     <?php if (($sukses ?? null) !== null) { ?>
-        <div class="alert alert-success py-2"><?= esc($sukses) ?></div>
+        <div class="alert alert-success py-2" data-flash><?= esc($sukses) ?></div>
     <?php } ?>
     <?php if (($gagal ?? null) !== null) { ?>
-        <div class="alert alert-danger py-2"><?= esc($gagal) ?></div>
+        <div class="alert alert-danger py-2" data-flash><?= esc($gagal) ?></div>
     <?php } ?>
 
     <div class="card">

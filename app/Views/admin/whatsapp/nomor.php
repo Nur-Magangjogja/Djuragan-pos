@@ -6,9 +6,13 @@
  * Nomor yang tidak disematkan ke orang boleh dipakai semua CS di toko itu;
  * nomor yang disematkan hanya muncul di form Reminder WhatsApp punyanya.
  *
+ * @var string                     $title      judul halaman (dari Admin\Whatsapp::nomor())
  * @var list<array<string, mixed>> $daftar
  * @var array<int, string>         $toko
  * @var array<int, string>         $pegawai
+ * @var string                     $kabar      pesan sukses flash (kosong kalau tidak ada)
+ * @var string                     $galat      pesan gagal flash (kosong kalau tidak ada)
+ * @var string                     $peringatan pesan peringatan flash (kosong kalau tidak ada)
  */
 ?>
 <?= $this->extend('template/main') ?>
@@ -57,8 +61,9 @@
         </a>
     </div>
 
-    <?php if ($kabar !== '') : ?><div class="alert alert-success py-2"><?= esc($kabar) ?></div><?php endif; ?>
-    <?php if ($galat !== '') : ?><div class="alert alert-danger py-2"><?= esc($galat) ?></div><?php endif; ?>
+    <?php if ($kabar !== '') : ?><div class="alert alert-success py-2" data-flash><?= esc($kabar) ?></div><?php endif; ?>
+    <?php if ($peringatan !== '') : ?><div class="alert alert-warning py-2" data-flash><?= esc($peringatan) ?></div><?php endif; ?>
+    <?php if ($galat !== '') : ?><div class="alert alert-danger py-2" data-flash><?= esc($galat) ?></div><?php endif; ?>
 
     <div class="nm-kartu">
         <div class="nm-judul">Daftar nomor (<?= count($daftar) ?>)</div>

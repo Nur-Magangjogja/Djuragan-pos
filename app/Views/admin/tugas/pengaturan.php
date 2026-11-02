@@ -3,9 +3,14 @@
 /**
  * Aturan reminder transaksi.
  *
- * @var array $aturan nilai aktif (kunci => angka)
- * @var array $meta   label + bawaan tiap kunci
- * @var array $hitung jumlah nota yang sedang masuk tiap aturan
+ * Semua variabel di bawah disuntik Admin\Tugas::pengaturan() lewat view(); blok
+ * @var ini hanya memberi tahunya ke analyzer, bukan kode yang dijalankan.
+ *
+ * @var string $title judul halaman
+ * @var string $kabar pesan sukses flash (string kosong kalau tidak ada)
+ * @var array<string, int>                                     $aturan nilai aktif (kunci => angka)
+ * @var array<string, array{label: string, bawaan: int, satuan: string}> $meta   label + bawaan tiap kunci
+ * @var array<string, int>                                     $hitung jumlah nota yang sedang masuk tiap aturan
  */
 ?>
 <?= $this->extend('template/main') ?>
@@ -46,7 +51,7 @@
     <h1 class="h3 mt-2"><i class="fal fa-bell me-1 text-brand-500"></i> <?= esc($title) ?></h1>
 
     <?php if ($kabar !== '') : ?>
-        <div class="alert alert-success py-2"><?= esc($kabar) ?></div>
+        <div class="alert alert-success py-2" data-flash><?= esc($kabar) ?></div>
     <?php endif; ?>
 
     <?= form_open('admin/tugas/pengaturan', ['class' => 'aturan-kotak']) ?>

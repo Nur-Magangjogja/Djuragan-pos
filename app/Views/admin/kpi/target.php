@@ -70,7 +70,7 @@ $poin_tampil = static function (float $n): string {
     <h1 class="h3 mt-5">Target KPI</h1>
 
     <?php if ($kabar !== '') { ?>
-        <div class="alert alert-success py-2"><?= esc($kabar) ?></div>
+        <div class="alert alert-success py-2" data-flash><?= esc($kabar) ?></div>
     <?php } ?>
 
     <p class="text-muted small">

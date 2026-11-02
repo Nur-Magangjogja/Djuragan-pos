@@ -7,10 +7,17 @@
  * obrolan itu supaya CS berikutnya (atau Admin) tidak perlu bertanya "tadi ngobrol
  * apa". Sekali simpan bisa langsung lahir tugas lanjutan.
  *
- * @var array $toko        id toko => nama
- * @var array $label       master tag pelanggan
- * @var array $pilihan     prioritas
- * @var array $belakangan  10 tugas lanjutan terakhir buatan akun ini
+ * Semua variabel di bawah disuntik Admin\Tugas::catatan() lewat view() (extract),
+ * jadi analyzer tidak bisa menelusurinya dari file ini. Blok @var di bawah hanya
+ * memberi tahunya ke IntelliJ/Intelephense, bukan kode yang dijalankan.
+ *
+ * @var string $title      judul halaman
+ * @var array<int, string> $toko   id toko => nama
+ * @var list<array<string, mixed>> $label  master tag pelanggan
+ * @var array<string, array<string, string>> $pilihan  'prioritas' => kunci => label
+ * @var list<array<string, mixed>> $belakangan  10 tugas lanjutan terakhir buatan akun ini
+ * @var string $kabar      pesan sukses flash (string kosong kalau tidak ada)
+ * @var string $galat      pesan gagal flash (string kosong kalau tidak ada)
  */
 
 $level = (string) session()->get('level');
@@ -58,10 +65,10 @@ $level = (string) session()->get('level');
     <h1 class="h3 mt-2"><i class="fal fa-comments me-1 text-brand-500"></i> <?= esc($title) ?></h1>
 
     <?php if ($kabar !== '') : ?>
-        <div class="alert alert-success py-2"><?= esc($kabar) ?></div>
+        <div class="alert alert-success py-2" data-flash><?= esc($kabar) ?></div>
     <?php endif; ?>
     <?php if ($galat !== '') : ?>
-        <div class="alert alert-danger py-2"><?= esc($galat) ?></div>
+        <div class="alert alert-danger py-2" data-flash><?= esc($galat) ?></div>
     <?php endif; ?>
 
     <?= form_open('admin/tugas/catatan', ['class' => 'catatan-kotak']) ?>

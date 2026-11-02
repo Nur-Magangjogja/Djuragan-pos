@@ -3,10 +3,25 @@
 /**
  * Dasbor kerja harian. Isinya beda per peran, cakupannya selalu toko akun ini.
  *
- * @var array<string, int>    $ringkas
- * @var list<array>           $pegangan $antrean $terlambat $riwayat $beban $regu
- * @var array<string, mixed>|null $shift
- * @var array<string, string> $meta
+ * Semua variabel di bawah disuntik Admin\Tugas::dasbor() lewat view(). Satu tag
+ * @var hanya mengikat satu variabel, jadi tiap variabel ditulis pada barisnya sendiri.
+ *
+ * @var string $title       judul halaman
+ * @var string $hari        tanggal hari ini (Y-m-d)
+ * @var string $level       peran yang membuka (cs/admin/superadmin)
+ * @var array<string, int>  $ringkas   jumlah tugas per status
+ * @var list<array<string, mixed>> $pegangan  tugas atas namaku yang belum beres
+ * @var list<array<string, mixed>> $antrean   tugas yang belum ada penggarapnya
+ * @var list<array<string, mixed>> $terlambat tugas yang lewat tenggat
+ * @var list<array<string, mixed>> $riwayat   kejadian terakhir
+ * @var list<array<string, mixed>> $beban     rekap kerja per orang
+ * @var int    $sesi        lembar Cek Toko yang belum ditutup
+ * @var array<string, mixed>|null $shift      jam shift saya hari ini
+ * @var list<array<string, mixed>> $regu      jam shift semua CS hari ini
+ * @var int    $pengenalan  toko yang belum dikenali CS-nya
+ * @var array<string, array<string, string>> $meta  label status/jenis/prioritas
+ * @var string $kabar       pesan sukses flash (string kosong kalau tidak ada)
+ * @var string $galat       pesan gagal flash (string kosong kalau tidak ada)
  */
 
 $level  = (string) $level;
@@ -95,8 +110,8 @@ if ($level !== 'cs') {
         <?php endif; ?>
     </div>
 
-    <?php if ($kabar !== '') : ?><div class="alert alert-success py-2"><?= esc($kabar) ?></div><?php endif; ?>
-    <?php if ($galat !== '') : ?><div class="alert alert-danger py-2"><?= esc($galat) ?></div><?php endif; ?>
+    <?php if ($kabar !== '') : ?><div class="alert alert-success py-2" data-flash><?= esc($kabar) ?></div><?php endif; ?>
+    <?php if ($galat !== '') : ?><div class="alert alert-danger py-2" data-flash><?= esc($galat) ?></div><?php endif; ?>
 
     <div class="dsb-tiles">
         <?php foreach ($tiles as [$label, $angka, $ikon, $sub]) : ?>
@@ -181,7 +196,7 @@ if ($level !== 'cs') {
                         <div class="dsb-kosong">Belum ada tugas yang dikerjakan orang pada rentang ini.</div>
                     <?php else : ?>
                         <div class="table-responsive">
-                            <table class="table dsb-beban">
+                            <table class="table dsb-beban tabel-rapi">
                                 <thead>
                                     <tr><th>Orang</th><th class="text-end">Terbuka</th><th class="text-end">Telat</th><th class="text-end">Selesai</th><th class="text-end">Dibatal</th></tr>
                                 </thead>

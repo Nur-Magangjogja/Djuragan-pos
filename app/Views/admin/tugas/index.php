@@ -80,6 +80,7 @@ $label_status = static function (string $kode) use ($pilihan): string {
     .table.tugas-daftar { margin: 0; }
     .tugas-daftar th { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: #667085; background: #f9fafb; }
     .tugas-daftar td { vertical-align: middle; font-size: .86rem; }
+    .tugas-daftar thead th:first-child { width: 34%; }
     .tugas-nama { font-weight: 700; color: #0f172a; text-decoration: none; display: block; }
     .tugas-nama:hover { color: #da251d; }
     .tugas-sub { font-size: .76rem; color: #64748b; display: flex; flex-wrap: wrap; gap: .2rem .6rem; margin-top: .1rem; }
@@ -147,10 +148,10 @@ $label_status = static function (string $kode) use ($pilihan): string {
     </div>
 
     <?php if ($kabar !== '') : ?>
-        <div class="alert alert-success py-2"><?= esc($kabar) ?></div>
+        <div class="alert alert-success py-2" data-flash><?= esc($kabar) ?></div>
     <?php endif; ?>
     <?php if ($galat !== '') : ?>
-        <div class="alert alert-danger py-2"><?= esc($galat) ?></div>
+        <div class="alert alert-danger py-2" data-flash><?= esc($galat) ?></div>
     <?php endif; ?>
 
     <div class="tugas-tab">
@@ -260,7 +261,7 @@ $label_status = static function (string $kode) use ($pilihan): string {
             </div>
         <?php else : ?>
             <div class="table-responsive">
-                <table class="table table-hover align-middle tugas-daftar">
+                <table class="table table-hover align-middle tugas-daftar tabel-rapi">
                     <thead>
                         <tr>
                             <th>Tugas</th>
@@ -268,7 +269,7 @@ $label_status = static function (string $kode) use ($pilihan): string {
                             <th>Prioritas</th>
                             <th>Tenggat</th>
                             <th>Penggarap</th>
-                            <th class="text-end">Aksi</th>
+                            <th class="text-center">Aksi</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -301,7 +302,7 @@ $label_status = static function (string $kode) use ($pilihan): string {
                                 <td class="text-muted">
                                     <?= $t['nama_dikerjakan'] ? esc($t['nama_dikerjakan']) : '<span class="text-muted">belum ada</span>' ?>
                                 </td>
-                                <td class="text-end">
+                                <td class="text-center">
                                     <div class="tugas-aksi">
                                         <?php if ($status === 'queued') : ?>
                                             <form method="post" action="<?= esc(site_url('admin/tugas/ambil/' . (int) $t['id_tugas'])) ?>">
