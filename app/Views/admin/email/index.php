@@ -16,6 +16,12 @@
  * @var array<string, string>    $tab   kunci => label
  * @var array<string, int>       $angka kunci => jumlah baris
  * @var array<int, string>       $toko
+ * @var array<int, string>       $email  alamat yang boleh dipakai akun ini
+ * @var list<array<string, mixed>> $daftar baris crm_email (baris tabel pertama)
+ * @var array<int, list<array>>  $pegang id_email => pemegang
+ * @var array<int, string>       $staf   id => nama CS aktif
+ * @var array<int, array>        $hitung id_email => terbuka/selesai (0 = tanpa alamat)
+ * @var bool                     $kelola akun ini Admin/Superadmin?
  * @var int    $milik      id akun yang sedang login
  * @var string $kabar      pesan sukses flash (string kosong kalau tidak ada)
  * @var string $galat      pesan gagal flash (string kosong kalau tidak ada)
@@ -31,7 +37,7 @@ $tanya = static function (array $ubah): string {
         unset($q['halaman']);
     }
 
-    foreach (['tab', 'toko', 'cari', 'saya', 'batas', 'halaman'] as $k) {
+    foreach (['tab', 'toko', 'email', 'cari', 'saya', 'batas', 'halaman'] as $k) {
         if (isset($q[$k]) && $q[$k] === '') {
             unset($q[$k]);
         }
@@ -93,6 +99,21 @@ $tanya = static function (array $ubah): string {
     .em-aksi { display: inline-flex; gap: .3rem; align-items: center; justify-content: flex-end; }
     .em-form-lepas { margin-top: .4rem; }
     .em-pager { padding: .8rem 1rem; background: #fff; border-top: 1px solid #eaecf0; }
+
+    .em-email-kartu { margin-bottom: 1rem; }
+    .em-email-kartu .em-daftar thead th:first-child { width: 28%; }
+    .em-email-kartu .em-daftar thead th:nth-child(2) { width: 26%; }
+    .em-email { font-weight: 700; color: #0f172a; }
+    .em-mati .em-email { color: #94a3b8; text-decoration: line-through; }
+    .em-pegang { display: flex; flex-wrap: wrap; gap: .3rem; align-items: center; }
+    .em-angka { white-space: nowrap; }
+    .em-angka a { text-decoration: none; }
+    .em-kosong-baris { padding: 1.4rem 1rem; color: #94a3b8; font-size: .86rem; }
+    .em-pil-aktif { font-size: .84rem; color: #475569; margin: 0 0 .5rem; }
+    .pil-orang { display: inline-flex; align-items: center; gap: .3rem; padding: .16rem .3rem .16rem .55rem;
+        border-radius: 999px; font-size: .72rem; font-weight: 700; background: #e6f4fb; color: #0369a1; }
+    .pil-orang form { display: inline; }
+    .pil-orang button { border: 0; background: none; padding: 0 .2rem; color: inherit; font-size: .85rem; line-height: 1; cursor: pointer; }
 </style>
 <?= $this->endSection() ?>
 
@@ -102,10 +123,16 @@ $tanya = static function (array $ubah): string {
 <div class="container-xxl em-halaman">
 
     <div class="em-head">
-        <div>
+        <div class="me-auto">
             <h1 class="h3 mt-5"><i class="fal fa-envelope me-1 text-brand-500"></i> <?= esc($title) ?></h1>
-            <p>Catat apa yang dilihat di kotak masuk hari ini. Tidak ada akun yang perlu ditulis, tidak ada sandi yang disimpan.</p>
+            <p>Satu baris = satu alamat email dan orang yang memegangnya. Catatan ditugaskan ke salah satu alamat itu — siapa yang memegang alamatnya, dia yang dapat tugasnya.</p>
         </div>
+        <?php if ($kelola) : ?>
+            <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalEmailBaru"
+                data-id="" data-email="" data-label="" data-catatan="">
+                <i class="fal fa-plus"></i> Tambah Email
+            </button>
+        <?php endif; ?>
     </div>
 
     <?php if ($kabar !== '') : ?><div class="alert alert-success py-2" data-flash><?= esc($kabar) ?></div><?php endif; ?>
@@ -113,8 +140,21 @@ $tanya = static function (array $ubah): string {
 
     <?php if ($toko !== []) : ?>
         <?= form_open('admin/tugas/email/simpan', ['class' => 'em-buat']) ?>
+            <div class="lapangan">
+                <label for="email-pilih">Tugaskan ke email</label>
+                <select class="form-select form-select-sm" id="email-pilih" name="email_id" required>
+                    <?php if ($email === []) : ?>
+                        <option value="">belum ada email</option>
+                    <?php else : ?>
+                        <option value="">Pilih email</option>
+                        <?php foreach ($email as $id_email => $nama_e) : ?>
+                            <option value="<?= (int) $id_email ?>"><?= esc($nama_e) ?></option>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </select>
+            </div>
             <div class="lebar">
-                <label class="form-label small fw-bold mb-1" for="catatan">Catatan cek email</label>
+                <label class="form-label small fw-bold mb-1" for="catatan">Catatan</label>
                 <textarea class="form-control form-control-sm" id="catatan" name="catatan" rows="2" required
                     maxlength="2000" placeholder="mis. belum ada balasan ukuran dari pelanggan 0812..., nota sudah dikirim kemarin"></textarea>
             </div>
@@ -158,6 +198,9 @@ $tanya = static function (array $ubah): string {
             <input type="search" class="form-control form-control-sm" id="cari" name="cari" value="<?= esc($s['cari']) ?>"
                 placeholder="isi catatan">
         </div>
+        <?php if ($s['email_get'] !== '') : ?>
+            <input type="hidden" name="email" value="<?= esc($s['email_get'], 'attr') ?>">
+        <?php endif; ?>
         <?php if (count($toko) > 1) : ?>
             <div class="lapangan">
                 <label for="toko">Toko</label>
@@ -186,6 +229,153 @@ $tanya = static function (array $ubah): string {
         </div>
     </form>
 
+    <div class="em-kartu em-email-kartu">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle em-daftar tabel-rapi">
+                <thead>
+                    <tr>
+                        <th>Email</th>
+                        <th>Dipegang oleh</th>
+                        <th>Catatan</th>
+                        <?php if ($kelola) : ?>
+                            <th>Delegasikan</th>
+                            <th class="text-center">Aksi</th>
+                        <?php endif; ?>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($daftar as $e) : ?>
+                        <?php
+                        $id_e    = (int) $e['id_email'];
+                        $isi_e   = $pegang[$id_e] ?? [];
+                        $sudah_e = array_map(static fn (array $p): int => (int) $p['user_id'], $isi_e);
+                        $pilih_e = $staf;
+
+                        foreach ($sudah_e as $y) {
+                            unset($pilih_e[$y]);
+                        }
+
+                        $terbuka = (int) ($hitung[$id_e]['terbuka'] ?? 0);
+                        $selesai = (int) ($hitung[$id_e]['selesai'] ?? 0);
+                        ?>
+                        <tr class="<?= (int) $e['aktif'] === 1 ? '' : 'em-mati' ?>">
+                            <td>
+                                <div class="em-email"><?= esc($e['email']) ?></div>
+                                <div class="em-sub">
+                                    <?php if ($e['label'] !== '') : ?><span><i class="fal fa-tag"></i> <?= esc($e['label']) ?></span><?php endif; ?>
+                                    <?php if ($e['catatan']) : ?><span><?= esc($e['catatan']) ?></span><?php endif; ?>
+                                    <?php if ((int) $e['aktif'] === 0) : ?><span class="pil-status s-cancelled">dimatikan</span><?php endif; ?>
+                                </div>
+                            </td>
+                            <td>
+                                <?php if ($isi_e === []) : ?>
+                                    <span class="text-muted small">belum ada yang memegang</span>
+                                <?php else : ?>
+                                    <div class="em-pegang">
+                                        <?php foreach ($isi_e as $p) : ?>
+                                            <span class="pil-orang">
+                                                <i class="fal fa-user"></i> <?= esc($p['nama_staf']) ?>
+                                                <?php if ($kelola) : ?>
+                                                    <?= form_open('admin/tugas/email/pegang-copot') ?>
+                                                        <input type="hidden" name="id_email" value="<?= $id_e ?>">
+                                                        <input type="hidden" name="user_id" value="<?= (int) $p['user_id'] ?>">
+                                                        <button type="submit" title="lepas dari <?= esc($p['nama_staf']) ?>" aria-label="lepas">&times;</button>
+                                                    <?= form_close() ?>
+                                                <?php endif; ?>
+                                            </span>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
+                            </td>
+                            <td class="em-angka">
+                                <?php if ($terbuka === 0 && $selesai === 0) : ?>
+                                    <span class="text-muted small">belum ada catatan</span>
+                                <?php else : ?>
+                                    <a class="pil-status s-queued" href="<?= esc($tanya(['email' => (string) $id_e, 'tab' => 'belum'])) ?>"><?= $terbuka ?> menunggu</a>
+                                    <a class="pil-status s-completed" href="<?= esc($tanya(['email' => (string) $id_e, 'tab' => 'sudah'])) ?>"><?= $selesai ?> beres</a>
+                                <?php endif; ?>
+                            </td>
+                            <?php if ($kelola) : ?>
+                                <td>
+                                    <?php if ($pilih_e !== [] && (int) $e['aktif'] === 1) : ?>
+                                        <?= form_open('admin/tugas/email/pegang', ['class' => 'em-pegang']) ?>
+                                            <input type="hidden" name="id_email" value="<?= $id_e ?>">
+                                            <select class="form-select form-select-sm" name="user_id" style="max-width:160px" required>
+                                                <option value="">Pilih CS</option>
+                                                <?php foreach ($pilih_e as $uid => $nama) : ?>
+                                                    <option value="<?= (int) $uid ?>"><?= esc($nama) ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                            <button type="submit" class="btn btn-sm btn-outline-primary rounded-pill">Tautkan</button>
+                                        <?= form_close() ?>
+                                    <?php else : ?>
+                                        <span class="text-muted small"><?= (int) $e['aktif'] === 1 ? 'semua CS sudah tertaut' : 'email dimatikan' ?></span>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="text-center">
+                                    <div class="em-aksi">
+                                        <button type="button" class="btn btn-sm btn-link text-decoration-none" data-bs-toggle="modal"
+                                            data-bs-target="#modalEmailBaru" data-id="<?= $id_e ?>"
+                                            data-email="<?= esc($e['email'], 'attr') ?>"
+                                            data-label="<?= esc($e['label'], 'attr') ?>"
+                                            data-catatan="<?= esc((string) $e['catatan'], 'attr') ?>">Ubah</button>
+                                        <?= form_open('admin/tugas/email/daftar-aktif') ?>
+                                            <input type="hidden" name="id_email" value="<?= $id_e ?>">
+                                            <input type="hidden" name="aktif" value="<?= (int) $e['aktif'] === 1 ? '0' : '1' ?>">
+                                            <button type="submit" class="btn btn-sm btn-link text-decoration-none <?= (int) $e['aktif'] === 1 ? 'text-danger' : '' ?>">
+                                                <?= (int) $e['aktif'] === 1 ? 'Matikan' : 'Aktifkan' ?>
+                                            </button>
+                                        <?= form_close() ?>
+                                    </div>
+                                </td>
+                            <?php endif; ?>
+                        </tr>
+                    <?php endforeach; ?>
+                    <?php if (($hitung[0]['terbuka'] ?? 0) > 0 || ($hitung[0]['selesai'] ?? 0) > 0) : ?>
+                        <tr>
+                            <td>
+                                <div class="em-email text-muted">catatan tanpa alamat</div>
+                                <div class="em-sub"><span>catatan lama sebelum daftar email dipakai</span></div>
+                            </td>
+                            <td><span class="text-muted small">tidak ditugaskan</span></td>
+                            <td class="em-angka">
+                                <a class="pil-status s-queued" href="<?= esc($tanya(['email' => '0', 'tab' => 'belum'])) ?>"><?= (int) ($hitung[0]['terbuka'] ?? 0) ?> menunggu</a>
+                                <a class="pil-status s-completed" href="<?= esc($tanya(['email' => '0', 'tab' => 'sudah'])) ?>"><?= (int) ($hitung[0]['selesai'] ?? 0) ?> beres</a>
+                            </td>
+                            <?php if ($kelola) : ?>
+                                <td></td>
+                                <td class="text-center"><span class="text-muted small">-</span></td>
+                            <?php endif; ?>
+                        </tr>
+                    <?php endif; ?>
+                    <?php if ($daftar === []) : ?>
+                        <tr>
+                            <td colspan="5" class="em-kosong-baris">
+                                Belum ada email di daftar. <?= $kelola ? 'Tambahkan lewat tombol di atas, lalu tautkan CS-nya.' : 'Admin belum mendelegasikan alamat apa pun.' ?>
+                            </td>
+                        </tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <?php if ((int) $s['email_id'] > 0) : ?>
+        <?php
+        $pil_saring = $email[(int) $s['email_id']] ?? '';
+
+        if ($pil_saring === '') {
+            foreach ($daftar as $e) {
+                if ((int) $e['id_email'] === (int) $s['email_id']) {
+                    $pil_saring = (string) $e['email'];
+                    break;
+                }
+            }
+        }
+        ?>
+        <p class="em-pil-aktif">Menampilkan catatan untuk: <strong><?= esc($pil_saring) ?></strong>
+            <a class="btn btn-sm btn-link text-decoration-none" href="<?= esc(site_url('admin/tugas/email')) ?>">lihat semua</a>
+        </p>
+    <?php endif; ?>
     <div class="em-kartu">
         <?php if ($baris === []) : ?>
             <div class="em-kosong">
@@ -218,6 +408,9 @@ $tanya = static function (array $ubah): string {
                                     <div class="em-catatan"><?= nl2br(esc($w['deskripsi'] ?: $w['judul'])) ?></div>
                                     <div class="em-sub">
                                         <span>#<?= $id ?></span>
+                                        <?php if (! empty($w['email_alamat'])) : ?>
+                                            <span><i class="fal fa-inbox"></i> <?= esc($w['email_label'] ?: $w['email_alamat']) ?></span>
+                                        <?php endif; ?>
                                         <?php if ($w['nama_juragan']) : ?><span><i class="fal fa-store"></i> <?= esc($w['nama_juragan']) ?></span><?php endif; ?>
                                         <span class="pil-status s-<?= esc($st) ?>"><?= esc(\App\Models\TugasModel::STATUS[$st] ?? $st) ?></span>
                                         <span class="pil-orang pil-buat">dibuat: <?= esc($w['nama_dibuat'] ?: '?') ?></span>
@@ -286,4 +479,70 @@ $tanya = static function (array $ubah): string {
 
 </div>
 
+<!-- satu popup untuk tambah dan ubah alamat: isian dan judulnya diambil dari
+     tombol yang diklik (lihat bagian js), jadi tidak ada popup per baris -->
+<?php if ($kelola) : ?>
+<div class="modal fade" id="modalEmailBaru" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <?= form_open('admin/tugas/email/daftar') ?>
+                <input type="hidden" name="id_email" id="em-modal-id" value="">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="em-modal-judul">Tambah Email</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label small fw-bold" for="em-modal-email">Alamat email <span class="text-danger">*</span></label>
+                    <input type="email" class="form-control form-control-sm" id="em-modal-email" name="email" required
+                        maxlength="120" placeholder="mis. jahit.toko@gmail.com">
+                    <label class="form-label small fw-bold mt-2" for="em-modal-label">Label (opsional)</label>
+                    <input type="text" class="form-control form-control-sm" id="em-modal-label" name="label"
+                        maxlength="60" placeholder="mis. Email Penjahit">
+                    <label class="form-label small fw-bold mt-2" for="em-modal-catatan">Catatan (opsional)</label>
+                    <input type="text" class="form-control form-control-sm" id="em-modal-catatan" name="catatan"
+                        maxlength="255" placeholder="dipakai untuk apa">
+                    <div class="form-text small mt-2">
+                        Alamat tidak pernah dihapus — yang sudah tidak dipakai cukup dimatikan supaya catatan lama tetap terbaca.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-sm btn-link text-decoration-none" data-bs-dismiss="modal">Batal</button>
+                    <button type="submit" class="btn btn-sm btn-primary"><i class="fal fa-save me-1"></i> Simpan</button>
+                </div>
+            <?= form_close() ?>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
+<?= $this->endSection() ?>
+
+<?= $this->section('js') ?>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    'use strict';
+
+    var modal = document.getElementById('modalEmailBaru');
+
+    if (! modal) {
+        return;
+    }
+
+    modal.addEventListener('show.bs.modal', function (event) {
+        var pemicu = event.relatedTarget;
+
+        if (! pemicu) {
+            return;
+        }
+
+        var data = pemicu.dataset;
+
+        document.getElementById('em-modal-id').value = data.id || '';
+        document.getElementById('em-modal-email').value = data.email || '';
+        document.getElementById('em-modal-label').value = data.label || '';
+        document.getElementById('em-modal-catatan').value = data.catatan || '';
+        document.getElementById('em-modal-judul').textContent = (data.id ? 'Ubah email' : 'Tambah Email');
+    });
+});
+</script>
 <?= $this->endSection() ?>

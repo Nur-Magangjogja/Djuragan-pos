@@ -168,6 +168,9 @@ $jam = static function (?int $detik): string {
             <div><dt>Jenis</dt><dd><?= esc($pilihan['jenis'][$tugas['jenis']] ?? $tugas['jenis']) ?></dd></div>
             <div><dt>Prioritas</dt><dd><?= esc($pilihan['prioritas'][$tugas['prioritas']] ?? $tugas['prioritas']) ?></dd></div>
             <div><dt>Toko</dt><dd><?= $tugas['nama_juragan'] ? esc($tugas['nama_juragan']) : 'Lintas toko' ?></dd></div>
+            <?php if (! empty($tugas['email_alamat'])) : ?>
+                <div><dt>Email</dt><dd><?= esc($tugas['email_label'] ?: $tugas['email_alamat']) ?></dd></div>
+            <?php endif; ?>
             <div><dt>Pelanggan</dt><dd><?= $tugas['nama_pelanggan'] ? esc($tugas['nama_pelanggan']) : '-' ?></dd></div>
             <div>
                 <dt>Nomor nota</dt>
@@ -239,32 +242,8 @@ $jam = static function (?int $detik): string {
                 <?php endif; ?>
             </p>
 
-            <?= form_open('admin/tugas/ulasan/' . (int) $tugas['id_tugas']) ?>
-                <div class="d-flex flex-wrap align-items-end gap-2">
-                    <div style="min-width:120px">
-                        <label class="form-label small fw-bold" for="bintang">Bintang dari pelanggan</label>
-                        <select class="form-select form-select-sm" id="bintang" name="bintang" required>
-                            <option value="">-</option>
-                            <?php for ($b = 5; $b >= 1; $b--) : ?>
-                                <option value="<?= $b ?>"><?= $b ?> &starf;</option>
-                            <?php endfor; ?>
-                        </select>
-                    </div>
-                    <div style="flex:1 1 160px">
-                        <label class="form-label small fw-bold" for="platform">Platform</label>
-                        <input type="text" class="form-control form-control-sm" id="platform" name="platform"
-                            maxlength="40" value="<?= esc($ulasan['platform'] ?? '') ?>" placeholder="Shopee, Tokopedia, ...">
-                    </div>
-                    <div style="flex:2 1 220px">
-                        <label class="form-label small fw-bold" for="komentar">Kutipan ulasan</label>
-                        <input type="text" class="form-control form-control-sm" id="komentar" name="komentar"
-                            maxlength="500" value="<?= esc($ulasan['komentar'] ?? '') ?>">
-                    </div>
-                    <button type="submit" class="btn btn-sm btn-outline-dark rounded-pill">Catat ulasan</button>
-                </div>
-            <?= form_close() ?>
             <p class="small text-muted mb-0 mt-2">
-                Mengisi ulasan tidak menyelesaikan tugas ini, dan menyelesaikan tugas tidak mencatat ulasan.
+                Ulasan dicatat lewat tombol <strong>Selesai</strong> di daftar Reminder Bintang 5.
             </p>
         </div>
     <?php endif; ?>
