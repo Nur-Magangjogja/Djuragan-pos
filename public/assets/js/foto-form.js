@@ -51,6 +51,20 @@
     return Math.max(0, Number($panel().attr("data-maks")) - jumlah());
   }
 
+  /* Batas yang benar-benar berlaku di server, diserahkan panel lewat data-*
+     (lihat batas_upload() di app/Helpers/fungsi_helper.php). 0 = tidak dibatasi. */
+  function batasBerkas() {
+    return Math.max(0, Number($panel().attr("data-batas-byte") || 0));
+  }
+
+  function batasRombongan() {
+    return Math.max(0, Number($panel().attr("data-batas-rombongan") || 0));
+  }
+
+  function mb(byte) {
+    return Math.round((Number(byte) / 1048576) * 10) / 10;
+  }
+
   function kartu(atribut) {
     return $('<div class="col-4 col-sm-3 col-md-2 foto-kartu proses"></div>')
       .attr(atribut || {})
@@ -93,14 +107,20 @@
       return;
     }
 
-    $kotak
-      .append('<i class="fal fa-info-circle me-1"></i>')
-      .append(
-        pesan.map(function (p) {
-          return $("<div></div>").text(p);
-        }),
-      )
-      .removeClass("d-none");
+    // satu baris per pesan: ikon dan teks duduk sejajar, ikon rata ke baris
+    // pertama. Dulu ikonnya sendirian di atas karena tiap pesan dibungkus <div>
+    // blok, dan div blok selalu mulai di baris baru di samping ikon inline.
+    pesan.forEach(function (p, i) {
+      $kotak.append(
+        $("<div/>", {
+          class: "d-flex align-items-start gap-1" + (i > 0 ? " mt-1" : ""),
+        })
+          .append('<i class="fal fa-info-circle flex-shrink-0"></i>')
+          .append($("<span/>").text(p)),
+      );
+    });
+
+    $kotak.removeClass("d-none");
   }
 
   /** Pesan dari server; jawaban bisa berupa teks biasa kalau bukan JSON. */
@@ -123,12 +143,52 @@
   }
 
   /**
-   * Perkecil ke SISI px sisi terpanjang lalu tulis ulang lewat canvas.
-   * Gambar yang tidak bisa dibuka dibiarkan apa adanya supaya server yang
-   * menolak dan pesannya sampai ke pengguna.
+   * Tulis ulang gambar lewat canvas pada sisi `sisi` dan kualitas `mutu`.
+   * Canvas yang gagal (mis. gambar lintas asal tanpa izin) menyerahkan null.
    */
+  function tulisUlang(img, lebar, tinggi, sisi, mutu, file, selesai) {
+    var skala = Math.max(lebar, tinggi) > sisi ? sisi / Math.max(lebar, tinggi) : 1;
+    var w = Math.max(1, Math.round(lebar * skala));
+    var h = Math.max(1, Math.round(tinggi * skala));
+    var kanvas = document.createElement("canvas");
+
+    kanvas.width = w;
+    kanvas.height = h;
+
+    var ctx = kanvas.getContext("2d");
+    var jpg = file.type !== "image/png" && file.type !== "image/webp";
+
+    if (jpg) {
+      // JPEG tidak punya saluran alpha, bagian transparan jadi hitam tanpa latar
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, w, h);
+    }
+
+    ctx.drawImage(img, 0, 0, w, h);
+
+    try {
+      kanvas.toBlob(selesai, jpg ? "image/jpeg" : file.type, mutu);
+    } catch (e) {
+      selesai(null);
+    }
+  }
+
+  /**
+   * Perkecil lalu tulis ulang lewat canvas, dan hasilnya diuji ke batas server:
+   * kalau masih tidak muat, sisi dan kualitasnya diturunkan bertahap. Jadi
+   * "ganti size foto" dikerjakan lebih dulu oleh peramban sebelum pengguna
+   * disuruh menghapus. Yang tetap tidak muat ditandai, bukan dikirim.
+   */
+  var USAHA = [
+    [SISI, MUTU],
+    [SISI, 0.7],
+    [1200, 0.6],
+    [1000, 0.5],
+  ];
+
   function kecil(file) {
     var dfd = $.Deferred();
+    var batas = batasBerkas();
     var alamat = URL.createObjectURL(file);
     var img = new Image();
 
@@ -137,48 +197,66 @@
 
       var lebar = img.naturalWidth || img.width;
       var tinggi = img.naturalHeight || img.height;
-      var skala =
-        Math.max(lebar, tinggi) > SISI ? SISI / Math.max(lebar, tinggi) : 1;
+      var terkecil = null;
 
-      lebar = Math.max(1, Math.round(lebar * skala));
-      tinggi = Math.max(1, Math.round(tinggi * skala));
+      var coba = function (i) {
+        if (i >= USAHA.length) {
+          // tidak ada usaha yang muat: kartunya tetap menampilkan hasil terkecil
+          // supaya terlihat mana yang harus dihapus, tapi tidak ikut diantrekan
+          dfd.resolve({ blob: terkecil || file, muat: false });
 
-      var kanvas = document.createElement("canvas");
-      kanvas.width = lebar;
-      kanvas.height = tinggi;
+          return;
+        }
 
-      var ctx = kanvas.getContext("2d");
-      var jpg = file.type !== "image/png" && file.type !== "image/webp";
+        tulisUlang(img, lebar, tinggi, USAHA[i][0], USAHA[i][1], file, function (b) {
+          if (!b) {
+            coba(i + 1);
 
-      if (jpg) {
-        // JPEG tidak punya saluran alpha, bagian transparan jadi hitam tanpa latar
-        ctx.fillStyle = "#fff";
-        ctx.fillRect(0, 0, lebar, tinggi);
-      }
+            return;
+          }
 
-      ctx.drawImage(img, 0, 0, lebar, tinggi);
+          if (batas === 0 || b.size <= batas) {
+            dfd.resolve({ blob: b, muat: true });
 
-      try {
-        kanvas.toBlob(
-          function (b) {
-            dfd.resolve(b || file);
-          },
-          jpg ? "image/jpeg" : file.type,
-          MUTU,
-        );
-      } catch (e) {
-        dfd.resolve(file);
-      }
+            return;
+          }
+
+          if (!terkecil || b.size < terkecil.size) {
+            terkecil = b;
+          }
+
+          coba(i + 1);
+        });
+      };
+
+      coba(0);
     };
 
     img.onerror = function () {
       URL.revokeObjectURL(alamat);
-      dfd.resolve(file);
+
+      // gambar yang tidak bisa dibuka dibiarkan apa adanya: server yang
+      // menolak, pesannya tetap sampai ke pengguna
+      dfd.resolve({ blob: file, muat: batas === 0 || file.size <= batas });
     };
 
     img.src = alamat;
 
     return dfd.promise();
+  }
+
+  /** Pesan yang jujur soal kartu yang tidak muat; hilang sendiri saat kartunya dibuang. */
+  function sapuPesanKebesaran() {
+    var ada = $panel().find(".foto-kebesaran").length;
+
+    pesanGalat(
+      ada > 0
+        ? [
+            ada +
+              " foto terlalu besar untuk server walau sudah diperkecil \u2014 hapus kartu itu atau pilih foto yang lebih kecil.",
+          ]
+        : [],
+    );
   }
 
   function namai(nama) {
@@ -219,13 +297,24 @@
 
       $p.find(".foto-daftar").append($k);
 
-      kecil(f).always(function (blob) {
+      kecil(f).always(function (hasil) {
         // kartunya bisa saja sudah dibuang pengguna selama gambar diolah
         if (!document.body.contains($k[0])) {
           return;
         }
 
+        var blob = hasil.blob;
         var satu = { kunci: k, blob: blob, nama: namai(f.name) };
+
+        // tidak muat walau sudah diperkecil: kartunya ditandai dan TIDAK masuk
+        // antrean, jadi orderannya ditahan sampai foto itu dihapus/diganti
+        if (!hasil.muat) {
+          isi($k, URL.createObjectURL(blob), satu.nama);
+          $k.addClass("foto-kebesaran");
+          sapuPesanKebesaran();
+
+          return;
+        }
 
         if (produk_mode()) {
           ANTRE_P.push(satu);
@@ -433,6 +522,7 @@
       });
       $k.remove();
       hitung();
+      sapuPesanKebesaran();
     });
 
   $(function () {
@@ -564,6 +654,65 @@
       return $panel().length > 0 && ANTRE.length > 0;
     },
     kirim: selesai,
+
+    /**
+     * Ditanya halaman SEBELUM orderan dikirim: masih ada foto yang diolah,
+     * yang jelas tidak akan muat ke server, atau totalnya melebihi batas sekali
+     * kirim? Kalau ya, orderannya JANGAN disimpan dulu — pesannya sudah tampil
+     * di panel dan kartunya sudah ditandai, tinggal dihapus atau diganti.
+     * Mengembalikan teks pesan; string kosong berarti boleh dikirim.
+     */
+    hambatkan: function () {
+      var $p = $panel();
+
+      // form Sunting dan panel produk mengunggah sendiri saat foto dipilih,
+      // jadi tidak ada antrean tertahan yang bisa membatalkan orderan
+      if (
+        $p.length === 0 ||
+        produk_mode() ||
+        Number($p.attr("data-pemilik") || 0) > 0
+      ) {
+        return "";
+      }
+
+      if ($p.find(".foto-kartu.proses").length > 0) {
+        var tunggu =
+          "Fotonya masih diolah peramban, tunggu sebentar lalu tekan Simpan lagi.";
+        panel_buka();
+        pesanGalat([tunggu]);
+
+        return tunggu;
+      }
+
+      var besar = $p.find(".foto-kebesaran").length;
+
+      if (besar > 0) {
+        panel_buka();
+        sapuPesanKebesaran();
+
+        return besar + " foto terlalu besar untuk server.";
+      }
+
+      var anggaran = batasRombongan();
+      var beban = ANTRE.reduce(function (t, s) {
+        return t + (s.blob && s.blob.size ? s.blob.size : 0);
+      }, 0);
+
+      if (anggaran > 0 && beban > anggaran) {
+        var lebih =
+          "Semua foto ini totalnya " +
+          mb(beban) +
+          " MB, server hanya menerima " +
+          mb(anggaran) +
+          " MB sekali kirim. Hapus sebagian fotonya dulu ya.";
+        panel_buka();
+        pesanGalat([lebih]);
+
+        return lebih;
+      }
+
+      return "";
+    },
 
     /** Reset antrean produk (dipanggil saat modal ditutup). */
     reset: function () {

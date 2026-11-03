@@ -366,7 +366,11 @@ $session  = \Config\Services::session();
             </div>
             <div class="card-body">
                 <div class="table-responsive">
-                    <table class="table table-hover">
+                    <table class="table table-hover tabel-patok">
+                        <colgroup>
+                            <col class="k-produk"><col class="k-harga"><col class="k-qty">
+                            <col class="k-subtotal"><col class="k-aksi">
+                        </colgroup>
                         <thead>
                             <tr>
                                 <th scope="col">Produk</th>
@@ -1753,14 +1757,28 @@ $js = <<< JS
     	// main form
     	var emef=$('#iForm');
     	var request;
+    	var terkunci = false;
+
     	emef.on('submit',function(f){
     		f.preventDefault(),
     		f.stopPropagation();
 
-    		// Abort any pending request
-    		if (request) {
-    			request.abort();
+    		// satu klik Simpan = satu orderan. Dulu permintaan yang masih jalan
+    		// di-abort lalu dikirim ulang, padahal server tetap menyimpan orderan
+    		// pertama — akhirnya satu form melahirkan beberapa orderan sekaligus.
+    		if (terkunci) {
+    			return false;
     		}
+
+    		// foto ditahan di peramban dan baru naik setelah orderan punya id: kalau
+    		// ada yang jelas tidak akan diterima server, orderannya jangan disimpan
+    		// dulu — fotonya dihapus atau diganti, baru Simpan lagi
+    		if (window.FOTO && window.FOTO.hambatkan() !== '') {
+    			return false;
+    		}
+
+    		terkunci = true;
+
     		// setup some local variables
     		var f = $(this);
 
@@ -1801,6 +1819,10 @@ $js = <<< JS
 
     		// Callback handler that will be called on failure
     		request.fail(function (jqXHR, textStatus, errorThrown){
+    			// gagal: kunci dilepas dan kolom dibuka lagi supaya bisa dicoba lagi
+    			terkunci = false;
+    			inputs.prop("disabled", false);
+
     			//
     			// console.log( Object.keys(jqXHR['responseJSON']).length);
     			$( Object.entries(jqXHR['responseJSON']) ).each(function( i,v ) {
@@ -1820,13 +1842,9 @@ $js = <<< JS
 
     		});
 
-    		// Callback handler that will be called regardless
-    		// if the request failed or succeeded
-    		request.always(function () {
-    			// Reenable the inputs
-    			inputs.prop("disabled", false);
-
-    		});
+    		// sengaja tidak ada handler "always": setelah sukses kolom memang
+    		// dibiarkan terkunci, orderannya sudah jadi dan yang masih menunggu
+    		// cuma fotonya — menekan Simpan lagi harus melahirkan orderan baru
     	});
 
     	function makeToast(id,text,status) {
@@ -1864,6 +1882,7 @@ $js = <<< JS
     	var DRAF_NAMA_CSRF = '{$nama_csrf}';   // field token CSRF: jangan ikut draf
     	var DRAF_umur  = 12 * 60 * 60 * 1000;   // kedaluwarsa 12 jam
     	var drafSiap   = false;                 // tabung hanya setelah pemulihan selesai
+    	var drafBuang  = false;                 // sengaja berhenti menulis: jangan ditabung lagi
     	var drafTimer  = null;
     	// juragan diisi lewat AJAX; pilihannya ditahan di sini sampai opsinya tiba
     	var drafTunda  = { juragan: '' };
@@ -1879,7 +1898,7 @@ $js = <<< JS
     	}
 
     	function simpanDraf() {
-    		if (!drafSiap) {
+    		if (!drafSiap || drafBuang) {
     			return;
     		}
 
@@ -1981,11 +2000,59 @@ $js = <<< JS
     		);
     	}
 
-    	pulihkanDraf();
+    	// ── Kapan draf boleh dipulihkan ─────────────────────────────────
+    	// Aturannya: menyegarkan halaman (F5 / tombol reload) = pekerjaan lama
+    	// dikembalikan; pergi dari layar ini = mulai dari nol. Membuka Tulis Orderan
+    	// lagi, menekan tautan "kembali", atau back/forward peramban semuanya tercatat
+    	// sebagai navigasi selain 'reload', jadi draf lama dibuang, bukan dipasang.
+    	var drafCara = '';
+
+    	if (window.performance && performance.getEntriesByType) {
+    		var drafNav = performance.getEntriesByType('navigation')[0];
+    		drafCara = drafNav && drafNav.type ? drafNav.type : '';
+    	}
+
+    	function buangDraf() {
+    		try { sessionStorage.removeItem(DRAF_KUNCI); } catch (e) { /* mode privat */ }
+    	}
+
+    	// berhenti total: draf dibuang DAN isian baru tidak ditabung lagi, supaya
+    	// beforeunload di bawahnya tidak menulis ulang pekerjaan yang baru saja
+    	// dibatalkan. Layar berikutnya (setelah reload/navigasi) mulai bersih lagi.
+    	function berhentiMenulis() {
+    		drafBuang = true;
+    		buangDraf();
+    	}
+
+    	// peramban yang tidak memberi tahu caranya halaman ini dibuka diperlakukan
+    	// seperti refresh: lebih baik draf tertinggal daripada pekerjaan hilang.
+    	// Yang dibuang di sini hanya isian lama; penulisan baru tetap didraf.
+    	if (drafCara === '' || drafCara === 'reload') {
+    		pulihkanDraf();
+    	} else {
+    		buangDraf();
+    	}
+
     	drafSiap = true;
 
     	// flush terakhir saat tab ditutup/di-refresh, jangan sampai ketinggal debounce
     	$(window).on('beforeunload', simpanDraf);
+
+    	// tautan "kembali" = sengaja berhenti menulis orderan: drafnya dibuang di sini
+    	// juga, dan drafBuang menahan beforeunload di bawahnya menabung ulang
+    	$('.tombol-kembali').on('click', berhentiMenulis);
+
+    	// kembali ke layar ini dengan tombol back bisa mengambilnya dari bfcache: skrip
+    	// di atas tidak jalan sama sekali, jadi isian lama masih tertinggal di DOM.
+    	// Buang drafnya lalu muat ulang supaya benar-benar mulai dari nol.
+    	$(window).on('pageshow', function (e) {
+    		var asli = e.originalEvent || {};
+
+    		if (asli.persisted) {
+    			berhentiMenulis();
+    			document.location.reload();
+    		}
+    	});
 
     });
 

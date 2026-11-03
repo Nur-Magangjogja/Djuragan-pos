@@ -237,7 +237,7 @@ $kelolaTransaksi = wewenang_sunting_transaksi();
         ['belum-proses', 'Belum Proses', 'counterBelumProses', 'Transaksi yang belum mulai dikerjakan'],
         ['dalam-proses', 'Dalam Proses', 'counterDalamProses', 'Transaksi yang sedang dikerjakan'],
         ['selesai', 'Selesai', 'counterSelesai', 'Transaksi yang sudah selesai; nota sewa baru masuk sini setelah barangnya dicatat kembali'],
-        ['masih-disewa', 'Masih Disewa', 'counterMasihDisewa', 'Nota sewa yang pengembaliannya belum dicatat — termasuk yang baru diikat, belum diserahkan, atau belum lunas'],
+        ['masih-disewa', 'Masih Disewa', 'counterMasihDisewa', 'Nota sewa yang pengembaliannya belum dicatat dan dananya sudah masuk: DP, sedang dicicil, atau lunas'],
     ];
     ?>
     <div class="baris-toolbar mb-4 flex flex-wrap items-center gap-x-1 gap-y-2">
@@ -344,7 +344,7 @@ $kelolaTransaksi = wewenang_sunting_transaksi();
             <?php if ($hal === 'saring') : ?>
                 Belum ada orderan pada saringan <?= esc($kategori_pembayaran[$kategori]['label']) ?>.
             <?php elseif ($hal === 'masih-disewa') : ?>
-                Belum ada barang yang sedang disewa — nota sewa masuk ke sini sejak notasnya ditulis, dan keluar dari sini saat tombol "Sudah kembali" ditekan.
+                Belum ada barang yang sedang disewa. Tab ini hanya memuat nota sewa yang dananya sudah masuk (DP, dicicil, atau lunas) dan pengembaliannya belum dicatat — nota sewa yang belum dibayar sama sekali dicek di tab <strong>Pembayaran</strong> atau <strong>Belum Proses</strong>.
             <?php elseif ($kategori !== 'semua' && in_array($hal, ['pembayaran', 'belum-proses'], true)) : ?>
                 Belum ada transaksi berkategori <?= esc($kategori_pembayaran[$kategori]['label']) ?>.
             <?php else : ?>
@@ -948,7 +948,7 @@ $kelolaTransaksi = wewenang_sunting_transaksi();
                         // dicatat kembali hanya masuk akal untuk barang yang memang
                         // benar-benar sedang dipinjam orang
                         $kembali = [
-                            'content'      => '<i class="fal fa-tshirt"></i> <span class="kata-depan">Sudah </span>kembali',
+                            'content'      => '<i class="fal fa-tshirt"></i> <span class="label-kembali"><span class="kata-depan">Sudah </span>kembali</span>',
                             'data-invoice' => $pesanan->id_invoice,
                             'data-seri'    => $pesanan->seri,
                         ];

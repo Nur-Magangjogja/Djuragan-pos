@@ -1069,6 +1069,18 @@
   opacity: 0.45;
 }
 
+/* foto yang tetap terlalu besar walau sudah diperkecil peramban: orderannya
+   ditahan sampai kartu ini dihapus atau diganti, jadi penandanya harus jelas */
+.foto-kebesaran .foto-kotak {
+  border-color: #dc3545;
+  box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.22);
+}
+
+.foto-kebesaran .foto-nama {
+  color: #b02a37;
+  font-weight: 700;
+}
+
 .foto-dibuang .foto-kotak::after {
   content: "\f1f8";
   font-family: "Font Awesome 6 Pro", "Font Awesome 6 Free";
@@ -3836,7 +3848,13 @@ tr.varian-sorot td {
      "Sudah kembali" -> "Kembali". Tanpa itu "Cek Pembayaran" dan
      "Sudah kembali" tidak pernah muat berdampingan di layar 360px dan
      kembali bertumpuk. Di desktop labelnya tetap lengkap, begitu pula
-     judul modalnya. */
+     judul modalnya.
+     Bentuk markupnya tidak boleh sembarangan: label dua kata itu harus
+     dibungkus SATU span induk (lihat .label-bayar dan .label-kembali). Di atas
+     .btn memakai inline-flex dengan gap 0,4rem, jadi span + teks telanjang
+     dihitung dua benda berbeda dan jarak antar katanya jadi dua kali lipat -
+     "Sudah  kembali". Di dalam satu span, keduanya satu teks dan spasinya
+     normal lagi. */
   .kartu-invoice .aksi-transaksi .kata-depan {
     display: none;
   }

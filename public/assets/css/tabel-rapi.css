@@ -40,3 +40,23 @@
 
 /* kolom aksi di tengah, tapi isian di dalamnya tetap enak dibaca dari kiri */
 .tabel-rapi tbody td:last-child :is(input, textarea, select) { text-align: left; }
+
+/* ------------------------------------------------------------------ orderan */
+/* Tabel isian orderan (nota baru & sunting nota): dulu satu nama produk atau
+   ringkasan ukuran yang panjang mendorong seluruh tabel melebar, jadi kolom
+   bergeser dan sebagian terpotong — dan posisinya berubah tiap sidebar dibuka
+   atau ditutup. Layout dipatok ke lebar kartu: tiap kolom punya bagian sendiri,
+   teks panjang dipotong satu baris dengan elipsis (teks utuhnya tetap ada di
+   title dan di tombol Detail), tanpa gulir mendatar lagi. Di bawah 560px
+   tabelnya masih boleh digulir seperti dulu. */
+.tabel-patok { table-layout: fixed; width: 100%; min-width: 560px; }
+.tabel-patok :is(th, td) { overflow: hidden; }
+/* flex item menolak menyusut di bawah lebar konten tulisannya sendiri
+   (min-width: auto) — itulah yang membuat .text-truncate di dalam sel tidak
+   pernah aktif, jadi tabelnya yang melebar */
+.tabel-patok .flex-grow-1 { min-width: 0; }
+.tabel-patok .k-produk { width: 42%; }
+.tabel-patok .k-harga { width: 18%; }
+.tabel-patok .k-qty { width: 8%; }
+.tabel-patok .k-subtotal { width: 18%; }
+.tabel-patok .k-aksi { width: 14%; }

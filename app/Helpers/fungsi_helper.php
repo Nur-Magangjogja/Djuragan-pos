@@ -1435,6 +1435,57 @@ if (! function_exists('anggota_panel_form')) {
     }
 }
 
+if (! function_exists('nilai_php_ini')) {
+    /**
+     * Nilai php.ini yang ditulis shorthand ("8M", "1G", "204800") dalam byte.
+     * 0 berarti tidak dibatasi — sama seperti arti "0" di upload_max_filesize.
+     */
+    function nilai_php_ini(string $kunci): int
+    {
+        $nilai = trim((string) ini_get($kunci));
+
+        if ($nilai === '') {
+            return 0;
+        }
+
+        $angka = (int) $nilai;
+
+        return match (strtoupper(substr($nilai, -1))) {
+            'G'     => $angka * 1024 * 1024 * 1024,
+            'M'     => $angka * 1024 * 1024,
+            'K'     => $angka * 1024,
+            default => $angka,
+        };
+    }
+}
+
+if (! function_exists('batas_upload')) {
+    /**
+     * Batas yang benar-benar berlaku di server ini: batas model dipotong
+     * `upload_max_filesize` (per berkas) dan `post_max_size` (satu permintaan
+     * berisi semua foto sekaligus).
+     *
+     * Angkanya diserahkan ke peramban lewat data-* panel foto supaya berkas yang
+     * pasti ditolak server sudah tertahan sejak awal: orderannya tidak jadi
+     * tersimpan, pengguna tinggal menghapus atau mengganti fotonya.
+     *
+     * @return array{berkas: int, rombongan: int}
+     */
+    function batas_upload(int $batas_model, int $maks_foto): array
+    {
+        $per   = nilai_php_ini('upload_max_filesize');
+        $total = nilai_php_ini('post_max_size');
+
+        $berkas = $per > 0 ? min($batas_model, $per) : $batas_model;
+
+        // dipakai 95% saja: nama field dan boundary multipart ikut dihitung
+        // post_max_size, bukan cuma isi berkasnya
+        $rombongan = $total > 0 ? (int) floor($total * 0.95) : $berkas * $maks_foto;
+
+        return ['berkas' => $berkas, 'rombongan' => max($berkas, $rombongan)];
+    }
+}
+
 if (! function_exists('foto_panel_form')) {
     /**
      * Panel "Foto Orderan" di bawah panel anggota, form Tulis dan form Sunting,
@@ -1467,6 +1518,8 @@ if (! function_exists('foto_panel_form')) {
                 ? 'Foto langsung tersimpan begitu dipilih.'
                 : 'Fotonya ikut dikirim setelah orderan disimpan.');
         $kartu     = '';
+        $anggaran  = batas_upload($model::MAKS_BYTE, $model::MAKS_FOTO);
+        $mb_foto   = round($anggaran['berkas'] / 1024 / 1024, 1);
 
         foreach ($sudah as $f) {
             $alamat = $model::alamat((int) $f['id_foto']);
@@ -1492,6 +1545,8 @@ if (! function_exists('foto_panel_form')) {
             . ' data-sumber="' . esc($sumber, 'attr') . '"'
             . ' data-pemilik="' . (int) $pemilik . '"'
             . ' data-maks="' . (int) $model::MAKS_FOTO . '"'
+            . ' data-batas-byte="' . (int) $anggaran['berkas'] . '"'
+            . ' data-batas-rombongan="' . (int) $anggaran['rombongan'] . '"'
             . ' data-unggah="' . esc(site_url($api . '/unggah'), 'attr') . '"'
             . ' data-hapus="' . esc(site_url($api . '/hapus'), 'attr') . '">'
             . '<div class="card-header border-ink-100 bg-ink-50/60 py-2.5 px-3 px-sm-4">'
@@ -1502,7 +1557,7 @@ if (! function_exists('foto_panel_form')) {
             . '</div>'
             . '</div>'
             . '<div class="card-body foto-isi p-3 p-sm-4">'
-            . '<p class="small text-muted mb-2"><i class="fal fa-info-circle me-1 text-primary"></i>' . $acuan . ' ' . $petunjuk . ' Maksimum ' . (int) $model::MAKS_FOTO . ' foto JPG, PNG, atau WebP.</p>'
+            . '<p class="small text-muted mb-2"><i class="fal fa-info-circle me-1 text-primary"></i>' . $acuan . ' ' . $petunjuk . ' Maksimum ' . (int) $model::MAKS_FOTO . ' foto JPG, PNG, atau WebP &middot; ' . $mb_foto . ' MB per foto.</p>'
             . '<div class="row g-2 foto-daftar">' . $kartu . '</div>'
             . '<label class="foto-pilih mt-2">'
             . '<input type="file" class="foto-input d-none" multiple accept="image/jpeg,image/png,image/webp">'

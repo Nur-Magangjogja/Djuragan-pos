@@ -324,11 +324,13 @@ $kueriTab = array_filter([
 
                     <?php /* chip "sedang disewa" ditaruh di ATAS daftar supaya langsung
                        terlihat: angkanya = unit yang diikat nota sewa dan belum kembali
-                       (sama dengan pengurang kolom Tersedia); klik membuka tab Masih
-                       Disewa yang kini memuat semua nota sewa aktif itu. */ ?>
+                       (sama dengan pengurang kolom Tersedia, berapa pun status
+                       pembayarannya). Tab yang dituju lebih sempit dari angka ini: di
+                       sana hanya nota yang dananya sudah masuk (DP/cicilan/lunas),
+                       jadi tooltipnya menyebut keduanya supaya tidak dibaca sebagai bug. */ ?>
                     <?php if ($disewa > 0) { ?>
                         <a class="pil-disewa mb-3" href="<?= esc($tautan_disewa) ?>"
-                            title="Unit yang sudah diikat nota sewa dan belum dicatat kembali — inilah pengurang kolom Tersedia. Klik untuk membuka daftar nota sewa aktif di tab Masih Disewa.">
+                            title="Unit yang sudah diikat nota sewa dan belum dicatat kembali — inilah pengurang kolom Tersedia. Tab Masih Disewa hanya memuat nota yang dananya sudah masuk (DP, dicicil, atau lunas), jadi angkanya bisa lebih sedikit daripada chip ini.">
                             <span class="pil-disewa__titik" aria-hidden="true"></span>
                             <?= formatRibuan($disewa) ?> unit terikat nota sewa
                             <i class="fal fa-arrow-alt-right text-ink-400" aria-hidden="true"></i>

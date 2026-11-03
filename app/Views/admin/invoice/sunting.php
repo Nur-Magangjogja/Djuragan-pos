@@ -425,7 +425,11 @@ $rincian_pesanan = baca_rincian($orderan->rincian);
             </div>
             <div class="card-body">
                 <div class="table-responsive">
-                    <table class="table table-hover">
+                    <table class="table table-hover tabel-patok">
+                        <colgroup>
+                            <col class="k-produk"><col class="k-harga"><col class="k-qty">
+                            <col class="k-subtotal"><col class="k-aksi">
+                        </colgroup>
                         <thead>
                             <tr>
                                 <th scope="col">Produk</th>
@@ -1804,14 +1808,21 @@ $js = <<< JS
     	// main form
     	var emef=$('#iForm');
     	var request;
+    	var terkunci = false;
+
     	emef.on('submit',function(f){
     		f.preventDefault(),
     		f.stopPropagation();
 
-    		// Abort any pending request
-    		if (request) {
-    			request.abort();
+    		// satu klik Simpan = satu pengiriman. Dulu permintaan yang masih jalan
+    		// di-abort lalu dikirim ulang, padahal server tetap menyimpan yang
+    		// pertama — akhirnya satu form tersimpan berkali-kali.
+    		if (terkunci) {
+    			return false;
     		}
+
+    		terkunci = true;
+
     		// setup some local variables
     		var f = $(this);
 
@@ -1841,6 +1852,10 @@ $js = <<< JS
 
     		// Callback handler that will be called on failure
     		request.fail(function (jqXHR, textStatus, errorThrown){
+    			// gagal: kunci dilepas dan kolom dibuka lagi supaya bisa dicoba lagi
+    			terkunci = false;
+    			inputs.prop("disabled", false);
+
     			//
     			// console.log( Object.keys(jqXHR['responseJSON']).length);
     			$( Object.entries(jqXHR['responseJSON']) ).each(function( i,v ) {
@@ -1860,13 +1875,9 @@ $js = <<< JS
 
     		});
 
-    		// Callback handler that will be called regardless
-    		// if the request failed or succeeded
-    		request.always(function () {
-    			// Reenable the inputs
-    			inputs.prop("disabled", false);
-
-    		});
+    		// sengaja tidak ada handler "always": setelah sukses kolom dibiarkan
+    		// terkunci supaya menekan Simpan lagi tidak mengirim ulang nota yang
+    		// sama — halaman tetap pindah sampai responsnya tiba
     	});
 
     	function makeToast(id,text,status) {

@@ -221,9 +221,9 @@ $routes->group('admin', static function ($routes) {
                 $routes->post('nomor-aktif', 'Admin\Whatsapp::aktifNomor');
             });
         });
-        // kategori 2: permintaan ulasan dari nota yang sudah selesai + lunas. Tab
-        // ketiga menampung penagihan (DP belum dikonfirmasi / pelunasan mendekati
-        // tenggat) supaya pekerjaan uang tetap punya satu layar sendiri.
+        // kategori 2: permintaan ulasan dari nota yang dananya sudah masuk (DP,
+        // dicicil, atau lunas). Tab ketiga menampung penagihan (DP belum dikonfirmasi /
+        // pelunasan mendekati tenggat) supaya pekerjaan uang tetap punya satu layar sendiri.
         $routes->group('bintang', static function ($routes) {
             $routes->get('/', 'Admin\Bintang::index');
             $routes->get('jumlah', 'Admin\Bintang::jumlah');
