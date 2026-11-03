@@ -76,6 +76,7 @@ class Email extends BaseController
             'staf'   => $this->stafCs(),
             'hitung' => $model->hitungPerEmail($this->tokoBoleh()),
             'kelola' => $this->bolehKelola(),
+            'bagian' => $this->bagian(),
             'milik'  => (int) session()->get('id'),
             'kabar'  => (string) session()->getFlashdata('sukses'),
             'galat'  => (string) session()->getFlashdata('galat'),
@@ -209,7 +210,7 @@ class Email extends BaseController
             return redirect()->back()->with('galat', 'Email gagal disimpan.')->withInput();
         }
 
-        return redirect()->to(site_url('admin/tugas/email'))
+        return redirect()->to(site_url('admin/tugas/email?bagian=email'))
             ->with('sukses', $id > 0 ? 'Email diperbarui.' : 'Email ditambahkan.');
     }
 
@@ -227,7 +228,7 @@ class Email extends BaseController
 
         $model->setAktif($id, (string) $this->request->getPost('aktif') === '1');
 
-        return redirect()->to(site_url('admin/tugas/email'))->with('sukses', 'Status email diperbarui.');
+        return redirect()->to(site_url('admin/tugas/email?bagian=email'))->with('sukses', 'Status email diperbarui.');
     }
 
     public function beriPegang()
@@ -248,7 +249,7 @@ class Email extends BaseController
 
         $model->beri($id, $user, (int) session()->get('id'));
 
-        return redirect()->to(site_url('admin/tugas/email'))->with('sukses', 'Email didelegasikan ke CS itu.');
+        return redirect()->to(site_url('admin/tugas/email?bagian=email'))->with('sukses', 'Email didelegasikan ke CS itu.');
     }
 
     public function copotPegang()
@@ -264,7 +265,7 @@ class Email extends BaseController
 
         $model->copot($id, (int) $this->request->getPost('user_id'));
 
-        return redirect()->to(site_url('admin/tugas/email'))->with('sukses', 'Delegasi dilepas; catatan lama tidak berubah.');
+        return redirect()->to(site_url('admin/tugas/email?bagian=email'))->with('sukses', 'Delegasi dilepas; catatan lama tidak berubah.');
     }
 
     /** @return array<int, string> id => nama, khusus CS aktif */
@@ -312,6 +313,12 @@ class Email extends BaseController
     private function bolehKelola(): bool
     {
         return in_array((string) session()->get('level'), ['admin', 'superadmin'], true);
+    }
+
+    /** Tab layar yang dibuka: catatan (bawaan) atau daftar email. */
+    private function bagian(): string
+    {
+        return $this->request->getGet('bagian') === 'email' ? 'email' : 'catatan';
     }
     // ------------------------------------------------------------------ dalam
 
