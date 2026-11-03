@@ -39,8 +39,12 @@ class FotoModel extends Model
     /** Sebanyak ini pun jarang dipakai; batasnya cuma supaya disk tidak kewatiran. */
     public const MAKS_FOTO = 12;
 
-    /** 3 MB cukup untuk foto 1600 px; browser sudah memcompress sebelum kirim. */
-    private const MAKS_BYTE = 3 * 1024 * 1024;
+    /**
+     * 3 MB cukup untuk foto 1600 px; browser sudah memcompress sebelum kirim.
+     * Public karena panel foto perlu menyerahkannya ke peramban lewat data-*,
+     * supaya foto yang pasti ditolak server tertahan sebelum orderan dikirim.
+     */
+    public const MAKS_BYTE = 3 * 1024 * 1024;
 
     /** Sisi terpanjang yang disimpan. Lebih dari ini hanya memberatkan halaman. */
     private const MAKS_SISI = 1600;

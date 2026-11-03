@@ -127,7 +127,7 @@ $tanya = static function (array $ubah): string {
     /* catatan dipotong dua baris supaya tinggi baris tabel seragam;
        teks lengkapnya tetap terbaca di halaman rinci tugas */
     .wa-catatan { font-size: .76rem; color: #64748b; margin-top: .3rem; display: -webkit-box;
-        -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     .wa-nomor { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .78rem; color: #334155; }
     .wa-kosong { padding: 2.6rem 1rem; text-align: center; color: #94a3b8; }
     .wa-kosong i { font-size: 2rem; display: block; margin-bottom: .5rem; }

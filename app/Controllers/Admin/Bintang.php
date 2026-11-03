@@ -10,21 +10,25 @@ use App\Models\UlasanModel;
 use CodeIgniter\Exceptions\PageNotFoundException;
 
 /**
- * Reminder Bintang 5: permintaan ulasan yang lahir dari nota selesai + lunas.
+ * Reminder Bintang 5: pengingat untuk meminta ulasan bintang lima di Google Maps
+ * pada nota yang dananya sudah masuk — DP, sedang dicicil, atau lunas
+ * (TugasModel::sinkronReminder). Isinya murni permintaan ulasan; sisa bayar yang
+ * belum masuk ditangani CRM Follow-Up, bukan layar ini.
  *
- * Satu layar, tiga tab: dua tab untuk ulasan (belum/sudah dikerjakan) dan satu tab
- * penagihan (DP yang belum dikonfirmasi + pelunasan yang mendekati tenggat) supaya
- * pekerjaan uang tidak hilang saat layar antrean umum tidak lagi dipakai.
+ * Layarnya disamakan dengan Reminder WhatsApp: empat tab status (belum diambil,
+ * sedang diproses, selesai, dan tab jejak lepas tangan khusus Admin).
  *
  * Mesin antreannya tetap punyanya `TugasModel`: ambil siapa cepat dia dapat (guard
  * di database), lepas tangan kembali ke antrean, dan perpindahan tercatat di riwayat.
  */
 class Bintang extends BaseController
 {
+    /** Tab layar; nilainya dipakai sebagai filter status, labelnya dipakai di layar. */
     private const TAB = [
-        'belum' => 'Belum Dikerjakan',
-        'sudah' => 'Sudah Dikerjakan',
-        'tagih' => 'Perlu Ditagih',
+        'belum'       => 'Belum Diambil',
+        'proses'      => 'Sedang Diproses',
+        'selesai'     => 'Sudah Diselesaikan',
+        'tak_selesai' => 'Tidak Jadi Dikerjakan',
     ];
 
     private const BATAS = [10, 25, 50];
@@ -38,38 +42,48 @@ class Bintang extends BaseController
         $model  = new TugasModel();
         $s      = $this->saring();
         $batas  = $this->batas();
-        $total  = $model->jumlah($this->korong($s));
+        // tab jejak dibaca dari riwayat, bukan dari daftar tugas: querynya sendiri,
+        // tapi saringan, pagination, dan cakupan tokonya tetap sama
+        $jejak  = $s['tab'] === 'tak_selesai';
+        $total  = $jejak ? $model->jejakLepasJumlah($this->korong($s)) : $model->jumlah($this->korong($s));
         $page   = max(1, min($this->halaman(), max(1, (int) ceil($total / $batas))));
-        $baris  = $model->daftar($this->korong($s), $batas, ($page - 1) * $batas);
+        $baris  = $jejak
+            ? $model->jejakLepas($this->korong($s), $batas, ($page - 1) * $batas)
+            : $model->daftar($this->korong($s), $batas, ($page - 1) * $batas);
 
         $angka = [];
 
-        foreach (array_keys(self::TAB) as $tab) {
-            $angka[$tab] = $model->jumlah($this->korong(array_merge($s, ['tab' => $tab])));
+        foreach (array_keys($this->daftarTab()) as $tab) {
+            $satu           = array_merge($s, ['tab' => $tab]);
+            $angka[$tab]    = $tab === 'tak_selesai'
+                ? $model->jejakLepasJumlah($this->korong($satu))
+                : $model->jumlah($this->korong($satu));
         }
 
         return view('admin/bintang/index', [
-            'title'   => 'Reminder Bintang 5',
-            's'       => $s,
-            'baris'   => $baris,
-            'ulasan'  => (new UlasanModel())->untukInvoiceList(array_filter(array_map(
-                static fn (array $w): int => (int) $w['invoice_id'],
+            'title'    => 'Reminder Bintang 5',
+            's'        => $s,
+            'baris'    => $baris,
+            'ulasan'   => (new UlasanModel())->untukInvoiceList(array_filter(array_map(
+                static fn (array $w): int => (int) ($w['invoice_id'] ?? 0),
                 $baris
             ))),
-            'total'   => $total,
-            'page'    => $page,
-            'batas'   => $batas,
-            'tab'     => self::TAB,
-            'angka'   => $angka,
-            'toko'    => $this->tokoPeta(),
+            'total'    => $total,
+            'page'     => $page,
+            'batas'    => $batas,
+            'tab'      => $this->daftarTab(),
+            'angka'    => $angka,
+            'rekap'    => $jejak ? $model->jejakLepasPerOrang($this->korong($s)) : [],
+            'toko'     => $this->tokoPeta(),
             'platform' => $this->platformPeta(),
-            'milik'   => (int) session()->get('id'),
-            'kabar'   => (string) session()->getFlashdata('sukses'),
-            'galat'   => (string) session()->getFlashdata('galat'),
+            'milik'    => (int) session()->get('id'),
+            'kelola'   => $this->bolehKelola(),
+            'kabar'    => (string) session()->getFlashdata('sukses'),
+            'galat'    => (string) session()->getFlashdata('galat'),
         ]);
     }
 
-    /** Ambil tugas ulasan/penagihan: siapa cepat dia dapat. */
+    /** Ambil tugas ulasan: siapa cepat dia dapat. */
     public function ambil(int $id)
     {
         $this->barisMilikSaya($id);
@@ -116,15 +130,15 @@ class Bintang extends BaseController
 
         return $this->response->setJSON([
             'status' => 'success',
-            'count'  => $model->hitungPemicu('ulasan', $toko) + $model->hitungPemicu('tagih', $toko),
+            'count'  => $model->hitungPemicu('ulasan', $toko),
         ]);
     }
 
     // ------------------------------------------------------------------ dalam
 
     /**
-     * Saringan + tab jadi satu klausul query. Tab yang tidak dikenal jatuh ke
-     * 'belum' supaya tidak ada jalan memancing isi tabel lain.
+     * Saringan + tab jadi satu klausul query. Tab yang tidak dikenal
+     * jatuh ke 'belum' supaya tidak ada jalan memancing isi tabel lain.
      *
      * @param array<string, mixed> $s
      *
@@ -132,19 +146,48 @@ class Bintang extends BaseController
      */
     private function korong(array $s): array
     {
-        $dasar = match ($s['tab']) {
-            'sudah' => ['pemicu' => 'ulasan', 'status_in' => ['completed', 'cancelled']],
-            'tagih' => ['pemicu' => 'tagih', 'terbuka' => true],
-            default => ['pemicu' => 'ulasan', 'terbuka' => true],
-        };
-
-        $q = array_merge($s, $dasar);
+        $q = [
+            'pemicu'      => ['ulasan'],
+            'juragan_id'  => (int) $s['juragan_id'],
+            'juragan_ids' => $s['juragan_ids'],
+            'cari'        => $s['cari'],
+            'milik_saya'  => (int) $s['milik_saya'],
+            'dari'        => $s['dari'],
+            'sampai'      => $s['sampai'],
+        ];
 
         if ((int) $s['milik_saya'] > 0) {
             $q['dikerjakan_oleh'] = (int) $s['milik_saya'];
         }
 
+        // tab status: sama persis dengan layar WhatsApp, hanya 'tak_selesai' yang
+        // dibaca dari riwayat (bangunJejak) dan tidak butuh filter status
+        match ($s['tab']) {
+            'belum'   => $q['status'] = 'queued',
+            'proses'  => $q['status_in'] = ['assigned', 'in_progress', 'waiting'],
+            'selesai' => $q['status'] = 'completed',
+            default   => null,
+        };
+
         return $q;
+    }
+
+    /**
+     * Tab yang boleh dibuka akun ini. CS tidak punya layar yang mengungkit
+     * pelepasan orang lain, jadi tab alasannya dilepas dari daftar — dan `saring()`
+     * menolak nilainya juga kalau ada yang mengetik manual di URL.
+     *
+     * @return array<string, string>
+     */
+    private function daftarTab(): array
+    {
+        $tab = self::TAB;
+
+        if (! $this->bolehKelola()) {
+            unset($tab['tak_selesai']);
+        }
+
+        return $tab;
     }
 
     /** @return array<string, mixed> */
@@ -153,11 +196,13 @@ class Bintang extends BaseController
         $tab = (string) $this->request->getGet('tab');
 
         return [
-            'tab'          => array_key_exists($tab, self::TAB) ? $tab : 'belum',
-            'juragan_id'   => (int) $this->request->getGet('toko'),
-            'cari'         => trim((string) $this->request->getGet('cari')),
-            'milik_saya'   => $this->request->getGet('saya') === '1' ? (int) session()->get('id') : 0,
-            'juragan_ids'  => $this->tokoBoleh(),
+            'tab'         => in_array($tab, array_keys($this->daftarTab()), true) ? $tab : 'belum',
+            'juragan_id'  => (int) $this->request->getGet('toko'),
+            'cari'        => trim((string) $this->request->getGet('cari')),
+            'dari'        => (string) $this->request->getGet('dari'),
+            'sampai'      => (string) $this->request->getGet('sampai'),
+            'milik_saya'  => $this->request->getGet('saya') === '1' ? (int) session()->get('id') : 0,
+            'juragan_ids' => $this->tokoBoleh(),
         ];
     }
 
@@ -186,6 +231,12 @@ class Bintang extends BaseController
     {
         return redirect()->to(site_url('admin/tugas/bintang'))
             ->with($hasil['ok'] ? 'sukses' : 'galat', $hasil['ok'] ? $sukses : $hasil['pesan']);
+    }
+
+    /** Admin/Superadmin boleh membuka tab jejak lepas tangan dan melihat aturannya. */
+    private function bolehKelola(): bool
+    {
+        return in_array((string) session()->get('level'), ['admin', 'superadmin'], true);
     }
 
     /** @return array<int, string> */
