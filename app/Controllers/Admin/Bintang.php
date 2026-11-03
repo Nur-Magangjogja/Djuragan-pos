@@ -108,16 +108,40 @@ class Bintang extends BaseController
         return $this->kembali($hasil, 'Tugas dilepas, kembali ke antrean.');
     }
 
+    /**
+     * Selesaikan reminder. Bintang yang diisi ikut dicatat sebagai ulasan
+     * pelanggan pada nota ini; dibiarkan kosong kalau belum ada balasan.
+     */
     public function selesai(int $id)
     {
-        $this->barisMilikSaya($id);
+        $tugas   = $this->barisMilikSaya($id);
+        $mentah  = (string) $this->request->getPost('bintang');
+        $bintang = $mentah === '' ? null : UlasanModel::bintangSah($mentah);
 
-        $hasil = (new TugasModel())->ubahStatus(
-            $id,
-            'completed',
-            (int) session()->get('id'),
-            (string) $this->request->getPost('catatan')
-        );
+        if ($mentah !== '' && $bintang === null) {
+            return redirect()->back()->with('galat', 'Bintang ulasan harus 1 sampai 5.');
+        }
+
+        $model = new TugasModel();
+        $hasil = $model->ubahStatus($id, 'completed', (int) session()->get('id'), '');
+
+        if ($bintang !== null && $hasil['ok'] && (int) ($tugas['invoice_id'] ?? 0) > 0) {
+            $user = (int) session()->get('id');
+
+            (new UlasanModel())->terima(
+                (int) $tugas['invoice_id'],
+                $bintang,
+                (string) $this->request->getPost('komentar'),
+                $user
+            );
+
+            $model->catat([
+                'tugas_id' => $id,
+                'jenis'    => 'ulasan',
+                'user'     => $user,
+                'catatan'  => 'ulasan ' . $bintang . ' bintang diterima',
+            ]);
+        }
 
         return $this->kembali($hasil, 'Reminder selesai dicatat.');
     }

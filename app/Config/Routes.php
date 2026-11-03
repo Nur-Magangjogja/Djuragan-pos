@@ -240,11 +240,19 @@ $routes->group('admin', static function ($routes) {
             $routes->post('ambil/(:num)', 'Admin\Email::ambil/$1');
             $routes->post('lepas/(:num)', 'Admin\Email::lepas/$1');
             $routes->post('selesai/(:num)', 'Admin\Email::selesai/$1');
+
+            // daftar alamat email + siapa yang memegangnya: khusus Admin/Superadmin.
+            // CS hanya memakai hasilnya lewat layar Cek Email di atas.
+            $routes->group('', ['filter' => 'auth:admin,superadmin'], static function ($routes) {
+                $routes->post('daftar', 'Admin\Email::tambahEmail');
+                $routes->post('daftar-aktif', 'Admin\Email::setEmailAktif');
+                $routes->post('pegang', 'Admin\Email::beriPegang');
+                $routes->post('pegang-copot', 'Admin\Email::copotPegang');
+            });
         });
         $routes->get('cari-pelanggan', 'Admin\Tugas::cariPelanggan');
         $routes->get('catatan', 'Admin\Tugas::catatan');
         $routes->post('catatan', 'Admin\Tugas::simpanCatatan');
-        $routes->post('ulasan/(:num)', 'Admin\Tugas::ulasan/$1');
         // (:num) saja, jadi 'jumlah' di atas tidak pernah dikira id tugas
         $routes->get('(:num)', 'Admin\Tugas::lihat/$1');
         $routes->post('simpan', 'Admin\Tugas::simpan');

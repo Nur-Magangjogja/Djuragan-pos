@@ -183,6 +183,37 @@ class TugasModel extends Model
         return $peta;
     }
 
+    /**
+     * Berapa catatan yang masih menunggu dan yang sudah beres per alamat email,
+     * untuk toko-toko akun ini. Kunci 0 dipakai catatan lama yang belum punya
+     * alamat, supaya jumlah itu tetap kelihatan dan tidak hilang begitu saja.
+     *
+     * @param array<int> $juragan_ids
+     *
+     * @return array<int, array{terbuka: int, selesai: int}>
+     */
+    public function hitungPerEmail(array $juragan_ids): array
+    {
+        $belum = "'" . implode("','", self::BELUM_SELESAI) . "'";
+
+        $b = $this->db->table('crm_tugas t')
+            ->select('COALESCE(t.email_id, 0) AS id_email,'
+                . " SUM(CASE WHEN t.status IN ({$belum}) THEN 1 ELSE 0 END) AS terbuka,"
+                . " SUM(CASE WHEN t.status IN ('completed','cancelled') THEN 1 ELSE 0 END) AS selesai")
+            ->where("t.jenis = 'pemeriksaan_email'")
+            ->groupBy('id_email', false);
+
+        $this->terapkanToko($b, $juragan_ids);
+
+        $hasil = [];
+
+        foreach ($b->get()->getResultArray() as $r) {
+            $hasil[(int) $r['id_email']] = ['terbuka' => (int) $r['terbuka'], 'selesai' => (int) $r['selesai']];
+        }
+
+        return $hasil;
+    }
+
     /** @return list<array<string, mixed>> */
     private function hitungPerStatus(array $juragan_ids): array
     {
@@ -402,6 +433,30 @@ class TugasModel extends Model
 
         if (! empty($s['juragan_id'])) {
             $b->where('t.juragan_id', (int) $s['juragan_id']);
+        }
+
+        if (! empty($s['email_id'])) {
+            $b->where('t.email_id', (int) $s['email_id']);
+        }
+
+        // CS hanya mengurus alamat yang didelegasikan kepadanya. Catatan lama yang
+        // belum punya alamat ikut ditampilkan supaya tidak ada yang menghilang.
+        if (isset($s['email_ids'])) {
+            $ids = array_values(array_unique(array_map('intval', (array) $s['email_ids'])));
+
+            if ($ids !== []) {
+                $b->groupStart();
+
+                if (! empty($s['email_ids_atau_null'])) {
+                    $b->where('t.email_id IS NULL')->orWhereIn('t.email_id', $ids);
+                } else {
+                    $b->whereIn('t.email_id', $ids);
+                }
+
+                $b->groupEnd();
+            } elseif (! empty($s['email_ids_atau_null'])) {
+                $b->where('t.email_id IS NULL');
+            }
         }
 
         // cakupan sesi: tugas tanpa toko (mis. pemeriksaan email bersama) tetap
@@ -649,6 +704,7 @@ class TugasModel extends Model
 
         return $this->db->table('crm_tugas t')
             ->select('t.*, p.nama_pelanggan, kontak.nomor AS nomor_wa, inv.seri AS invoice_seri, j.nama_juragan,'
+                . ' em.email AS email_alamat, em.label AS email_label,'
                 . ' du.name AS nama_dibuat, ku.name AS nama_dikerjakan, su.name AS nama_selesai')
             ->join('pelanggan p', 'p.id_pelanggan = t.pelanggan_id', 'left')
             // satu nomor per pelanggan saja yang ikut tampil; pencarian tetap
@@ -657,6 +713,9 @@ class TugasModel extends Model
                 'kontak.pelanggan_id = t.pelanggan_id', 'left')
             ->join('invoice inv', 'inv.id_invoice = t.invoice_id', 'left')
             ->join('juragan j', 'j.id_juragan = t.juragan_id', 'left')
+            // catatan cek email boleh menunjuk satu alamat dari daftar email; catatan
+            // lama yang belum punya tautan tetap tampil (kolomnya NULL)
+            ->join('crm_email em', 'em.id_email = t.email_id', 'left')
             ->join('user du', 'du.id = t.dibuat_oleh', 'left')
             ->join('user ku', 'ku.id = t.dikerjakan_oleh', 'left')
             ->join('user su', 'su.id = t.selesai_oleh', 'left');
@@ -687,6 +746,7 @@ class TugasModel extends Model
             'pelanggan_id' => $this->idAtauNull($data['pelanggan_id'] ?? null),
             'invoice_id'   => $this->idAtauNull($data['invoice_id'] ?? null),
             'juragan_id'   => $this->idAtauNull($data['juragan_id'] ?? null),
+            'email_id'     => $this->idAtauNull($data['email_id'] ?? null),
             'dibuat_oleh'  => $user,
             'tenggat'      => $this->tanggalAtauNull($data['tenggat'] ?? null),
             'catatan'      => $this->isiAtauNull($data['catatan'] ?? null),

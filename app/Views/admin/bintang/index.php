@@ -413,12 +413,6 @@ $tanya = static function (array $ubah): string {
                                                 <button type="submit" class="btn btn-sm btn-outline-primary rounded-pill">Ambil Tugas</button>
                                             </form>
                                         <?php elseif ($punya && $buka) : ?>
-                                            <button type="button" class="btn btn-sm btn-outline-warning rounded-pill" data-bs-toggle="modal"
-                                                data-bs-target="#modalBintang" data-tugas="<?= $id ?>"
-                                                data-judul="<?= esc($w['judul'], 'attr') ?>"
-                                                data-platform="<?= esc(implode(',', $pil), 'attr') ?>" role="button">
-                                                <i class="fal fa-star"></i> Catat Ulasan
-                                            </button>
                                             <button type="button" class="btn btn-sm btn-success rounded-pill" data-bs-toggle="modal"
                                                 data-bs-target="#mtB5Selesai" data-tugas="<?= $id ?>"
                                                 data-judul="<?= esc($w['judul'], 'attr') ?>" role="button">Selesai</button>
@@ -452,50 +446,6 @@ $tanya = static function (array $ubah): string {
 
 <!-- satu pasang modal untuk semua baris: tujuan kirim dan judul nota diisi dari
      tombol yang diklik (lihat bagian js), jadi tidak ada modal per baris -->
-<div class="modal fade" id="modalBintang" tabindex="-1" aria-hidden="true" data-modal-aksi="ulasan">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <form id="b5-form-ulasan" method="post" action="">
-                <?= csrf_field() ?>
-                <div class="modal-header">
-                    <h5 class="modal-title">Catat Ulasan Pelanggan</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
-                </div>
-                <div class="modal-body">
-                    <p class="b5-modal-judul small text-muted mb-3"></p>
-                    <div class="row g-2">
-                        <div class="col-6">
-                            <label class="form-label small fw-bold" for="b5-bintang">Bintang <span class="text-danger">*</span></label>
-                            <select class="form-select form-select-sm" id="b5-bintang" name="bintang" required>
-                                <?php for ($b = 5; $b >= 1; $b--) : ?>
-                                    <option value="<?= $b ?>"><?= $b ?> bintang</option>
-                                <?php endfor; ?>
-                            </select>
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label small fw-bold" for="b5-platform">Platform</label>
-                            <select class="form-select form-select-sm" id="b5-platform" name="platform">
-                                <option value="">Tidak disebutkan</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="mt-2">
-                        <label class="form-label small fw-bold" for="b5-komentar">Isi ulasan (opsional)</label>
-                        <textarea class="form-control form-control-sm" id="b5-komentar" name="komentar" rows="3" maxlength="500"
-                            placeholder="salin apa adanya, jangan ditambah-tambahi"></textarea>
-                    </div>
-                    <div class="form-text small mt-2">
-                        Mencatat ulasan tidak menutup remindernya. Pakai tombol Selesai kalau pekerjaannya memang sudah beres.
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-sm btn-link text-decoration-none" data-bs-dismiss="modal">Batal</button>
-                    <button type="submit" class="btn btn-sm btn-primary"><i class="fal fa-save me-1"></i> Simpan</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
 
 <div class="modal fade" id="mtB5Selesai" tabindex="-1" aria-hidden="true" data-modal-aksi="selesai">
     <div class="modal-dialog modal-dialog-centered">
@@ -508,10 +458,16 @@ $tanya = static function (array $ubah): string {
                 </div>
                 <div class="modal-body">
                     <p class="b5-modal-judul small text-muted mb-3"></p>
-                    <label class="form-label small fw-bold" for="b5-selesai-catatan">Hasil</label>
-                    <textarea class="form-control form-control-sm" id="b5-selesai-catatan" name="catatan" rows="3"
-                        maxlength="500" placeholder="mis. pelanggan sudah membalas dan memberi 5 bintang di Shopee"></textarea>
-                    <div class="form-text small">Tertulis di riwayat tugas sebagai hasil kerja kamu.</div>
+                    <label class="form-label small fw-bold" for="b5-bintang">Bintang dari pelanggan</label>
+                    <select class="form-select form-select-sm" id="b5-bintang" name="bintang">
+                        <option value="">belum ada ulasan</option>
+                        <?php for ($b = 5; $b >= 1; $b--) : ?>
+                            <option value="<?= $b ?>"><?= $b ?> bintang</option>
+                        <?php endfor; ?>
+                    </select>
+                    <label class="form-label small fw-bold mt-2" for="b5-komentar">Kutipan ulasan</label>
+                    <textarea class="form-control form-control-sm" id="b5-komentar" name="komentar" rows="3" maxlength="500"
+                        placeholder="salin apa adanya, jangan ditambah-tambahi"></textarea>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-sm btn-link text-decoration-none" data-bs-dismiss="modal">Batal</button>
@@ -581,33 +537,10 @@ document.addEventListener('DOMContentLoaded', function() {
     'use strict';
 
     var dasar = {
-        ulasan:  '<?= site_url('admin/tugas/ulasan') ?>/',
         selesai: '<?= site_url('admin/tugas/bintang/selesai') ?>/',
         lepas:   '<?= site_url('admin/tugas/bintang/lepas') ?>/'
     };
 
-    // platform aktif toko nota itu, supaya CS tahu ulasannya mau diminta di mana
-    function isiPlatform(pemicu) {
-        var pilih = document.getElementById('b5-platform');
-
-        if (! pilih) {
-            return;
-        }
-
-        pilih.innerHTML = '';
-
-        var kosong = document.createElement('option');
-        kosong.value = '';
-        kosong.textContent = 'Tidak disebutkan';
-        pilih.appendChild(kosong);
-
-        (pemicu.dataset.platform || '').split(',').filter(Boolean).forEach(function (nama) {
-            var o = document.createElement('option');
-            o.value = nama;
-            o.textContent = nama;
-            pilih.appendChild(o);
-        });
-    }
 
     // satu modal per aksi dipakai bersama semua baris: tujuan kirim, judul nota,
     // dan isian khususnya diambil dari tombol yang diklik
@@ -633,9 +566,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 judul.textContent = pemicu.dataset.judul || '';
             }
 
-            if (jenis === 'ulasan') {
-                isiPlatform(pemicu);
-            }
 
             if (jenis === 'alasan') {
                 // textContent dipakai supaya teks alasan mentah tidak pernah
