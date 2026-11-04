@@ -29,6 +29,13 @@
 $level    = (string) session()->get('level');
 $hari_ini = date('Y-m-d');
 
+/** Saringan yang sudah terisi — untuk angka pada kotak pemicu filter di HP. */
+$saring_aktif = count(array_filter([
+    (string) ($s['nomor'] ?? ''),
+    (string) ($s['tindak_lanjut'] ?? ''),
+    (string) ($s['juragan_id'] ?? ''),
+]));
+
 // kolom "Role" pada tab "Tidak Jadi Dikerjakan": level akun yang memegang tugasnya
 $role = ['cs' => 'CS', 'admin' => 'Admin', 'superadmin' => 'Superadmin'];
 
@@ -79,6 +86,27 @@ $tanya = static function (array $ubah): string {
     .wa-saring .lapangan { display: flex; flex-direction: column; gap: .2rem; }
     .wa-saring label { font-size: .7rem; font-weight: 700; color: #667085; text-transform: uppercase; letter-spacing: .04em; }
     .wa-saring .form-control, .wa-saring .form-select { max-width: 190px; }
+
+    /* pemicu filter hanya dipakai di layar sempit; di desktop saringan itu sudah
+       terlihat, jadi kotaknya tidak perlu — selector harus sedalam .wa-saring
+       .lapangan kalau tidak mau kalah darinya */
+    .wa-saring > .wa-saring-pemicu { display: none; }
+    .wa-saring > .wa-saring-lapis { display: contents; }
+    #saringWadah .wa-saring-lapis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem; }
+    #saringWadah .wa-saring-lapis .lapangan:last-child:nth-child(odd) { grid-column: 1 / -1; }
+    .wa-saring-kotak {
+        display: inline-flex; align-items: center; justify-content: center; gap: .45rem;
+        padding: .3rem .7rem; font: inherit; font-size: .84rem; font-weight: 600; color: #fff;
+        background: #101828; border: 1px solid #101828; border-radius: 8px; white-space: nowrap;
+    }
+    .wa-saring-kotak:hover { background: #1e293b; border-color: #1e293b; color: #fff; }
+    .wa-saring-jumlah {
+        min-width: 1.15rem; padding: 0 .3rem; border-radius: 999px; font-size: .72rem;
+        line-height: 1.2; text-align: center; background: #fff; color: #101828;
+    }
+    /* ikon saja lebih pendek dari tombol bertuliskan (FontAwesome line-height:1) */
+    #modalSaringWa .modal-footer { align-items: stretch; }
+    .wa-saring .wa-aksi { align-items: stretch; }
 
     /* Yang boleh tergulir cuma isi tabel. Deretan tab + saringan menempel di atas
        (.wa-lekat) dan kepala kolom ikut menempel di dalam wadah gulirnya
@@ -180,6 +208,24 @@ $tanya = static function (array $ubah): string {
     .wa-saran.tampil { display: block; }
     .wa-saran button { display: block; width: 100%; text-align: left; padding: .4rem .6rem; background: none; border: 0; font-size: .82rem; }
     .wa-saran button:hover { background: #f7f9fc; }
+
+    /* Resep responsif rumah, sama seperti halaman SOP/Tugas: ikon judul dibuang
+       di layar sempit, tombol kepala & pil tab mengisi lebar kartu, dan isian
+       filter tidak lagi terpaku 190px sehingga separuh kartu tidak kosong. */
+    @media (max-width: 991.98px) {
+        .wa-head h1 > i { display: none; }
+        .wa-head > .me-auto { flex: 1 1 100%; }
+        .wa-head > a.btn, .wa-head > button.btn { flex: 1 1 auto; min-width: 0; }
+        .wa-tab { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .wa-tab a { justify-content: center; }
+        .wa-tab a:last-child:nth-child(odd) { grid-column: 1 / -1; }
+        /* di HP yang tersisa cuma kotak cari dan kotak filter; Cari & Ulangi
+           pindah ke kaki popus supaya tidak ada dua tombol cari sebaris */
+        .wa-saring { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+        .wa-saring .form-control, .wa-saring .form-select { max-width: none; width: 100%; }
+        .wa-saring > .wa-saring-pemicu { display: flex; }
+        .wa-saring > .wa-saring-aksi { display: none; }
+    }
 </style>
 <?= $this->endSection() ?>
 
@@ -228,6 +274,16 @@ $tanya = static function (array $ubah): string {
                 <input type="search" class="form-control form-control-sm" id="cari" name="cari" value="<?= esc($s['cari']) ?>"
                     placeholder="judul atau catatan">
             </div>
+            <!-- di layar sempit saringan lain disembunyikan di balik kotak ini -->
+            <div class="lapangan wa-saring-pemicu">
+                <label>&nbsp;</label>
+                <button type="button" class="wa-saring-kotak" id="saring"
+                    data-bs-toggle="modal" data-bs-target="#modalSaringWa" aria-label="Buka filter">
+                    <i class="fal fa-filter"></i> Filter
+                    <?php if ($saring_aktif > 0) : ?><span class="wa-saring-jumlah"><?= (int) $saring_aktif ?></span><?php endif; ?>
+                </button>
+            </div>
+            <div class="wa-saring-lapis" id="saringLapis">
             <div class="lapangan">
                 <label for="nomor">Nomor WA</label>
                 <input type="search" class="form-control form-control-sm" id="nomor" name="nomor" value="<?= esc($s['nomor']) ?>"
@@ -253,22 +309,66 @@ $tanya = static function (array $ubah): string {
                     </select>
                 </div>
             <?php endif; ?>
-            <div class="lapangan">
-                <label for="batas">Baris</label>
-                <select class="form-select form-select-sm" id="batas" name="batas">
-                    <?php foreach ([10, 25, 50] as $n) : ?>
-                        <option value="<?= $n ?>" <?= $batas === $n ? 'selected' : '' ?>><?= $n ?></option>
-                    <?php endforeach; ?>
-                </select>
             </div>
-            <div class="lapangan">
+            <div class="lapangan wa-saring-aksi">
                 <label>&nbsp;</label>
                 <div class="wa-aksi">
                     <button type="submit" class="btn btn-sm btn-dark"><i class="fal fa-search"></i> Cari</button>
                     <a class="btn btn-sm btn-link text-decoration-none" href="<?= esc(site_url('admin/tugas/whatsapp')) ?>">Ulangi</a>
                 </div>
             </div>
+
+            <!-- popus filter layar sempit: ditulis DI DALAM form yang sama supaya
+                 field yang dipindah JS ke dalamnya tetap ikut terkirim saat submit -->
+            <div class="modal fade" id="modalSaringWa" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Filter</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div id="saringWadah"></div>
+                        </div>
+                        <div class="modal-footer">
+                            <a class="btn btn-sm btn-dark text-decoration-none" href="<?= esc(site_url('admin/tugas/whatsapp')) ?>"
+                                title="Ulangi" aria-label="Ulangi"><i class="fal fa-sync"></i></a>
+                            <button type="submit" class="btn btn-sm btn-dark"><i class="fal fa-search me-1"></i> Cari</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </form>
+
+        <script>
+        (function () {
+            'use strict';
+
+            var lapis = document.getElementById('saringLapis');
+            var wadah = document.getElementById('saringWadah');
+
+            if (! lapis || ! wadah) {
+                return;
+            }
+
+            var asal = lapis.parentNode;
+            var sesudah = lapis.nextElementSibling;
+            var sempit = window.matchMedia('(max-width: 991.98px)');
+
+            // satu set field yang sama dipindah antara baris filter dan popus —
+            // dua salinan akan mendobelkan nama input dan mengacaukan nilai terkirim
+            function tata() {
+                if (sempit.matches) {
+                    wadah.appendChild(lapis);
+                } else {
+                    asal.insertBefore(lapis, sesudah);
+                }
+            }
+
+            tata();
+            sempit.addEventListener('change', tata);
+        }());
+        </script>
     </div>
 
     <div class="wa-kartu">

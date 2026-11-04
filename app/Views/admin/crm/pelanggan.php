@@ -60,6 +60,58 @@ td .btn.crm-aksi {
     padding-left: 0.6rem !important;
     padding-right: 0.6rem !important;
 }
+/* Desktop: dua kolom uang adalah angka yang dibaca orang — "Rp 15.475.000" atau
+   badge "Rp 160.000" yang belah dua lebih membingungkan daripada kolomnya sedikit
+   lebih longgar, jadi keduanya (plus tanggal) tidak boleh turun baris. Lebar
+   kolomnya yang menyesuaikan: lihat blok 768-1199px di bawah. <=767.98px mode
+   kartu, sel-nya selebar layar jadi tidak ada yang perlu dinowrap-kan. */
+@media (min-width: 768px) {
+    .crm-tabel tbody td[data-label="Total Belanja"],
+    .crm-tabel tbody td[data-label="Sisa Piutang"] {
+        white-space: nowrap;
+    }
+}
+/* 768-1199px: wadahnya baru ±700-730px karena sidebar masih penuh, jadi delapan
+   kolom tidak muat dengan pembagian di atas (badge piutang dan tombol 360°
+   terpotong tepi .table-responsive yang overflow:hidden). Di rentang ini kolom
+   uang dan Aksi yang diberi ruang — nama customer boleh turun baris, angka
+   uang tidak. Jatah per kolom: 136/86/55/44/104/108/57/98px, semua cukup
+   (tanggal "20 Jun 2022" memang dibiarkan belah dua, kolomnya 70px). */
+@media (min-width: 768px) and (max-width: 1199.98px) {
+    .crm-tabel thead th:nth-child(1) { width: 17% !important; }
+    .crm-tabel thead th:nth-child(2) { width: 13% !important; }
+    .crm-tabel thead th:nth-child(3) { width: 8% !important; }
+    .crm-tabel thead th:nth-child(4) { width: 7% !important; }
+    .crm-tabel thead th:nth-child(5) { width: 15% !important; }
+    .crm-tabel thead th:nth-child(6) { width: 16% !important; }
+    .crm-tabel thead th:nth-child(7) { width: 10% !important; }
+    .crm-tabel thead th:nth-child(8) { width: 14% !important; }
+
+    .crm-tabel tbody td {
+        padding-left: 0.45rem !important;
+        padding-right: 0.45rem !important;
+    }
+}
+/* Desktop lebar (>=1280px): judul kolom tidak boleh belah dua ("ORDER / POS",
+   "ORDER / TERAKHIR"). Yang membuat itu baru mungkin di lebar ini: delapan judul
+   butuh 950px sekali baris (teks 11.52px huruf besar + jarak antar huruf 0.58px,
+   plus padding 0,6rem dua sisi), sedangkan wadahnya 960px di 1280px dan baru 890px
+   di 1200px — di bawah itu tetap boleh belah daripada terpotong. */
+@media (min-width: 1280px) {
+    .crm-tabel thead th {
+        white-space: nowrap !important;
+        padding-left: 0.6rem !important;
+        padding-right: 0.6rem !important;
+    }
+    .crm-tabel thead th:nth-child(1) { width: 15% !important; }
+    .crm-tabel thead th:nth-child(2) { width: 15% !important; }
+    .crm-tabel thead th:nth-child(3) { width: 10% !important; }
+    .crm-tabel thead th:nth-child(4) { width: 10% !important; }
+    .crm-tabel thead th:nth-child(5) { width: 13% !important; }
+    .crm-tabel thead th:nth-child(6) { width: 13% !important; }
+    .crm-tabel thead th:nth-child(7) { width: 13% !important; }
+    .crm-tabel thead th:nth-child(8) { width: 11% !important; }
+}
 /* Khusus mobile (<=768px): tiap baris ditumpuk jadi kartu. Desktop tidak diubah. */
 @media (max-width: 767.98px) {
     /* Wadah tabel: bukan area geser, tapi juga tidak boleh meluber ke kanan
@@ -288,14 +340,17 @@ td .btn.crm-aksi {
             <table class="table table-hover align-middle mb-0 crm-tabel">
                 <thead class="table-light">
                     <tr>
-                        <th style="width: 20%;">Customer &amp; Status</th>
+                        <!-- lebar kolom diukur dari isi terlebar (lihat .crm-tabel di atas):
+                             uang dan badge piutang tidak boleh turun baris, Aksi tidak lagi
+                             20% untuk satu tombol 84px -->
+                        <th style="width: 21%;">Customer &amp; Status</th>
                         <th style="width: 13%;">Kontak WhatsApp</th>
-                        <th style="width: 9%;">Lokasi</th>
+                        <th style="width: 10%;">Lokasi</th>
                         <th class="text-center" style="width: 7%;">Order POS</th>
-                        <th class="text-end" style="width: 11%;">Total Belanja</th>
-                        <th class="text-end" style="width: 10%;">Sisa Piutang</th>
-                        <th style="width: 10%;">Order Terakhir</th>
-                        <th class="text-center" style="width: 20%;">Aksi</th>
+                        <th class="text-end" style="width: 13%;">Total Belanja</th>
+                        <th class="text-end" style="width: 13%;">Sisa Piutang</th>
+                        <th style="width: 11%;">Order Terakhir</th>
+                        <th class="text-center" style="width: 12%;">Aksi</th>
                     </tr>
                 </thead>
                 <tbody>

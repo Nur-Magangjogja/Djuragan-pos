@@ -5,6 +5,7 @@ $levelSesi   = session()->get('level') ?? ($_SESSION['level'] ?? 'CS');
 $namaSesi    = session()->get('name') ?? ($_SESSION['name'] ?? 'Pengguna');
 $namaInisial = strtoupper(mb_substr($namaSesi, 0, 1));
 
+$isDasborAktif = url_is('user/dasbor*');
 $isTrxAktif   = url_is('user/invoices*');
 $isChartAktif = url_is('user/chart*');
 // katalog produk CS dilayani halaman yang sama dengan admin (read-only)
@@ -13,7 +14,6 @@ $isReminderAktif = url_is('admin/reminder*');
 $isTugasAktif    = url_is('admin/tugas*');
 $isCklAktif      = url_is('admin/checklist*');
 $isSopAktif     = url_is('admin/sop*');
-$isTokoAktif     = url_is('admin/toko*');
 // badge Reminder Penjahit (helper fungsi tidak autoload): orderan dekat/lewat deadline
 helper('fungsi');
 $reminderCount = pengingat_penjahit_jumlah();
@@ -95,6 +95,12 @@ $tugasTerbuka = $lainTerbuka + $b5Terbuka + $waTerbuka + $cklTerbuka + $emailTer
         <div class="sidebar-heading">Menu Utama</div>
         <ul class="sidebar-nav">
             <li class="nav-item">
+                <a class="sidebar-link <?= $isDasborAktif ? 'active' : '' ?>" href="<?= site_url('user/dasbor') ?>">
+                    <i class="sidebar-link-icon fal fa-home"></i>
+                    <span>Dasbor</span>
+                </a>
+            </li>
+            <li class="nav-item">
                 <a class="sidebar-link <?= $isTrxAktif ? 'active' : '' ?>" href="<?= site_url('user/invoices') ?>">
                     <i class="sidebar-link-icon fal fa-receipt"></i>
                     <span>Transaksi</span>
@@ -129,7 +135,7 @@ $tugasTerbuka = $lainTerbuka + $b5Terbuka + $waTerbuka + $cklTerbuka + $emailTer
                     <?php if ($tugasTerbuka > 0) : ?>
                         <span class="badge rounded-pill bg-danger ms-auto badge-live" title="<?= (int) $tugasTerbuka ?> tugas CS yang belum selesai"><?= (int) $tugasTerbuka ?></span>
                     <?php endif; ?>
-                    <i class="fal fa-chevron-down sidebar-chevron"></i>
+                    <i class="fal fa-chevron-down sidebar-chevron <?= $tugasTerbuka > 0 ? 'ms-2' : '' ?>"></i>
                 </a>
                 <div class="collapse <?= $isTugasAktif ? 'show' : '' ?>" id="submenuTugas">
                     <ul class="sidebar-submenu">
@@ -177,17 +183,6 @@ $tugasTerbuka = $lainTerbuka + $b5Terbuka + $waTerbuka + $cklTerbuka + $emailTer
                                 <?php endif; ?>
                             </a>
                         </li>
-                        <li class="submenu-item">
-                            <a class="sidebar-submenu-link <?= url_is('admin/tugas') ? 'active' : '' ?>"
-                                href="<?= site_url('admin/tugas') ?>"
-                                data-badge-url="<?= site_url('admin/tugas/jumlah') ?>" data-badge-unit="tugas lain-lain yang belum selesai">
-                                <i class="fal fa-layer-group"></i>
-                                <span>Lain-lain</span>
-                                <?php if ($lainTerbuka > 0) : ?>
-                                    <span class="badge rounded-pill bg-danger ms-auto badge-live" title="<?= (int) $lainTerbuka ?> tugas lain-lain yang belum selesai"><?= (int) $lainTerbuka ?></span>
-                                <?php endif; ?>
-                            </a>
-                        </li>
                     </ul>
                 </div>
             </li>
@@ -195,12 +190,6 @@ $tugasTerbuka = $lainTerbuka + $b5Terbuka + $waTerbuka + $cklTerbuka + $emailTer
                 <a class="sidebar-link <?= $isSopAktif ? 'active' : '' ?>" href="<?= site_url('admin/sop') ?>">
                     <i class="sidebar-link-icon fal fa-book-open"></i>
                     <span>SOP &amp; Panduan</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="sidebar-link <?= $isTokoAktif ? 'active' : '' ?>" href="<?= site_url('admin/toko/pengenalan') ?>">
-                    <i class="sidebar-link-icon fal fa-store"></i>
-                    <span>Pengenalan Toko</span>
                 </a>
             </li>
         </ul>

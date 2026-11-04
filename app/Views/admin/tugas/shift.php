@@ -39,6 +39,12 @@ $sudah_lewat = count(array_filter($baris, static fn ($b) => $b['lewat']));
     .shift-lewat { font-size: .74rem; color: #b81c16; font-weight: 700; white-space: nowrap; }
     .shift-cek { font-size: .8rem; color: #475569; }
     .shift-cek code { background: #f4f6f9; padding: .1rem .4rem; border-radius: 6px; }
+
+    /* pola rumah: di layar sempit ikon di depan judul dibuang, tombol back tetap
+       karena ia <a>, bukan <i> */
+    @media (max-width: 991.98px) {
+        .shift-halaman h1 > i { display: none; }
+    }
 </style>
 <?= $this->endSection() ?>
 
@@ -47,11 +53,8 @@ $sudah_lewat = count(array_filter($baris, static fn ($b) => $b['lewat']));
 
 <div class="container-xxl shift-halaman">
 
-    <a class="tugas-kembali mt-4" href="<?= esc(site_url('admin/tugas')) ?>" style="display:inline-flex;align-items:center;gap:.35rem;font-size:.8rem;color:#64748b;text-decoration:none;">
-        <i class="fal fa-arrow-alt-left"></i> Kembali ke antrean tugas
-    </a>
-
-    <h1 class="h3 mt-2"><i class="fal fa-clock me-1 text-brand-500"></i> <?= esc($title) ?></h1>
+    <h1 class="h3 mt-5"><a class="judul-balik" href="<?= esc(site_url('admin/tugas')) ?>"
+            title="Kembali ke antrean tugas" aria-label="Kembali ke antrean tugas"><i class="fal fa-arrow-left"></i></a><i class="fal fa-clock me-1 text-brand-500"></i> <?= esc($title) ?></h1>
 
     <?php if ($kabar !== '') : ?>
         <div class="alert alert-success py-2" data-flash><?= esc($kabar) ?></div>

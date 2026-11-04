@@ -69,8 +69,10 @@ class TokoOnlineModel extends Model
     {
         $waktu = time();
 
+        $juragan = (int) ($data['juragan_id'] ?? 0);
+
         $isi = [
-            'juragan_id' => (int) $data['juragan_id'],
+            'juragan_id' => $juragan > 0 ? $juragan : null,
             'platform'   => mb_substr(trim((string) ($data['platform'] ?? '')), 0, 40),
             'nama'       => mb_substr(trim((string) $data['nama']), 0, 120),
             'url'        => $this->isiAtauNull($data['url'] ?? null),
@@ -250,10 +252,113 @@ class TokoOnlineModel extends Model
         return $baris;
     }
 
+    /**
+     * Semua toko aktif sebagai peta id_toko => baris. Dipakai Admin/Superadmin:
+     * mereka mengurus toko yang belum punya pegangan juga, jadi tidak bisa
+     * disaring lewat juragan saja.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function petaSemua(): array
+    {
+        return $this->petakan(
+            $this->db->table('crm_toko_online')->select('id_toko, nama, juragan_id, platform')
+                ->where('aktif', 1)->orderBy('nama', 'ASC')->get()->getResultArray()
+        );
+    }
+
+    /** @param list<array<string, mixed>> $baris @return array<int, array<string, mixed>> */
+    private function petakan(array $baris): array
+    {
+        $punya = [];
+
+        foreach ($baris as $t) {
+            $punya[(int) $t['id_toko']] = [
+                'nama'       => (string) $t['nama'],
+                'juragan_id' => $t['juragan_id'] !== null ? (int) $t['juragan_id'] : null,
+                'platform'   => (string) ($t['platform'] ?? ''),
+            ];
+        }
+
+        return $punya;
+    }
+
     public function aksesPunyaUser(int $id_toko, int $user_id): bool
     {
         return (int) $this->db->table('crm_toko_akses')
             ->where('toko_id', $id_toko)->where('user_id', $user_id)->countAllResults() > 0;
+    }
+
+    /**
+     * Toko yang boleh dicek seorang akun: toko milik juragan yang didelegasikan
+     * kepadanya, ditambah toko yang memang ditautkan kepadanya sendiri. Jalan
+     * kedua itu penting untuk toko tanpa juragan — tanpa tautan, tidak ada
+     * cara lain untuk menyerahkannya ke orang.
+     *
+     * @param array<int, int> $juragan_ids
+     *
+     * @return array<int, string> id_toko => nama
+     */
+    public function petaCek(array $juragan_ids, int $user_id): array
+    {
+        $baris = [];
+
+        if ($juragan_ids !== []) {
+            $baris = array_merge($baris, $this->db->table('crm_toko_online')->select('id_toko, nama, juragan_id, platform')
+                ->where('aktif', 1)->whereIn('juragan_id', array_map('intval', $juragan_ids))->get()->getResultArray());
+        }
+
+        $khusus = array_map('intval', array_column(
+            $this->db->table('crm_toko_akses')->select('toko_id')->where('user_id', $user_id)
+                ->get()->getResultArray(),
+            'toko_id'
+        ));
+
+        if ($khusus !== []) {
+            $baris = array_merge($baris, $this->db->table('crm_toko_online')->select('id_toko, nama, juragan_id, platform')
+                ->where('aktif', 1)->whereIn('id_toko', $khusus)->get()->getResultArray());
+        }
+
+        $punya = $this->petakan($baris);
+        uasort($punya, static fn (array $a, array $b): int => strcmp($a['nama'], $b['nama']));
+
+        return $punya;
+    }
+
+    /**
+     * Akun-akun yang ditautkan langsung ke toko cek, per toko. Ditampilkan di
+     * kartu delegasi supaya kelihatan siapa saja yang boleh membuka lembar
+     * toko itu di luar delegasi juragan.
+     *
+     * @param array<int, int> $id_tokos
+     *
+     * @return array<int, list<array{id:int, nama:string, level:string}>>
+     */
+    public function pemegang(array $id_tokos): array
+    {
+        if ($id_tokos === []) {
+            return [];
+        }
+
+        $peta = [];
+
+        $baris = $this->db->table('crm_toko_akses a')
+            ->select('a.toko_id, a.user_id, u.name AS nama, u.level')
+            ->join('user u', 'u.id = a.user_id')
+            ->whereIn('a.toko_id', array_map('intval', $id_tokos))
+            ->orderBy('u.name', 'ASC')
+            ->get()
+            ->getResultArray();
+
+        foreach ($baris as $a) {
+            $peta[(int) $a['toko_id']][] = [
+                'id'    => (int) $a['user_id'],
+                'nama'  => (string) $a['nama'],
+                'level' => (string) $a['level'],
+            ];
+        }
+
+        return $peta;
     }
 
     /** Berapa toko yang belum dipahami akun ini — untuk angka badge/penanda. */
@@ -309,11 +414,13 @@ class TokoOnlineModel extends Model
     {
         $akses = $this->db->prefixTable('crm_toko_akses');
 
+        // LEFT JOIN: toko cek boleh berdiri sendiri tanpa juragan, dan tokonya
+        // tetap harus muncul di daftar meski kolom juragannya kosong
         return $this->db->table('crm_toko_online o')
             ->select('o.*, j.nama_juragan, j.juragan AS slug_juragan,'
                 . ' (SELECT COUNT(*) FROM `' . $akses . '` a WHERE a.toko_id = o.id_toko) AS jumlah_cs,'
                 . ' (SELECT COUNT(*) FROM `' . $akses . '` a WHERE a.toko_id = o.id_toko AND a.pengenalan = \'sudah\') AS cs_siap')
-            ->join('juragan j', 'j.id_juragan = o.juragan_id');
+            ->join('juragan j', 'j.id_juragan = o.juragan_id', 'left');
     }
 
     private function isiAtauNull(mixed $nilai): ?string

@@ -8,13 +8,15 @@ $namaInisial = strtoupper(mb_substr($namaSesi, 0, 1));
 // Deteksi menu induk aktif
 $isDasborAktif   = url_is('admin/dasbor*') || $di_halaman === 'admin';
 $isReminderAktif = url_is('admin/reminder*');
-$isTugasAktif    = url_is('admin/tugas*');
+// dua reminder itu pindah etalase: halamannya masih di bawah /admin/tugas, tapi
+// menunya duduk di CRM — jadi hanya satu dari dua induk yang boleh menyala
+$diReminderKerja = url_is('admin/tugas/whatsapp*') || url_is('admin/tugas/bintang*');
+$isTugasAktif    = url_is('admin/tugas*') && ! $diReminderKerja;
 $isCklAktif      = url_is('admin/checklist*');
 $isSopAktif     = url_is('admin/sop*');
-$isTokoAktif     = url_is('admin/toko*');
 $isTrxAktif      = url_is('admin/invoices*') || url_is('admin/cod*');
 $isProdukAktif   = url_is('admin/produk*') || url_is('admin/poin*');
-$isCrmAktif      = url_is('admin/crm*');
+$isCrmAktif      = url_is('admin/crm*') || $diReminderKerja;
 $isKpiAktif      = url_is('admin/kpi*');
 $isLaporanAktif  = url_is('admin/laporan*');
 $isSettingsAktif = url_is('admin/settings*');
@@ -40,7 +42,7 @@ $b5Model     = new \App\Models\TugasModel();
 $b5Terbuka    = $b5Model->hitungPemicu('ulasan', juragan_dipakai_sesi()) + $b5Model->hitungPemicu('tagih', juragan_dipakai_sesi());
 $emailTerbuka = (new \App\Models\TugasModel())->jumlah(["jenis" => "pemeriksaan_email", "terbuka" => true, "juragan_ids" => juragan_dipakai_sesi()]);
 $cklTerbuka    = (new \App\Models\ChecklistModel())->hitungTerbuka(juragan_dipakai_sesi(), date('Y-m-d'));
-$tugasTerbuka = $lainTerbuka + $b5Terbuka + $waTerbuka + $cklTerbuka + $emailTerbuka;
+$tugasTerbuka = $lainTerbuka + $cklTerbuka + $emailTerbuka;
 
 // Submenu Transaksi
 // 'invoices' tetap satu halaman dengan 'cod': yang pertama dipakai untuk orderan
@@ -71,14 +73,30 @@ if ($levelSesi === 'superadmin') {
 }
 
 // Submenu CRM. Live Chat WA, Broadcast, Riwayat Pesan, Template Pesan, dan
-// Pengaturan WA sudah dihapus dari aplikasi, jadi daftarnya tinggal empat.
+// Pengaturan WA sudah dihapus dari aplikasi, jadi daftarnya tinggal tujuh.
+// Dua reminder kerja (WhatsApp & Bintang 5) ikut ke sini: halamannya masih
+// /admin/tugas/..., tapi pekerjaannya memang lanjutan dari percakapan pelanggan.
+// Elemen ke-5 opsional = badge hidup (url angka + satuan + jumlah awal).
 $crmSubmenu = [
     ['admin/crm', 'Ringkasan', 'fa-chart-pie', $di_halaman === 'admin/crm'],
     ['admin/crm/pelanggan', 'Data Pelanggan', 'fa-users', str_starts_with($di_halaman, 'admin/crm/pelanggan')],
     ['admin/crm/followup', 'Follow-up', 'fa-tasks', str_starts_with($di_halaman, 'admin/crm/followup')],
     ['admin/crm/tagihan', 'Tagihan', 'fa-file-invoice-dollar', str_starts_with($di_halaman, 'admin/crm/tagihan')],
     ['admin/crm/duplikat', 'Akun Duplikat', 'fa-clone', str_starts_with($di_halaman, 'admin/crm/duplikat')],
+    [
+        'admin/tugas/whatsapp', 'Reminder WhatsApp', 'fa-comment-dots',
+        url_is('admin/tugas/whatsapp*'),
+        ['url' => 'admin/tugas/whatsapp/jumlah', 'unit' => 'reminder WhatsApp yang belum selesai', 'angka' => $waTerbuka],
+    ],
+    [
+        'admin/tugas/bintang', 'Reminder Bintang 5', 'fa-star',
+        url_is('admin/tugas/bintang*'),
+        ['url' => 'admin/tugas/bintang/jumlah', 'unit' => 'reminder Bintang 5 yang belum dikerjakan', 'angka' => $b5Terbuka],
+    ],
 ];
+
+// angka yang menempel di induk CRM: dua reminder yang baru pindah ke menu ini
+$crmTerbuka = $waTerbuka + $b5Terbuka;
 
 // Submenu Laporan
 // 'produk' adalah awalan dari 'produksi', jadi pencocokan harus per segmen penuh
@@ -248,32 +266,13 @@ if ($levelSesi === 'superadmin') {
                     <?php if ($tugasTerbuka > 0) : ?>
                         <span class="badge rounded-pill bg-danger ms-auto badge-live" title="<?= (int) $tugasTerbuka ?> tugas CS yang belum selesai"><?= (int) $tugasTerbuka ?></span>
                     <?php endif; ?>
-                    <i class="fal fa-chevron-down sidebar-chevron"></i>
+                    <!-- ms-2 hanya boleh ada kalau badge ikut tampil: tanpa badge, kelas itu
+                         (Bootstrap !important) menimpa margin-left:auto dari style.css dan
+                         chevronnya menempel ke label alih-alih duduk di pojok kanan -->
+                    <i class="fal fa-chevron-down sidebar-chevron <?= $tugasTerbuka > 0 ? 'ms-2' : '' ?>"></i>
                 </a>
                 <div class="collapse <?= $isTugasAktif ? 'show' : '' ?>" id="submenuTugas">
                     <ul class="sidebar-submenu">
-                        <li class="submenu-item">
-                            <a class="sidebar-submenu-link <?= url_is('admin/tugas/whatsapp*') ? 'active' : '' ?>"
-                                href="<?= site_url('admin/tugas/whatsapp') ?>"
-                                data-badge-url="<?= site_url('admin/tugas/whatsapp/jumlah') ?>" data-badge-unit="reminder WhatsApp yang belum selesai">
-                                <i class="fal fa-comment-dots"></i>
-                                <span>Reminder WhatsApp</span>
-                                <?php if ($waTerbuka > 0) : ?>
-                                    <span class="badge rounded-pill bg-danger ms-auto badge-live" title="<?= (int) $waTerbuka ?> reminder WhatsApp yang belum selesai"><?= (int) $waTerbuka ?></span>
-                                <?php endif; ?>
-                            </a>
-                        </li>
-                        <li class="submenu-item">
-                            <a class="sidebar-submenu-link <?= url_is('admin/tugas/bintang*') ? 'active' : '' ?>"
-                                href="<?= site_url('admin/tugas/bintang') ?>"
-                                data-badge-url="<?= site_url('admin/tugas/bintang/jumlah') ?>" data-badge-unit="reminder Bintang 5 yang belum dikerjakan">
-                                <i class="fal fa-star"></i>
-                                <span>Reminder Bintang 5</span>
-                                <?php if ($b5Terbuka > 0) : ?>
-                                    <span class="badge rounded-pill bg-danger ms-auto badge-live" title="<?= (int) $b5Terbuka ?> reminder Bintang 5 yang belum dikerjakan"><?= (int) $b5Terbuka ?></span>
-                                <?php endif; ?>
-                            </a>
-                        </li>
                         <li class="submenu-item">
                             <a class="sidebar-submenu-link <?= $isCklAktif ? 'active' : '' ?>"
                                 href="<?= site_url('admin/checklist') ?>"
@@ -296,17 +295,6 @@ if ($levelSesi === 'superadmin') {
                                 <?php endif; ?>
                             </a>
                         </li>
-                        <li class="submenu-item">
-                            <a class="sidebar-submenu-link <?= url_is('admin/tugas') ? 'active' : '' ?>"
-                                href="<?= site_url('admin/tugas') ?>"
-                                data-badge-url="<?= site_url('admin/tugas/jumlah') ?>" data-badge-unit="tugas lain-lain yang belum selesai">
-                                <i class="fal fa-layer-group"></i>
-                                <span>Lain-lain</span>
-                                <?php if ($lainTerbuka > 0) : ?>
-                                    <span class="badge rounded-pill bg-danger ms-auto badge-live" title="<?= (int) $lainTerbuka ?> tugas lain-lain yang belum selesai"><?= (int) $lainTerbuka ?></span>
-                                <?php endif; ?>
-                            </a>
-                        </li>
                     </ul>
                 </div>
             </li>
@@ -314,12 +302,6 @@ if ($levelSesi === 'superadmin') {
                 <a class="sidebar-link <?= $isSopAktif ? 'active' : '' ?>" href="<?= site_url('admin/sop') ?>">
                     <i class="sidebar-link-icon fal fa-book-open"></i>
                     <span>SOP &amp; Panduan</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="sidebar-link <?= $isTokoAktif ? 'active' : '' ?>" href="<?= site_url('admin/toko') ?>">
-                    <i class="sidebar-link-icon fal fa-store"></i>
-                    <span>Toko Online</span>
                 </a>
             </li>
         </ul>
@@ -332,15 +314,25 @@ if ($levelSesi === 'superadmin') {
                     <a class="sidebar-link <?= $isCrmAktif ? 'active' : '' ?>" data-bs-toggle="collapse" href="#submenuCrm" role="button" aria-expanded="<?= $isCrmAktif ? 'true' : 'false' ?>" aria-controls="submenuCrm">
                         <i class="sidebar-link-icon fal fa-comments-alt"></i>
                         <span>CRM</span>
-                        <i class="fal fa-chevron-down sidebar-chevron"></i>
+                        <?php if ($crmTerbuka > 0) : ?>
+                            <span class="badge rounded-pill bg-danger ms-auto badge-live" title="<?= (int) $crmTerbuka ?> reminder kerja yang belum selesai"><?= (int) $crmTerbuka ?></span>
+                        <?php endif; ?>
+                        <i class="fal fa-chevron-down sidebar-chevron <?= $crmTerbuka > 0 ? 'ms-2' : '' ?>"></i>
                     </a>
                     <div class="collapse <?= $isCrmAktif ? 'show' : '' ?>" id="submenuCrm">
                         <ul class="sidebar-submenu">
-                            <?php foreach ($crmSubmenu as [$url, $label, $ikon, $aktif]) : ?>
+                            <?php foreach ($crmSubmenu as $item) : ?>
+                                <?php [$url, $label, $ikon, $aktif] = $item; $lencana = $item[4] ?? null; ?>
                                 <li class="submenu-item">
-                                    <a class="sidebar-submenu-link <?= $aktif ? 'active' : '' ?>" href="<?= site_url($url) ?>">
+                                    <a class="sidebar-submenu-link <?= $aktif ? 'active' : '' ?>" href="<?= site_url($url) ?>"
+                                        <?php if ($lencana !== null) : ?>
+                                            data-badge-url="<?= site_url($lencana['url']) ?>" data-badge-unit="<?= esc($lencana['unit']) ?>"
+                                        <?php endif; ?>>
                                         <i class="fal <?= $ikon ?>"></i>
                                         <span><?= esc($label) ?></span>
+                                        <?php if ($lencana !== null && $lencana['angka'] > 0) : ?>
+                                            <span class="badge rounded-pill bg-danger ms-auto badge-live" title="<?= (int) $lencana['angka'] ?> <?= esc($lencana['unit']) ?>"><?= (int) $lencana['angka'] ?></span>
+                                        <?php endif; ?>
                                     </a>
                                 </li>
                             <?php endforeach; ?>

@@ -65,6 +65,27 @@ $tanya = static function (array $ubah): string {
     .b5-saring label { font-size: .7rem; font-weight: 700; color: #667085; text-transform: uppercase; letter-spacing: .04em; }
     .b5-saring .form-control, .b5-saring .form-select { max-width: 190px; }
 
+    /* resep responsif rumah: ikon judul dibuang, tombol kepala & pil tab menutup
+       lebar kartu, dan baris filter jadi satu baris [cari][toko][ikon][ikon] */
+    @media (max-width: 991.98px) {
+        .b5-head h1 > i { display: none; }
+        .b5-head > .me-auto { flex: 1 1 100%; }
+        .b5-head > a.btn { flex: 1 1 auto; min-width: 0; }
+        .b5-tab { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .b5-tab a { justify-content: center; }
+        .b5-tab a:last-child:nth-child(odd) { grid-column: 1 / -1; }
+        /* satu baris penuh: cari melebar, Toko seperlunya, lalu ikon cari & ulangi */
+        .b5-saring { flex-wrap: nowrap; gap: .5rem; }
+        .b5-saring > .lapangan:first-of-type { flex: 1 1 auto; min-width: 0; }
+        .b5-saring > .b5-toko { flex: 0 1 8.5rem; min-width: 64px; }
+        .b5-saring .form-control, .b5-saring .form-select { max-width: none; width: 100%; }
+        .b5-saring > .b5-saring-aksi { flex: 0 0 auto; }
+        /* tombol ikon saja lebih pendek dari tombol bertuliskan (FontAwesome memakai
+           line-height:1), jadi tingginya dipatok sama dengan kotak isian 2rem */
+        .b5-saring .b5-aksi { align-items: stretch; }
+        .b5-saring .b5-aksi .btn { min-height: 2rem; }
+    }
+
     .b5-kartu {
         background: #fff; border: 1px solid #e2e8f0; border-radius: 1.15rem;
         box-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 8px 24px -12px rgba(15, 23, 42, .12);
@@ -141,7 +162,7 @@ $tanya = static function (array $ubah): string {
                 placeholder="nomor nota atau pelanggan">
         </div>
         <?php if (count($toko) > 1) : ?>
-            <div class="lapangan">
+            <div class="lapangan b5-toko">
                 <label for="toko">Toko</label>
                 <select class="form-select form-select-sm" id="toko" name="toko">
                     <option value="">Semua toko</option>
@@ -151,19 +172,16 @@ $tanya = static function (array $ubah): string {
                 </select>
             </div>
         <?php endif; ?>
-        <div class="lapangan">
-            <label for="batas">Baris</label>
-            <select class="form-select form-select-sm" id="batas" name="batas">
-                <?php foreach ([10, 25, 50] as $n) : ?>
-                    <option value="<?= $n ?>" <?= $batas === $n ? 'selected' : '' ?>><?= $n ?></option>
-                <?php endforeach; ?>
-            </select>
-        </div>
-        <div class="lapangan">
+        <div class="lapangan b5-saring-aksi">
             <label>&nbsp;</label>
             <div class="b5-aksi">
-                <button type="submit" class="btn btn-sm btn-dark"><i class="fal fa-search"></i> Cari</button>
-                <a class="btn btn-sm btn-link text-decoration-none" href="<?= esc(site_url('admin/tugas/bintang')) ?>">Ulangi</a>
+                <button type="submit" class="btn btn-sm btn-dark" aria-label="Cari">
+                    <i class="fal fa-search"></i><span class="d-none d-lg-inline"> Cari</span>
+                </button>
+                <a class="btn btn-sm btn-dark text-decoration-none d-inline-flex d-lg-none"
+                    href="<?= esc(site_url('admin/tugas/bintang')) ?>" title="Ulangi" aria-label="Ulangi"><i class="fal fa-sync"></i></a>
+                <a class="btn btn-sm btn-link text-decoration-none d-none d-lg-inline"
+                    href="<?= esc(site_url('admin/tugas/bintang')) ?>">Ulangi</a>
             </div>
         </div>
     </form>

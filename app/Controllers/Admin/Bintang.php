@@ -216,10 +216,19 @@ class Bintang extends BaseController
         $peta = [];
 
         foreach ((new TokoOnlineModel())->daftar(['juragan_ids' => $this->tokoBoleh(), 'aktif' => '1'], 200, 0) as $t) {
-            $peta[(int) $t['juragan_id']][] = (string) $t['platform'];
+            $platform = trim((string) $t['platform']);
+
+            // toko hasil semai migrasi tidak punya platform; tanpa guard ini tiap
+            // nama toko dihiasi pil abu-abu kosong, dan dua toko dengan platform
+            // sama akan menampilkan label yang dobel
+            if ($platform === '') {
+                continue;
+            }
+
+            $peta[(int) $t['juragan_id']][$platform] = $platform;
         }
 
-        return $peta;
+        return array_map('array_values', $peta);
     }
 
     private function batas(): int

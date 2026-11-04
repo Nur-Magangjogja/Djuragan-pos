@@ -66,6 +66,42 @@ $tanya = static function (array $ubah): string {
     .em-saring { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .55rem; margin-bottom: 1rem; }
     .em-saring .lapangan { display: flex; flex-direction: column; gap: .2rem; }
     .em-saring .form-control, .em-saring .form-select { max-width: 190px; }
+    /* "Ulangi" di segala lebar cuma ikon, dan ikon (FontAwesome line-height:1)
+       membuat tombol lebih pendek dari tombol bertuliskan di sebelahnya */
+    .em-saring .em-aksi { align-items: stretch; }
+
+    /* resep responsif rumah: ikon judul dibuang, pil tab sama lebar, dan semua
+       kontrol menutup lebar kartu — cari & tombol sebaris penuh, sisanya berpasangan */
+    @media (max-width: 991.98px) {
+        .em-head h1 > i { display: none; }
+
+        .em-buat > .lebar, .em-buat > .lapangan:last-child { flex: 1 1 100%; min-width: 0; }
+        .em-buat > .lapangan { flex: 1 1 calc(50% - .55rem); min-width: 0; }
+        .em-buat .form-control, .em-buat .form-select { max-width: none; width: 100%; }
+        .em-buat > .lapangan:last-child .btn { width: 100%; }
+
+        /* tiga pil dipaksa sebaris: 293px teks + padding + gap masih di bawah 336px
+           kalau jaraknya dipangkas — huruf tidak dikecilkan dan label tidak dipotong.
+           basis auto (bukan 0) karena tiga kotak sama lebar = 108,8px, sementara
+           "Belum Dikerjakan" sudah 102px + padding: dengan 1 1 0 teksnya patah dua
+           baris; dengan 1 1 auto pilnya 113/113/100 dan tetap satu baris tinggi 32px */
+        .em-tab { gap: .3rem; }
+        .em-tab a { flex: 1 1 auto; justify-content: center; padding-left: .25rem; padding-right: .25rem; }
+        .em-tab a i { display: none; }
+
+        .em-saring { flex-wrap: nowrap; gap: .5rem; }
+        .em-saring > .lapangan:first-of-type { flex: 1 1 auto; min-width: 0; }
+        .em-saring > .em-toko { flex: 0 1 8.5rem; min-width: 64px; }
+        .em-saring .form-control, .em-saring .form-select { max-width: none; width: 100%; }
+        .em-saring > .em-saring-aksi { flex: 0 0 auto; }
+        /* tombol ikon saja lebih pendek dari tombol bertuliskan (FontAwesome memakai
+           line-height:1), jadi tingginya dipatok sama dengan kotak isian 2rem */
+        .em-saring .em-aksi { align-items: stretch; }
+        .em-saring .em-aksi .btn { min-height: 2rem; }
+
+        /* baris yang isinya cuma tombol tidak perlu lagi penahan setinggi label */
+        .em-buat > .lapangan:last-child > label, .em-saring > .lapangan:last-child > label { display: none; }
+    }
 
     .em-kartu { background: #fff; border: 1px solid #e2e8f0; border-radius: 1.15rem;
         box-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 8px 24px -12px rgba(15, 23, 42, .12); overflow: hidden; }
@@ -111,6 +147,19 @@ $tanya = static function (array $ubah): string {
     <?php if ($kabar !== '') : ?><div class="alert alert-success py-2" data-flash><?= esc($kabar) ?></div><?php endif; ?>
     <?php if ($galat !== '') : ?><div class="alert alert-danger py-2" data-flash><?= esc($galat) ?></div><?php endif; ?>
 
+    <div class="em-tab">
+        <?php foreach ($tab as $kode => $nama) : ?>
+            <a class="<?= $s['tab'] === $kode ? 'aktif' : '' ?>" href="<?= esc($tanya(['tab' => $kode])) ?>">
+                <?= esc($nama) ?>
+                <?php if (($angka[$kode] ?? 0) > 0) : ?><span><?= (int) $angka[$kode] ?></span><?php endif; ?>
+            </a>
+        <?php endforeach; ?>
+        <a class="<?= (int) $s['milik_saya'] === $milik ? 'aktif' : '' ?>"
+            href="<?= esc($tanya(['saya' => (int) $s['milik_saya'] === $milik ? '' : '1'])) ?>">
+            <i class="fal fa-user"></i> Hanya punyaku
+        </a>
+    </div>
+
     <?php if ($toko !== []) : ?>
         <?= form_open('admin/tugas/email/simpan', ['class' => 'em-buat']) ?>
             <div class="lebar">
@@ -137,19 +186,6 @@ $tanya = static function (array $ubah): string {
         <?= form_close() ?>
     <?php endif; ?>
 
-    <div class="em-tab">
-        <?php foreach ($tab as $kode => $nama) : ?>
-            <a class="<?= $s['tab'] === $kode ? 'aktif' : '' ?>" href="<?= esc($tanya(['tab' => $kode])) ?>">
-                <?= esc($nama) ?>
-                <?php if (($angka[$kode] ?? 0) > 0) : ?><span><?= (int) $angka[$kode] ?></span><?php endif; ?>
-            </a>
-        <?php endforeach; ?>
-        <a class="<?= (int) $s['milik_saya'] === $milik ? 'aktif' : '' ?>"
-            href="<?= esc($tanya(['saya' => (int) $s['milik_saya'] === $milik ? '' : '1'])) ?>">
-            <i class="fal fa-user"></i> Hanya punyaku
-        </a>
-    </div>
-
     <form class="em-saring" method="get" action="<?= esc(site_url('admin/tugas/email')) ?>">
         <input type="hidden" name="tab" value="<?= esc($s['tab']) ?>">
         <input type="hidden" name="saya" value="<?= (int) $s['milik_saya'] === $milik ? '1' : '' ?>">
@@ -159,7 +195,7 @@ $tanya = static function (array $ubah): string {
                 placeholder="isi catatan">
         </div>
         <?php if (count($toko) > 1) : ?>
-            <div class="lapangan">
+            <div class="lapangan em-toko">
                 <label for="toko">Toko</label>
                 <select class="form-select form-select-sm" id="toko" name="toko">
                     <option value="">Semua toko</option>
@@ -169,19 +205,14 @@ $tanya = static function (array $ubah): string {
                 </select>
             </div>
         <?php endif; ?>
-        <div class="lapangan">
-            <label for="batas">Baris</label>
-            <select class="form-select form-select-sm" id="batas" name="batas">
-                <?php foreach ([10, 25, 50] as $n) : ?>
-                    <option value="<?= $n ?>" <?= $batas === $n ? 'selected' : '' ?>><?= $n ?></option>
-                <?php endforeach; ?>
-            </select>
-        </div>
-        <div class="lapangan">
+        <div class="lapangan em-saring-aksi">
             <label>&nbsp;</label>
             <div class="em-aksi">
-                <button type="submit" class="btn btn-sm btn-dark"><i class="fal fa-search"></i> Cari</button>
-                <a class="btn btn-sm btn-link text-decoration-none" href="<?= esc(site_url('admin/tugas/email')) ?>">Ulangi</a>
+                <button type="submit" class="btn btn-sm btn-dark" aria-label="Cari">
+                    <i class="fal fa-search"></i><span class="d-none d-lg-inline"> Cari</span>
+                </button>
+                <a class="btn btn-sm btn-dark text-decoration-none d-inline-flex"
+                    href="<?= esc(site_url('admin/tugas/email')) ?>" title="Ulangi" aria-label="Ulangi"><i class="fal fa-sync"></i></a>
             </div>
         </div>
     </form>
