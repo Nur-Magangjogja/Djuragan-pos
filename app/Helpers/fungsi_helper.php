@@ -324,6 +324,10 @@ if (! function_exists('alasan_batal')) {
                 'label' => 'Nota duplikat',
                 'jenis' => 'kesalahan',
             ],
+            'salah_lainnya' => [
+                'label' => 'Lainnya',
+                'jenis' => 'kesalahan',
+            ],
             'pelanggan_batal' => [
                 'label' => 'Pelanggan membatalkan',
                 'jenis' => 'sah',

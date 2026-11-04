@@ -463,12 +463,13 @@ class KpiModel extends Model
     }
 
     /**
-     * Nota yang dihapus per pelaku.
+     * Nota yang dihapus per CS pembuat nota.
      *
-     * alasan_batal NULL berarti nota dihapus dari jalur yang belum meminta alasan
-     * (misalnya halaman CS) dan tidak dihitung sebagai kesalahan siapa pun.
+     * Di sini dihitung pembatalan karena kesalahan dan pembatalan sah (khusus nota belum lunas)
+     * yang mengurangi poin aktivitas CS. Data lama tanpa alasan atau pembatalan sah pada
+     * nota yang sudah lunas tidak mengurangi poin.
      *
-     * @return array<int, array{total: int, salah: int, sah: int, tanpa_alasan: int}>
+     * @return array<int, array{total: int, salah: int, sah: int, sah_belum_lunas: int, tanpa_alasan: int}>
      */
     private function voidPerPegawai(array $s): array
     {
@@ -476,23 +477,25 @@ class KpiModel extends Model
         $sah   = $this->daftarKutip($this->slugSah());
 
         $hasil = [];
-        foreach ($this->db->query('SELECT o.deleted_by user_id, u.name pegawai, COUNT(*) total,'
+        foreach ($this->db->query('SELECT o.user_id user_id, u.name pegawai, COUNT(*) total,'
             . ' SUM(o.alasan_batal IN (' . $salah . ')) salah,'
+            . ' SUM(o.alasan_batal IN (' . $sah . ') AND o.status_pembayaran NOT IN (\'5\', \'6\')) sah_belum_lunas,'
             . ' SUM(o.alasan_batal IN (' . $sah . ')) sah,'
             . ' SUM(o.alasan_batal IS NULL) tanpa_alasan'
             . ' FROM ' . $this->t('invoice') . ' o'
-            . ' JOIN ' . $this->t('user') . " u ON u.id = o.deleted_by AND u.status = 'active' AND u.deleted_at IS NULL"
-            . ' WHERE o.deleted_at IS NOT NULL AND o.deleted_by IS NOT NULL'
+            . ' JOIN ' . $this->t('user') . " u ON u.id = o.user_id AND u.status = 'active' AND u.deleted_at IS NULL"
+            . ' WHERE o.deleted_at IS NOT NULL'
             . ' AND o.deleted_at BETWEEN :awal_unix: AND :akhir_unix:'
             . ' AND o.juragan_id IN (' . $this->daftarId($s['juragan_ids']) . ')'
-            . $this->klausulPelaku($s, 'o.deleted_by')
-            . ' GROUP BY o.deleted_by, u.name', $this->paramsUnix($s))->getResultArray() as $baris) {
+            . $this->klausulPelaku($s, 'o.user_id')
+            . ' GROUP BY o.user_id, u.name', $this->paramsUnix($s))->getResultArray() as $baris) {
             $hasil[(int) $baris['user_id']] = [
-                'pegawai'      => $baris['pegawai'],
-                'total'        => (int) $baris['total'],
-                'salah'        => (int) $baris['salah'],
-                'sah'          => (int) $baris['sah'],
-                'tanpa_alasan' => (int) $baris['tanpa_alasan'],
+                'pegawai'         => $baris['pegawai'],
+                'total'           => (int) $baris['total'],
+                'salah'           => (int) $baris['salah'],
+                'sah'             => (int) $baris['sah'],
+                'sah_belum_lunas' => (int) $baris['sah_belum_lunas'],
+                'tanpa_alasan'    => (int) $baris['tanpa_alasan'],
             ];
         }
 
@@ -538,9 +541,8 @@ class KpiModel extends Model
     public const ATURAN_POIN = [
         'nota_dibuat'    => ['nama' => 'Nota dibuat', 'sumber' => 'order_invoice.user_id', 'satuan' => 'nota', 'poin' => 2],
         'nota_lunas'     => ['nama' => 'Nota lunas (closing)', 'sumber' => 'order_invoice.status_pembayaran 5/6', 'satuan' => 'nota', 'poin' => 3],
-        'tahap_produksi' => ['nama' => 'Tahap produksi dikerjakan', 'sumber' => 'order_invoice_status.user_id', 'satuan' => 'catatan tahap', 'poin' => 1, 'catatan' => 'kolom pelaksana baru ada sejak 9 Oktober 2026 dan belum pernah terisi'],
-        'foto_progres'   => ['nama' => 'Foto progres diunggah', 'sumber' => 'order_invoice_foto.user_id', 'satuan' => 'foto', 'poin' => 2, 'catatan' => 'foto yang notanya sudah dihapus permanen tidak bisa dipastikan tokonya, jadi tidak ikut dinilai'],
-        'void_salah'     => ['nama' => 'Nota dibatalkan karena kesalahan', 'sumber' => 'order_invoice.deleted_by + alasan_batal', 'satuan' => 'nota', 'poin' => -5, 'catatan' => 'pembatalan beralasan sah dan data lama tanpa alasan tidak dikurangi poin'],
+        'tahap_produksi' => ['nama' => 'Tahap produksi dikerjakan', 'sumber' => 'order_invoice_status pada nota CS', 'satuan' => 'catatan tahap', 'poin' => 1, 'catatan' => 'tahap produksi yang dicatat pada nota milik CS'],
+        'void_salah'     => ['nama' => 'Nota dibatalkan karena kesalahan', 'sumber' => 'order_invoice.user_id + alasan_batal', 'satuan' => 'nota', 'poin' => -5, 'catatan' => 'pembatalan sah (khusus nota belum lunas) dan kesalahan input dikurangi poin'],
     ];
 
     /** Batas nilai poin yang boleh dipasang; di luar ini dianggap salah ketik. */
@@ -822,13 +824,13 @@ class KpiModel extends Model
             ];
         }
 
-        // satu-satunya pengurang: nota yang dibatalkan karena kesalahan
+        // pengurang: nota yang dibatalkan karena kesalahan dan pembatalan sah (belum lunas)
         foreach ($this->voidPerPegawai($s) as $id => $baris) {
             if ($id === 0) {
                 continue;
             }
 
-            $catatan[$id]['void_salah'] = (int) $baris['salah'];
+            $catatan[$id]['void_salah'] = (int) $baris['salah'] + (int) $baris['sah_belum_lunas'];
         }
 
         foreach ($this->jejakLain($s) as $slug => $perPegawai) {
@@ -841,13 +843,10 @@ class KpiModel extends Model
     }
 
     /**
-     * Aktivitas di luar nota yang tetap dihitung poin: tahap produksi dan foto
-     * progres. Keduanya dihitung dari kolom pelakunya sendiri.
+     * Aktivitas di luar nota yang tetap dihitung poin: tahap produksi.
+     * Dihitung per CS pemilik nota yang tahap produksinya dikerjakan.
      *
-     * Tahap produksi dan foto ikut menilai nota yang kemudian dibatalkan: kerjanya
-     * memang terjadi. Pesan manual dan catatan CRM pernah dihitung di sini tetapi
-     * keduanya dicabut dari poin (31 Oktober 2026), jadi querynya tidak dijalankan
-     * lagi -- ranking tidak boleh membayar kerja yang tidak ditampilkan.
+     * Tahap produksi ikut menilai nota yang kemudian dibatalkan: kerjanya memang terjadi.
      *
      * @return array<string, array<int, int>>
      */
@@ -858,15 +857,11 @@ class KpiModel extends Model
         $toko  = ' AND o.juragan_id IN (' . $this->daftarId($s['juragan_ids']) . ')';
 
         $query = [
-            'tahap_produksi' => 'SELECT st.user_id user_id, COUNT(1) jumlah FROM ' . $this->t('invoice_status') . ' st'
-                . $this->sambungkan('st') . ' JOIN ' . $this->t('invoice') . ' o ON o.id_invoice = st.invoice_id'
+            'tahap_produksi' => 'SELECT o.user_id user_id, COUNT(1) jumlah FROM ' . $this->t('invoice_status') . ' st'
+                . ' JOIN ' . $this->t('invoice') . ' o ON o.id_invoice = st.invoice_id'
+                . $this->sambungkan('o', 'user_id')
                 . ' WHERE st.tanggal_masuk BETWEEN :awal_unix: AND :akhir_unix:' . $toko . $level
-                . $this->klausulPelaku($s, 'st.user_id') . ' GROUP BY st.user_id',
-
-            'foto_progres' => 'SELECT f.user_id user_id, COUNT(1) jumlah FROM ' . $this->t('invoice_foto') . ' f'
-                . $this->sambungkan('f') . ' JOIN ' . $this->t('invoice') . ' o ON o.id_invoice = f.invoice_id'
-                . ' WHERE f.created_at BETWEEN :awal_unix: AND :akhir_unix:' . $toko . $level
-                . $this->klausulPelaku($s, 'f.user_id') . ' GROUP BY f.user_id',
+                . $this->klausulPelaku($s, 'o.user_id') . ' GROUP BY o.user_id',
         ];
 
         $hasil = [];
