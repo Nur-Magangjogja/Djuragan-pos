@@ -204,25 +204,55 @@ class Invoices extends BaseController
 
             // alasan wajib dan hanya dari daftar yang dikenal: Error/Void Rate
             // memisahkan kesalahan operasional dari pembatalan yang sah
-            $alasan = (string) $this->request->getPost('alasan');
+            $alasan        = (string) $this->request->getPost('alasan');
+            $daftar_alasan = alasan_batal();
 
-            if (! array_key_exists($alasan, alasan_batal())) {
+            if (! array_key_exists($alasan, $daftar_alasan)) {
                 return $this->response->setJSON([
                     'status' => 'Pilih alasan pembatalan lebih dulu.',
                     'url'    => site_url('admin/invoices/lihat/semua/semua?cari[kolom]=id&cari[q]=' . $invoice_id),
                 ]);
             }
 
+            // Pembatalan Sah hanya berlaku untuk nota yang statusnya BELUM LUNAS
+            if ($daftar_alasan[$alasan]['jenis'] === 'sah' && tagihan_lunas($nota->status_pembayaran)) {
+                return $this->response->setJSON([
+                    'status' => 'Pembatalan Sah hanya berlaku untuk orderan yang statusnya belum lunas.',
+                    'url'    => site_url('admin/invoices/lihat/semua/semua?cari[kolom]=id&cari[q]=' . $invoice_id),
+                ]);
+            }
+
+            // Opsi Lainnya wajib mengisi catatan alasan
+            $catatan = trim((string) $this->request->getPost('catatan_batal'));
+            if (in_array($alasan, ['lainnya', 'salah_lainnya'], true) && $catatan === '') {
+                return $this->response->setJSON([
+                    'status' => 'Catatan alasan wajib diisi jika memilih Lainnya.',
+                    'url'    => site_url('admin/invoices/lihat/semua/semua?cari[kolom]=id&cari[q]=' . $invoice_id),
+                ]);
+            }
+
             $invModel->delete($invoice_id);
+
+            $db         = \Config\Database::connect();
+            $dataUpdate = [
+                'deleted_by'   => pengguna_sesi(),
+                'alasan_batal' => $alasan,
+            ];
+
+            // pastikan kolom catatan_batal tersedia jika belum dibuat migrasi
+            if (! $db->fieldExists('catatan_batal', $db->prefixTable('invoice'))) {
+                $db->query('ALTER TABLE ' . $db->prefixTable('invoice') . ' ADD COLUMN catatan_batal VARCHAR(255) NULL AFTER alasan_batal');
+            }
+
+            if ($catatan !== '') {
+                $dataUpdate['catatan_batal'] = $catatan;
+            }
 
             // deleted_by/alasan_batal ada di luar allowedFields InvoiceModel,
             // jadi ditulis langsung; soft delete-nya sudah terjadi di baris yang sama
-            \Config\Database::connect()->table('invoice')
+            $db->table('invoice')
                 ->where('id_invoice', $invoice_id)
-                ->update([
-                    'deleted_by'   => pengguna_sesi(),
-                    'alasan_batal' => $alasan,
-                ]);
+                ->update($dataUpdate);
 
             // simpan notif
             simpan_notif(3, $nota->juragan_id, $invoice_id);

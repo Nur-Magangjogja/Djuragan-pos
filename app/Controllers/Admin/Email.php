@@ -16,6 +16,12 @@ use CodeIgniter\Exceptions\PageNotFoundException;
  * didelegasikan Admin/Superadmin lewat layar Daftar Email; CS hanya bisa memakai
  * alamat yang dipegangnya, sedangkan Admin/Superadmin memakai semuanya.
  *
+ * Tidak ada langkah "ambil catatan" di layar ini, tidak seperti jenis tugas lain
+ * yang direbut dari antrean: Admin/Superadmin yang menulis catatan dan langsung
+ * menunjuk satu alamat, jadi pemegang alamatnya otomatis memegang tugasnya dan
+ * cukup menandai selesai. Yang memilih penggarapnya kemudian cukup orang yang
+ * benar-benar mengerjakannya.
+ *
  * Sengaja cuma catatan — tidak ada sandi, tidak ada kredensial, dan tidak ada
  * koneksi ke servis email mana pun. Tiap catatan masuk ke mesin tugas yang sama
  * (jenis `pemeriksaan_email`) supaya yang sudah dibaca dan yang masih menunggu
@@ -128,15 +134,6 @@ class Email extends BaseController
             : redirect()->back()->with('galat', 'Catatan gagal disimpan. Coba lagi.')->withInput();
     }
 
-    public function ambil(int $id)
-    {
-        $this->catatanMilikSaya($id);
-
-        $hasil = (new TugasModel())->ambil($id, (int) session()->get('id'), $this->tokoBoleh());
-
-        return $this->kembali($hasil, 'Catatan diambil, sekarang di tanganmu.');
-    }
-
     public function lepas(int $id)
     {
         $this->catatanMilikSaya($id);
@@ -151,14 +148,29 @@ class Email extends BaseController
         return $this->kembali($hasil, 'Catatan dilepas, kembali ke daftar.');
     }
 
+    /**
+     * Menandai catatan selesai — tanpa langkah mengambil dulu. Catatan lahir dari
+     * Admin/Superadmin dan langsung menunjuk satu alamat email, jadi pemegang
+     * alamatnya tidak perlu memperebutkannya dari antrean.
+     *
+     * Mesin tugas tetap menuntut penggarap sebelum status 'completed', jadi
+     * penugasan dicatat pada saat ini lewat tetapkan() — bukan ambil(), yang
+     * berarti "direbut dari antrean" dan justru tidak benar di layar ini.
+     */
     public function selesai(int $id)
     {
-        $this->catatanMilikSaya($id);
+        $tugas = $this->catatanMilikSaya($id);
+        $model = new TugasModel();
+        $user  = (int) session()->get('id');
 
-        $hasil = (new TugasModel())->ubahStatus(
+        if ((string) $tugas['status'] === 'queued' && $tugas['dikerjakan_oleh'] === null) {
+            $model->tetapkan($id, $user, $user, 'langsung dikerjakan pemegang alamat email');
+        }
+
+        $hasil = $model->ubahStatus(
             $id,
             'completed',
-            (int) session()->get('id'),
+            $user,
             (string) $this->request->getPost('catatan')
         );
 
@@ -214,23 +226,42 @@ class Email extends BaseController
             ->with('sukses', $id > 0 ? 'Email diperbarui.' : 'Email ditambahkan.');
     }
 
-    /** Alamat dimatikan, tidak dihapus: catatan cek email lama tetap menunjuk ke sini. */
-    public function setEmailAktif()
+    /**
+     * Hapus satu alamat email untuk selamanya (ikon sampah di layar Daftar Email).
+     *
+     * Catatan yang menunjuk alamat ini tidak ikut hilang — model melepas email_id-
+     * nya supaya catatan itu jatuh ke kelompok "catatan tanpa alamat". Jumlahnya
+     * dihitung sebelum penghapusan dan disebut di pesan, jadi jelas apa yang
+     * tersisa setelah alamatnya pergi.
+     */
+    public function hapusEmail()
     {
         helper('fungsi');
 
         $model = new EmailModel();
         $id    = (int) $this->request->getPost('id_email');
+        $akun  = $model->satu($id);
 
-        if ($model->satu($id) === null) {
+        if ($akun === null) {
             throw PageNotFoundException::forPageNotFound();
         }
 
-        $model->setAktif($id, (string) $this->request->getPost('aktif') === '1');
+        $tertaut = (new TugasModel())->jumlah(['email_id' => $id]);
 
-        return redirect()->to(site_url('admin/tugas/email?bagian=email'))->with('sukses', 'Status email diperbarui.');
+        if (! $model->hapus($id)) {
+            return redirect()->back()->with('galat', 'Email gagal dihapus. Coba lagi.');
+        }
+
+        return redirect()->to(site_url('admin/tugas/email?bagian=email'))->with('sukses', $tertaut > 0
+            ? 'Email ' . $akun['email'] . ' dihapus; ' . $tertaut . ' catatan lama tetap ada tanpa alamat.'
+            : 'Email ' . $akun['email'] . ' dihapus.');
     }
 
+    /**
+     * Menautkan satu CS ke satu alamat. Layar mengirim pilihan langsung saat nama
+     * dipilih (tanpa tombol simpan), jadi pesannya menyebut alamat dan orangnya
+     * supaya jelas baris mana yang baru berubah.
+     */
     public function beriPegang()
     {
         helper('fungsi');
@@ -238,18 +269,21 @@ class Email extends BaseController
         $model = new EmailModel();
         $id    = (int) $this->request->getPost('id_email');
         $user  = (int) $this->request->getPost('user_id');
+        $akun  = $model->satu($id);
+        $staf  = $this->stafCs();
 
-        if ($model->satu($id) === null) {
+        if ($akun === null) {
             throw PageNotFoundException::forPageNotFound();
         }
 
-        if (! array_key_exists($user, $this->stafCs())) {
+        if (! array_key_exists($user, $staf)) {
             return redirect()->back()->with('galat', 'Akun itu tidak dikenal atau bukan CS aktif.');
         }
 
         $model->beri($id, $user, (int) session()->get('id'));
 
-        return redirect()->to(site_url('admin/tugas/email?bagian=email'))->with('sukses', 'Email didelegasikan ke CS itu.');
+        return redirect()->to(site_url('admin/tugas/email?bagian=email'))
+            ->with('sukses', 'Delegasi tersimpan: ' . $akun['email'] . ' sekarang dipegang ' . $staf[$user] . '.');
     }
 
     public function copotPegang()
@@ -258,14 +292,19 @@ class Email extends BaseController
 
         $model = new EmailModel();
         $id    = (int) $this->request->getPost('id_email');
+        $user  = (int) $this->request->getPost('user_id');
+        $akun  = $model->satu($id);
 
-        if ($model->satu($id) === null) {
+        if ($akun === null) {
             throw PageNotFoundException::forPageNotFound();
         }
 
-        $model->copot($id, (int) $this->request->getPost('user_id'));
+        $model->copot($id, $user);
 
-        return redirect()->to(site_url('admin/tugas/email?bagian=email'))->with('sukses', 'Delegasi dilepas; catatan lama tidak berubah.');
+        $nama = $this->stafCs()[$user] ?? 'CS itu';
+
+        return redirect()->to(site_url('admin/tugas/email?bagian=email'))
+            ->with('sukses', 'Tautan ' . $nama . ' pada ' . $akun['email'] . ' dilepas; catatan lama tidak berubah.');
     }
 
     /** @return array<int, string> id => nama, khusus CS aktif */
@@ -322,16 +361,20 @@ class Email extends BaseController
     }
     // ------------------------------------------------------------------ dalam
 
-    /** @param array<string, mixed> $s @return array<string, mixed> */
+    /**
+     * Saringan query untuk mesin tugas.
+     *
+     * Tidak ada filter "hanya punyaku" seperti di layar Bintang: catatan selalu
+     * ditugaskan ke satu alamat email, jadi cakupannya sudah memisahkan orangnya
+     * — CS hanya melihat alamat yang dipegangnya, Admin/Superadmin melihat semuanya.
+     *
+     * @param array<string, mixed> $s @return array<string, mixed>
+     */
     private function korong(array $s): array
     {
         $q = array_merge($s, $s['tab'] === 'sudah'
             ? ['jenis' => 'pemeriksaan_email', 'status_in' => ['completed', 'cancelled']]
             : ['jenis' => 'pemeriksaan_email', 'terbuka' => true]);
-
-        if ((int) $s['milik_saya'] > 0) {
-            $q['dikerjakan_oleh'] = (int) $s['milik_saya'];
-        }
 
         if ((int) $s['email_id'] > 0) {
             $q['email_id'] = (int) $s['email_id'];
@@ -367,18 +410,36 @@ class Email extends BaseController
             'email_id'    => (int) $this->request->getGet('email'),
             'email_get'   => trim((string) $this->request->getGet('email')),
             'cari'        => trim((string) $this->request->getGet('cari')),
-            'milik_saya'  => $this->request->getGet('saya') === '1' ? (int) session()->get('id') : 0,
+            'awal'        => $this->tanggal(trim((string) $this->request->getGet('awal'))),
+            'akhir'       => $this->tanggal(trim((string) $this->request->getGet('akhir'))),
             'juragan_ids' => $this->tokoBoleh(),
         ];
     }
 
-    /** Catatan ini hanya boleh disentuh akun yang memegang tokonya, dan memang jenisnya. */
+    /**
+     * Catatan ini boleh disentuh siapa: pemegang alamat email yang ditugaskan,
+     * atau Admin/Superadmin yang memang melihat semuanya.
+     *
+     * Dulu cukup "CS di toko ini" karena masih ada langkah ambil yang memilih
+     * penggarapnya sendiri. Sekarang penggarapnya tercatat saat ditandai selesai,
+     * jadi siapa yang boleh menandai itulah yang harus dijaga di sini — kalau
+     * tidak, nama di laporan per-CS jadi nama orang yang kebetulan klik lebih dulu.
+     */
     private function catatanMilikSaya(int $id): array
     {
         $baris = (new TugasModel())->satu($id);
 
         if ($baris === null || (string) $baris['jenis'] !== 'pemeriksaan_email'
             || ($baris['juragan_id'] !== null && ! $this->bolehToko((int) $baris['juragan_id']))) {
+            throw PageNotFoundException::forPageNotFound();
+        }
+
+        $id_email = (int) ($baris['email_id'] ?? 0);
+
+        // catatan lama dari sebelum daftar email dipakai tidak punya alamat untuk
+        // diperebutkan; biar tetap bisa dikerjakan semua CS di toko itu
+        if ($id_email > 0 && ! $this->bolehKelola()
+            && ! (new EmailModel())->pegangPunya($id_email, (int) session()->get('id'))) {
             throw PageNotFoundException::forPageNotFound();
         }
 

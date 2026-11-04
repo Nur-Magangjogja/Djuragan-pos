@@ -1066,6 +1066,7 @@ $cekBayar = ((string) $session->get('level')) === 'superadmin';
                             'content'      => '<i class="fal fa-trash-alt"></i> Hapus',
                             'data-invoice' => $pesanan->id_invoice,
                             'data-seri'    => $pesanan->seri,
+                            'data-lunas'   => tagihan_lunas($pesanan->status_pembayaran) ? '1' : '0',
                         ]); ?>
                     </div>
                 </div>
@@ -1372,6 +1373,21 @@ $cekBayar = ((string) $session->get('level')) === 'superadmin';
                     'id'       => 'alasanBatal',
                     'required' => '',
                 ]) ?>
+
+                <div id="wadahCatatanBatal" class="mt-3" style="display: none;">
+                    <?= form_label('Catatan alasan <span class="text-danger">*</span>', 'catatanBatal', ['class' => 'form-label']) ?>
+                    <?= form_textarea([
+                        'name'        => 'catatan_batal',
+                        'id'          => 'catatanBatal',
+                        'class'       => 'form-control',
+                        'rows'        => '2',
+                        'placeholder' => 'Tuliskan alasan pembatalan...',
+                    ]) ?>
+                </div>
+
+                <div id="pesanBatalLunas" class="alert alert-warning py-2 small mt-3" style="display: none;">
+                    <i class="fal fa-info-circle me-1"></i> Orderan ini sudah lunas. Kategori Pembatalan Sah hanya berlaku untuk orderan yang belum lunas.
+                </div>
             </div>
         </div>
         <div class="modal-footer">
@@ -2485,24 +2501,66 @@ $js = <<< JS
     	
     	$('.hapusOrderan').on('click',function(){
     		invoiceBatal = $(this).data('invoice');
+    		var isLunas = $(this).data('lunas') == '1';
 
     		$('#batalSeri').text($(this).data('seri'));
     		$('#alasanBatal').val('');
+    		$('#catatanBatal').val('').removeAttr('required');
+    		$('#wadahCatatanBatal').hide();
+
+    		// Kategori Pembatalan Sah hanya berlaku untuk orderan yang BELUM LUNAS
+    		var optgroupSah = $('#alasanBatal optgroup[label="Pembatalan sah"]');
+    		if (isLunas) {
+    			optgroupSah.hide();
+    			optgroupSah.find('option').prop('disabled', true);
+    			$('#pesanBatalLunas').show();
+    		} else {
+    			optgroupSah.show();
+    			optgroupSah.find('option').prop('disabled', false);
+    			$('#pesanBatalLunas').hide();
+    		}
 
     		var modal = new bootstrap.Modal(document.getElementById('modalBatal'));
     		modal.show();
     	});
 
+    	$('#alasanBatal').on('change', function(){
+    		var alasan = $(this).val();
+    		if (alasan === 'lainnya' || alasan === 'salah_lainnya') {
+    			$('#wadahCatatanBatal').slideDown(150);
+    			$('#catatanBatal').attr('required', true).focus();
+    		} else {
+    			$('#wadahCatatanBatal').slideUp(150);
+    			$('#catatanBatal').removeAttr('required').val('');
+    		}
+    	});
+
     	$('#submitBatal').on('submit',function(e){
     		e.preventDefault();
+
+    		var alasan = $('#alasanBatal').val();
+    		var catatan = $('#catatanBatal').val();
+
+    		if ((alasan === 'lainnya' || alasan === 'salah_lainnya') && !catatan.trim()) {
+    			alert('Tuliskan catatan alasan pembatalan.');
+    			$('#catatanBatal').focus();
+    			return;
+    		}
 
     		$.ajax({
     			method: "POST",
     			url: "{$link_hapus_orderan}",
-    			data: { invoice_id: invoiceBatal, alasan: $('#alasanBatal').val() }
+    			data: {
+    				invoice_id: invoiceBatal,
+    				alasan: alasan,
+    				catatan_batal: catatan
+    			}
     		})
     		.done(function( msg ) {
-    			// console.log( "Data Saved: " + msg );
+    			if (msg.status && msg.status !== 'Orderan dihapus') {
+    				alert(msg.status);
+    				return;
+    			}
     			document.location.href = msg.url;
     		});
     	});

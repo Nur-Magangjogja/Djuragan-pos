@@ -43,15 +43,15 @@ $sel   = static fn (int $n): string => $n === 0 ? '&mdash;' : $angka($n);
 $kelompok = [
     'Nota'      => ['nota_dibuat'],
     'Lunas'     => ['nota_lunas'],
-    'Produksi'  => ['tahap_produksi', 'foto_progres'],
+    'Produksi'  => ['tahap_produksi'],
     'Pengurang' => ['void_salah'],
 ];
 
 $petunjuk = [
     'Nota'      => 'nota dibuat',
     'Lunas'     => 'nota lunas',
-    'Produksi'  => 'tahap produksi dikerjakan + foto progres',
-    'Pengurang' => 'nota dibatalkan karena kesalahan',
+    'Produksi'  => 'tahap produksi dikerjakan',
+    'Pengurang' => 'nota dibatalkan karena kesalahan / pembatalan sah belum lunas',
 ];
 
 $nama_slug = array_column($aturan, 'nama', 'slug');

@@ -107,11 +107,26 @@ class EmailModel extends Model
         return (int) $this->db->insertID();
     }
 
-    /** Alamat dinonaktifkan, tidak dihapus: catatan lama tetap menunjuk ke sini. */
-    public function setAktif(int $id_email, bool $aktif): bool
+    /**
+     * Buang satu alamat untuk selamanya — layar Daftar Email memakai ikon sampah,
+     * bukan lagi tombol hidup/mati.
+     *
+     * Yang ikut pergi cuma tautan pemegangnya. Catatan cek email yang menunjuk
+     * alamat ini TIDAK dihapus: email_id-nya dilepas jadi NULL supaya catatan itu
+     * pindah ke kelompok "catatan tanpa alamat" dan tetap terbaca, bukan
+     * menghilang dari semua saringan (kolomnya memang boleh NULL sejak awal).
+     */
+    public function hapus(int $id_email): bool
     {
-        return $this->db->table('crm_email')->where('id_email', $id_email)
-            ->update(['aktif' => $aktif ? 1 : 0, 'updated_at' => time()]) !== false;
+        $this->db->transStart();
+
+        $this->db->table('crm_tugas')->where('email_id', $id_email)->update(['email_id' => null]);
+        $this->db->table('crm_email_pegang')->where('email_id', $id_email)->delete();
+        $this->db->table('crm_email')->where('id_email', $id_email)->delete();
+
+        $this->db->transComplete();
+
+        return $this->db->transStatus();
     }
 
     /**
