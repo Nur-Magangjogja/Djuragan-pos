@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use CodeIgniter\Database\Exceptions\DatabaseException;
 use CodeIgniter\Model;
 
 /**
@@ -46,12 +47,76 @@ class TokoOnlineModel extends Model
         return $baris ?: null;
     }
 
-    /** Toko lain yang sudah memegang kombinasi juragan + platform ini. */
-    public function kembar(int $juragan_id, string $platform, int $kecuali = 0): ?array
+    /**
+     * Berapa toko yang masih memakai tiap platform.
+     *
+     * Dipakai rincian platform di popus toko: sebelum menyembunyikan sebuah
+     * platform dari pilihan, Superadmin perlu tahu apakah ada toko yang
+     * menempel padanya.
+     *
+     * @return array<string, int> nama platform => jumlah toko
+     */
+    public function jumlahPerPlatform(): array
     {
+        $hasil = [];
+
+        $baris = $this->db->table('crm_toko_online')
+            ->select('platform, COUNT(*) AS jumlah')
+            ->where('platform !=', '')
+            ->groupBy('platform')
+            ->get()
+            ->getResultArray();
+
+        foreach ($baris as $b) {
+            $hasil[(string) $b['platform']] = (int) $b['jumlah'];
+        }
+
+        return $hasil;
+    }
+
+    /**
+     * Berapa lembar checklist yang pernah dibuka tiap toko.
+     *
+     * Angka ini menjawab pertanyaan paling penting sebelum menghapus: seberapa
+     * banyak catatan kerja yang ikut hilang bersama tokonya.
+     *
+     * @return array<int, int> id_toko => jumlah lembar
+     */
+    public function lembarPerToko(): array
+    {
+        $hasil = [];
+
+        $baris = $this->db->table('crm_checklist_run')
+            ->select('toko_id, COUNT(*) AS jumlah')
+            ->where('jenis', 'toko')
+            ->where('toko_id IS NOT NULL', null, false)
+            ->groupBy('toko_id')
+            ->get()
+            ->getResultArray();
+
+        foreach ($baris as $b) {
+            $hasil[(int) $b['toko_id']] = (int) $b['jumlah'];
+        }
+
+        return $hasil;
+    }
+
+    /**
+     * Toko lain yang sudah memegang kombinasi juragan + platform ini.
+     *
+     * Toko tanpa juragan tidak pernah kembar: kunci uniknya memuat kolom yang
+     * boleh NULL, dan MySQL tidak pernah menyamakan dua NULL. Karena itu pencarian
+     * hanya jalan kalau jurangannya benar-benar ada.
+     */
+    public function kembar(?int $juragan_id, string $platform, int $kecuali = 0): ?array
+    {
+        if ($juragan_id === null || $juragan_id <= 0) {
+            return null;
+        }
+
         $b = $this->db->table('crm_toko_online')
             ->where('juragan_id', $juragan_id)
-            ->where('platform', mb_substr($platform, 0, 40));
+            ->where('platform', mb_substr(trim($platform), 0, 40));
 
         if ($kecuali > 0) {
             $b->where('id_toko !=', $kecuali);
@@ -95,11 +160,94 @@ class TokoOnlineModel extends Model
         return (int) $this->db->insertID();
     }
 
-    /** Menonaktifkan, bukan menghapus: jejak checklist dan tugas lama tetap menunjuk ke sini. */
+    /**
+     * Menonaktifkan toko: jejak checklist dan tugas lama tetap menunjuk ke sini.
+     * Jalan menghapus yang sebenarnya ada di hapus(), dan itu harus dipilih
+     * dengan sadar di layar.
+     */
     public function setAktif(int $id_toko, bool $aktif): bool
     {
         return $this->db->table('crm_toko_online')->where('id_toko', $id_toko)
             ->update(['aktif' => $aktif ? 1 : 0, 'updated_at' => time()]) >= 0;
+    }
+
+    /**
+     * Menghapus satu toko untuk selamanya, bersama seluruh jejaknya.
+     *
+     * Empat tabel memang menunjuk ke baris ini dan tidak ada kunci asing yang
+     * menahan (periksa: crm_toko_akses, crm_checklist_run, crm_checklist_item,
+     * dan crm_checklist_hasil lewat run-nya), jadi semuanya bisa dibersihkan
+     * dalam satu transaksi — tidak ada yang boleh tertinggal setengah.
+     *
+     * @return array{nama: string, lembar: int, butir: int, tautan: int, user: list<int>}|null
+     *         null kalau tokonya memang tidak ada
+     */
+    public function hapus(int $id_toko): ?array
+    {
+        $toko = $this->satu($id_toko);
+
+        if ($toko === null) {
+            return null;
+        }
+
+        $run = array_map('intval', array_column(
+            $this->db->table('crm_checklist_run')->select('id_run')
+                ->where('jenis', 'toko')->where('toko_id', $id_toko)->get()->getResultArray(),
+            'id_run'
+        ));
+
+        $butir = array_map('intval', array_column(
+            $this->db->table('crm_checklist_item')->select('id_item')
+                ->where('jenis', 'toko')->where('toko_id', $id_toko)->get()->getResultArray(),
+            'id_item'
+        ));
+
+        // nama akun ditagih sebelum tautannya dibuang: setelah itu tidak ada lagi
+        // jalan mengetahui siapa saja yang tokonya hilang dari daftar
+        $tautan = array_map('intval', array_column(
+            $this->db->table('crm_toko_akses')->select('user_id')
+                ->where('toko_id', $id_toko)->get()->getResultArray(),
+            'user_id'
+        ));
+
+        $this->db->transBegin();
+
+        try {
+            if ($run !== []) {
+                $this->db->table('crm_checklist_hasil')->whereIn('run_id', $run)->delete();
+            }
+
+            if ($butir !== []) {
+                // jaring pengaman: butir toko ini sebenarnya hanya dipakai lembar
+                // toko ini, tapi hasil yang tertinggal tidak boleh ada
+                $this->db->table('crm_checklist_hasil')->whereIn('item_id', $butir)->delete();
+            }
+
+            $this->db->table('crm_checklist_item')->where('jenis', 'toko')->where('toko_id', $id_toko)->delete();
+            $this->db->table('crm_checklist_run')->where('jenis', 'toko')->where('toko_id', $id_toko)->delete();
+            $this->db->table('crm_toko_akses')->where('toko_id', $id_toko)->delete();
+            $this->db->table('crm_toko_online')->where('id_toko', $id_toko)->delete();
+
+            if ($this->db->transStatus() === false) {
+                $this->db->transRollback();
+
+                return null;
+            }
+
+            $this->db->transCommit();
+        } catch (DatabaseException $e) {
+            $this->db->transRollback();
+
+            return null;
+        }
+
+        return [
+            'nama'   => (string) $toko['nama'],
+            'lembar' => count($run),
+            'butir'  => count($butir),
+            'tautan' => count($tautan),
+            'user'   => $tautan,
+        ];
     }
 
     /**
