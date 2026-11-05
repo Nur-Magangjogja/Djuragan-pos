@@ -280,8 +280,10 @@ $routes->group('admin', static function ($routes) {
     });
 
     // checklist toko harian + pemeriksaan email manual. CS membuka dan mengisi
-    // sesinya; templat butir dan penonaktifan butir khusus Admin & Superadmin;
-    // menautkan toko ke akun (pendelegasian) khusus Superadmin.
+    // sesinya; kelola toko checklist khusus Admin & Superadmin. Menambah pemegang
+    // toko lewat popus sunting toko, jadi yang tersisa di sini pencabutan tautan
+    // langsung (tanda silang pada akun biru) dan penghapusan toko (ikon sampah di
+    // samping sunting) — yang terakhir ikut menghapus riwayat checklist tokonya.
     $routes->group('checklist', ['filter' => 'auth:admin,superadmin,cs'], static function ($routes) {
         $routes->get('/', 'Admin\Checklist::index', ['as' => 'hal.checklist']);
         $routes->post('mulai', 'Admin\Checklist::mulai');
@@ -294,19 +296,19 @@ $routes->group('admin', static function ($routes) {
         $routes->post('catatan', 'Admin\Checklist::catatan');
         $routes->post('catatan-selesai/(:num)', 'Admin\Checklist::catatanSelesai/$1');
 
+        // kelola toko checklist (tab "Kelola Toko" di halaman Cek Toko): daftar
+        // toko, tautan akun, dan penyuntingan tokonya. Tautan langsung tidak
+        // mengubah juragan yang dipegang siapa pun, jadi Admin ikut boleh
         $routes->group('', ['filter' => 'auth:admin,superadmin'], static function ($routes) {
-            $routes->get('aturan', 'Admin\Checklist::aturan');
-            $routes->post('butir', 'Admin\Checklist::simpanButir');
-            $routes->post('butir-aktif', 'Admin\Checklist::matikanButir');
             $routes->post('toko-simpan', 'Admin\Checklist::simpanToko');
+            $routes->post('tautan-copot', 'Admin\Checklist::tautanCopot');
+            $routes->post('toko-hapus', 'Admin\Checklist::hapusToko');
         });
 
-        // memindahkan sebuah toko ke tangan akun lain mengubah siapa yang boleh
-        // membuka lembar toko itu di semua halaman, jadi khusus Superadmin
+        // daftar platform toko (asal_order) dipakai bersama semua toko, jadi
+        // menyembunyikan salah satunya hanya boleh Superadmin
         $routes->group('', ['filter' => 'auth:superadmin'], static function ($routes) {
-            $routes->post('delegasi', 'Admin\Checklist::delegasi');
-            $routes->post('copot-delegasi', 'Admin\Checklist::copotDelegasi');
-            $routes->post('copot-tautan', 'Admin\Checklist::copotTautan');
+            $routes->post('platform-ubah', 'Admin\Checklist::platformUbah');
         });
     });
 

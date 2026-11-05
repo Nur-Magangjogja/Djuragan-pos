@@ -495,64 +495,6 @@ class ChecklistModel extends Model
         return $b;
     }
 
-    // ------------------------------------------------------------------ templat
-
-    /** @param array<string, mixed> $data */
-    public function simpanButir(array $data, ?int $oleh, int $id_item = 0): int
-    {
-        $waktu = time();
-
-        $isi = [
-            'jenis'     => $data['jenis'] === 'email' ? 'email' : 'toko',
-            'toko_id'   => ! empty($data['toko_id']) ? (int) $data['toko_id'] : null,
-            'judul'     => mb_substr(trim((string) $data['judul']), 0, 200),
-            'hint'      => trim((string) ($data['hint'] ?? '')) === '' ? null : mb_substr(trim((string) $data['hint']), 0, 255),
-            'urut'      => max(0, min(9999, (int) ($data['urut'] ?? 0))),
-            'wajib'     => ((int) ($data['wajib'] ?? 1)) === 1 ? 1 : 0,
-            'aktif'     => ((int) ($data['aktif'] ?? 1)) === 1 ? 1 : 0,
-            'updated_at' => $waktu,
-        ];
-
-        if ($isi['jenis'] === 'email') {
-            $isi['toko_id'] = null;
-        }
-
-        if ($id_item > 0) {
-            $this->db->table('crm_checklist_item')->where('id_item', $id_item)->update($isi);
-
-            return $id_item;
-        }
-
-        $this->db->table('crm_checklist_item')->insert($isi + [
-            'dibuat_oleh' => $oleh,
-            'created_at'  => $waktu,
-        ]);
-
-        return (int) $this->db->insertID();
-    }
-
-    /** @return list<array<string, mixed>> */
-    public function semuaButir(string $jenis): array
-    {
-        return $this->db->table('crm_checklist_item i')
-            ->select('i.*, o.nama AS nama_toko')
-            ->join('crm_toko_online o', 'o.id_toko = i.toko_id', 'left')
-            ->where('i.jenis', $jenis)
-            ->orderBy('i.aktif', 'DESC')
-            ->orderBy('i.urut', 'ASC')
-            ->get()
-            ->getResultArray();
-    }
-
-    /** Butir tidak pernah dihapus: matikan, riwayat sesi lama tetap menunjuk judulnya. */
-    public function setButirAktif(int $id_item, bool $aktif): bool
-    {
-        $this->db->table('crm_checklist_item')->where('id_item', $id_item)
-            ->update(['aktif' => $aktif ? 1 : 0, 'updated_at' => time()]);
-
-        return true;
-    }
-
     /** Sesi yang belum ditutup untuk toko-toko ini pada satu tanggal. */
     public function hitungTerbuka(array $toko_ids, string $tanggal): int
     {

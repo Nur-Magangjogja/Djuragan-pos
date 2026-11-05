@@ -11,7 +11,9 @@ $isReminderAktif = url_is('admin/reminder*');
 // dua reminder itu pindah etalase: halamannya masih di bawah /admin/tugas, tapi
 // menunya duduk di CRM — jadi hanya satu dari dua induk yang boleh menyala
 $diReminderKerja = url_is('admin/tugas/whatsapp*') || url_is('admin/tugas/bintang*');
-$isTugasAktif    = url_is('admin/tugas*') && ! $diReminderKerja;
+// Cek Toko tinggal di submenu ini, jadi induknya ikut terbuka saat orang sedang
+// di halaman checklist — bukan hanya saat di /admin/tugas
+$isTugasAktif    = (url_is('admin/tugas*') && ! $diReminderKerja) || url_is('admin/checklist*');
 $isCklAktif      = url_is('admin/checklist*');
 $isSopAktif     = url_is('admin/sop*');
 $isTrxAktif      = url_is('admin/invoices*') || url_is('admin/cod*');

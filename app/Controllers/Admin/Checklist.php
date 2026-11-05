@@ -7,9 +7,9 @@ use App\Controllers\Juragan as Jrgn;
 use App\Models\ChecklistModel;
 use App\Models\JuraganModel;
 use App\Models\LabelAsal;
-use App\Models\RelasiModel;
 use App\Models\TokoOnlineModel;
 use App\Models\UserModel;
+use CodeIgniter\Database\Exceptions\DatabaseException;
 use CodeIgniter\Exceptions\PageNotFoundException;
 
 /**
@@ -19,13 +19,18 @@ use CodeIgniter\Exceptions\PageNotFoundException;
  * punya tugas di antrean, jadi "sudah dicek hari ini atau belum" cukup dilihat
  * di satu tempat — tidak ada daftar pekerjaan kedua yang harus diingat orang.
  *
- * Layar ini juga tempat Superadmin mendelegasikan toko ke akun tertentu. Yang
- * diubah hanyalah tautan toko-akun yang sudah dipakai seluruh halaman, jadi
- * tokonya langsung ikut muncul di daftar kerja akun itu di mana-mana.
+ * Layar ini juga tempat Admin & Superadmin mengelola tokonya: daftar toko, siapa
+ * saja yang boleh membukanya, dan tombol untuk menautkan akun atau menyunting
+ * tokonya. Yang diubah hanyalah tautan toko-akun yang sudah dipakai seluruh
+ * halaman, jadi tokonya langsung ikut muncul di daftar kerja akun itu di mana-mana
+ * tanpa mengubah juragan yang sedang dipegangnya.
  */
 class Checklist extends BaseController
 {
     private const BATAS = [10, 25, 50];
+
+    /** Pilihan terakhir di dropdown platform: bukan nama platform, tapi niat menambah. */
+    private const PLATFORM_BARU = '__baru__';
 
     public function index()
     {
@@ -40,11 +45,15 @@ class Checklist extends BaseController
         $s     = $this->saring($toko);
         $batas = $this->batas();
 
-        // tab ketiga hanya ada untuk Superadmin; siapa pun yang memanggilnya tanpa
-        // hak itu dikembalikan ke daftar catatan, bukan diberi pesan error
-        $tabDelegasi = (string) $this->request->getGet('tab') === 'delegasi' && $this->bolehDelegasi();
+        // tab ketiga dipakai bersama Admin & Superadmin: isinya daftar toko,
+        // siapa yang memegangnya, dan tombol untuk menyunting/menautkan akun.
+        // Tidak digantungkan pada $toko !== [] supaya toko pertama masih bisa
+        // dibuat saat daftarnya masih kosong. Akun yang tidak berhak dikembalikan
+        // ke daftar catatan, bukan diberi pesan error
+        $kelolaToko = $this->bolehKelola();
+        $tabKelola  = (string) $this->request->getGet('tab') === 'kelola' && $kelolaToko;
 
-        if ($tabDelegasi) {
+        if ($tabKelola) {
             $baris = [];
             $total = 0;
             $page  = 1;
@@ -55,25 +64,28 @@ class Checklist extends BaseController
             $baris = $model->catatan($s, $batas, ($page - 1) * $batas);
         }
 
-        $delegasi = $this->bolehDelegasi() && $toko !== [];
         $kelola   = $this->bolehKelola();
         $pemegang = $kelola ? $this->pemegangCek($toko) : [];
 
         return view('admin/checklist/index', [
-            'title'    => 'Cek Toko',
-            's'        => $s,
-            'baris'    => $model->catatan($s, $batas, ($page - 1) * $batas),
-            'total'    => $total,
-            'page'     => $page,
-            'batas'    => $batas,
-            'toko'     => $toko,
-            'kelola'   => $kelola,
-            'delegasi' => $delegasi,
-            'tabDelegasi' => $tabDelegasi,
-            'calon'    => $delegasi ? $this->calonDelegasi() : [],
-            'pemegang' => $pemegang,
-            'kabar'    => (string) session()->getFlashdata('sukses'),
-            'galat'    => (string) session()->getFlashdata('galat'),
+            'title'       => 'Cek Toko',
+            's'           => $s,
+            'baris'       => $baris,
+            'total'       => $total,
+            'page'        => $page,
+            'batas'       => $batas,
+            'toko'        => $toko,
+            'kelola'      => $kelola,
+            'kelolaToko'  => $kelolaToko,
+            'tabKelola'   => $tabKelola,
+            'pegawai'     => $tabKelola ? $this->calonDelegasi() : [],
+            'pemegang'    => $pemegang,
+            'namajuragan' => $tabKelola ? $this->petaJuragan() : [],
+            'platform'    => $tabKelola ? $this->platform() : [],
+            'platformInfo' => $tabKelola ? $this->platformTersimpan() : [],
+            'lembarToko'  => $tabKelola ? (new TokoOnlineModel())->lembarPerToko() : [],
+            'kabar'       => (string) session()->getFlashdata('sukses'),
+            'galat'       => (string) session()->getFlashdata('galat'),
         ]);
     }
 
@@ -169,193 +181,112 @@ class Checklist extends BaseController
         ]);
     }
 
-    /** Cabut delegasi juragan sebuah toko. Sesi lama di toko itu tetap bisa dibaca. */
-    public function copotDelegasi()
-    {
-        $bahan = $this->bahanDelegasi();
-
-        if ($bahan === null) {
-            return redirect()->to(site_url('admin/checklist'))
-                ->with('galat', 'Tokonya atau akunnya tidak dikenali.');
-        }
-
-        [, , , $juragan_id] = $bahan;
-
-        [$user, $juragan_id] = [$bahan[1], $bahan[3]];
-
-        if ($juragan_id === null) {
-            return redirect()->to(site_url('admin/checklist'))
-                ->with('galat', 'Toko ini tidak berdiri di atas juragan, jadi gunakan lepas tautan.');
-        }
-
-        $kunci  = ['table' => 1, 'juragan_id' => (int) $juragan_id, 'val_id' => $user];
-        $relasi = new RelasiModel();
-
-        if ($relasi->where($kunci)->countAllResults() === 0) {
-            return redirect()->to(site_url('admin/checklist'))
-                ->with('galat', 'Tautan itu sudah tidak ada.');
-        }
-
-        $relasi->where($kunci)->delete();
-        $this->buangCacheToko([$user]);
-
-        return redirect()->to(site_url('admin/checklist'))
-            ->with('sukses', 'Delegasi dilepas. Sesi checklist yang sudah pernah dibuka di toko itu tidak berubah.');
-    }
-
     /**
-     * Serahkan satu toko ke akun Admin/CS tertentu (khusus Superadmin).
+     * Lepas tautan langsung sebuah toko dari satu akun (Admin & Superadmin).
      *
-     * Toko yang berdiri di atas seorang juragan mengikuti delegasi juragan: akun
-     * itu otomatis bekerja di tokonya pada semua halaman. Toko yang tidak punya
-     * juragan hanya bisa dicapai lewat tautan checklist, jadi dua jalur itu dipilih
-     * di sini dan tidak perlu ditanyakan ke orang yang menekan tombol.
+     * Menambah pemegang tidak lagi punya jalur sendiri di sini: akun dicentang
+     * dari popus "Sunting toko", jadi tautan dan juragan tokonya diurus di satu
+     * tempat. Yang tersisa hanya jalan melepasnya, karena tanda silang di daftar
+     * toko harus tetap bekerja.
+     *
+     * Tanda silang memanggil ini dari latar belakang (chipnya sudah hilang dari
+     * layar lebih dulu, menunggu "Urungkan" habis waktunya), jadi jawabannya JSON
+     * dan bukan halaman penuh.
      */
-    public function delegasi()
+    public function tautanCopot()
     {
-        $bahan = $this->bahanDelegasi();
+        $json  = $this->request->isAJAX();
+        $bahan = $this->bahanTautan();
 
         if ($bahan === null) {
-            return redirect()->to(site_url('admin/checklist'))
-                ->with('galat', 'Tokonya atau akunnya tidak dikenali — pilih dari daftar, jangan diketik manual.');
+            return $this->balas($json, false, 'Tokonya atau akunnya tidak dikenali.');
         }
 
         [$id_toko, $user, $nama, $juragan_id] = $bahan;
 
-        if (! array_key_exists($user, $this->calonDelegasi())) {
-            return redirect()->to(site_url('admin/checklist'))
-                ->with('galat', $nama . ' bukan akun aktif, jadi tidak bisa memegang toko.');
-        }
-
-        if ($juragan_id !== null) {
-            return $this->tautkanJuragan((int) $juragan_id, $user, $nama);
-        }
-
-        $model = new TokoOnlineModel();
-        $sudah = $model->aksesPunyaUser($id_toko, $user);
-
-        if (! $sudah) {
-            $model->beriAkses($id_toko, $user, (int) session()->get('id'));
-        }
-
-        return redirect()->to(site_url('admin/checklist'))
-            ->with('sukses', $sudah
-                ? $nama . ' memang sudah memegang toko ini.'
-                : 'Toko didelegasikan ke ' . $nama . '. Lembar tokonya langsung muncul di daftar kerja dia.');
-    }
-
-    /** Lepas tautan checklist sebuah toko ke seorang akun. */
-    public function copotTautan()
-    {
-        $bahan = $this->bahanDelegasi();
-
-        if ($bahan === null) {
-            return redirect()->to(site_url('admin/checklist'))
-                ->with('galat', 'Tokonya atau akunnya tidak dikenali.');
-        }
-
-        [$id_toko, $user] = $bahan;
-
         $model = new TokoOnlineModel();
 
         if (! $model->aksesPunyaUser($id_toko, $user)) {
-            return redirect()->to(site_url('admin/checklist'))
-                ->with('galat', 'Tautan itu sudah tidak ada.');
+            return $this->balas($json, false, 'Tautan itu sudah tidak ada.');
         }
 
         $model->copotAkses($id_toko, $user);
         $this->buangCacheToko([$user]);
 
-        return redirect()->to(site_url('admin/checklist'))
-            ->with('sukses', 'Tautan dilepas. Sesi checklist yang sudah pernah dibuka di toko itu tidak berubah.');
+        // mencabut tautan tidak selalu mencabut aksesnya: kalau juragan toko ini
+        // masih dipegang akun itu, tokonya tetap ikut lewat jalur juragan
+        $lewat = $this->pegangLewatJuragan($user, $juragan_id);
+
+        return $this->balas($json, true, 'Tautan ' . $nama . ' dilepas dari toko ini.'
+            . ($lewat ? ' Dia tetap bisa membukanya lewat juragan yang dipegangnya.' : ''),
+            ['lewat_juragan' => $lewat]);
     }
 
-    /** Kelola templat butir (Admin & Superadmin). */
-    public function aturan()
+    /**
+     * Satu aksi, dua bentuk balasan: JSON untuk tombol yang berjalan di latar,
+     * redirect + flash untuk form biasa (halaman tanpa JavaScript).
+     *
+     * @param array<string, mixed> $tambahan lapangan ekstra untuk balasan JSON
+     *
+     * @return \CodeIgniter\HTTP\RedirectResponse|\CodeIgniter\HTTP\ResponseInterface
+     */
+    private function balas(bool $json, bool $ok, string $pesan, array $tambahan = [])
     {
-        helper('fungsi');
+        if ($json) {
+            return $this->response->setJSON(['ok' => $ok, 'pesan' => $pesan] + $tambahan);
+        }
 
-        $model  = new ChecklistModel();
-        $jenis  = (string) $this->request->getGet('jenis') === 'email' ? 'email' : 'toko';
-        $toko   = $this->tokoCek();
-
-        return view('admin/checklist/aturan', [
-            'title'    => 'Templat Checklist',
-            'jenis'    => $jenis,
-            'butir'    => $model->semuaButir($jenis),
-            'toko'     => $toko,
-            'meta'     => ChecklistModel::JENIS,
-            'platform' => $this->platform(),
-            'pegawai'  => $this->calonDelegasi(),
-            'pemegang' => $this->pemegangCek($toko),
-            'juragan'  => $this->tokoId(),
-            'kabar'    => (string) session()->getFlashdata('sukses'),
-            'galat'    => (string) session()->getFlashdata('galat'),
-        ]);
+        return redirect()->back()->with($ok ? 'sukses' : 'galat', $pesan);
     }
 
-    public function simpanButir()
+    /**
+     * Menghapus satu toko beserta seluruh riwayat checklistnya (Admin & Superadmin).
+     *
+     * Ini jalan satu-satunya yang benar-benar membuang baris toko, jadi semuanya
+     * ikut dibersihkan dalam satu transaksi dan cache orang yang memegangnya
+     * dibuang. Layar menawarkan enam detik untuk mengurungkan sebelum permintaan
+     * ini dikirim — sesudah itu tidak ada yang bisa dikembalikan.
+     *
+     * @return \CodeIgniter\HTTP\RedirectResponse|\CodeIgniter\HTTP\ResponseInterface
+     */
+    public function hapusToko()
     {
-        helper('fungsi');
-
-        $model = new ChecklistModel();
-        $judul = trim((string) $this->request->getPost('judul'));
-        $id    = (int) $this->request->getPost('id_item');
-        $jenis = (string) $this->request->getPost('jenis') === 'email' ? 'email' : 'toko';
-        $toko  = (int) $this->request->getPost('toko_id');
-
-        if ($judul === '') {
-            return redirect()->back()->with('galat', 'Tulisi dulu butirnya.')->withInput();
-        }
-
-        if ($toko > 0 && ! isset($this->tokoCek()[$toko])) {
-            return redirect()->back()->with('galat', 'Toko tambahan bukan delegasimu.')->withInput();
-        }
-
-        if ($id > 0) {
-            $punya = $model->semuaButir($jenis);
-            $kenal = false;
-
-            foreach ($punya as $b) {
-                $kenal = $kenal || (int) $b['id_item'] === $id;
-            }
-
-            if (! $kenal) {
-                throw PageNotFoundException::forPageNotFound();
-            }
-        }
-
-        $model->simpanButir([
-            'jenis'    => $jenis,
-            'toko_id'  => $toko > 0 ? $toko : null,
-            'judul'    => $judul,
-            'hint'     => (string) $this->request->getPost('hint'),
-            'urut'     => (int) $this->request->getPost('urut'),
-            'wajib'    => (int) $this->request->getPost('wajib'),
-            'aktif'    => (int) $this->request->getPost('aktif'),
-        ], (int) session()->get('id'), $id);
-
-        return redirect()->to(site_url('admin/checklist/aturan?jenis=' . $jenis))->with('sukses', 'Butir disimpan.');
-    }
-
-    public function matikanButir()
-    {
-        $model = new ChecklistModel();
-        $id    = (int) $this->request->getPost('id_item');
-        $jenis = (string) $this->request->getPost('jenis') === 'email' ? 'email' : 'toko';
-        $kenal = false;
-
-        foreach ($model->semuaButir($jenis) as $b) {
-            $kenal = $kenal || (int) $b['id_item'] === $id;
-        }
-
-        if (! $kenal) {
+        if (! $this->bolehKelola()) {
             throw PageNotFoundException::forPageNotFound();
         }
 
-        $model->setButirAktif($id, (string) $this->request->getPost('aktif') === '1');
+        $json    = $this->request->isAJAX();
+        $id_toko = (int) $this->request->getPost('id_toko');
+        $model   = new TokoOnlineModel();
 
-        return redirect()->to(site_url('admin/checklist/aturan?jenis=' . $jenis))->with('sukses', 'Status butir diperbarui.');
+        // pemegang lewat juragan harus diketahui SEBELUM tokonya hilang: setelah
+        // barisnya tidak ada, jalurnya tidak bisa ditelusuri lagi
+        $lama    = $id_toko > 0 ? $model->satu($id_toko) : null;
+        $warisan = [];
+
+        if ($lama !== null && $lama['juragan_id'] !== null) {
+            foreach ((new JuraganModel())->pengelola([(int) $lama['juragan_id']]) as $per_level) {
+                foreach ($per_level as $daftar) {
+                    foreach ($daftar as $o) {
+                        $warisan[] = (int) $o['id'];
+                    }
+                }
+            }
+        }
+
+        $hasil = $model->hapus($id_toko);
+
+        if ($hasil === null) {
+            return $this->balas($json, false, 'Tokonya sudah tidak ada di daftar.');
+        }
+
+        $terkena = array_values(array_unique(array_merge($hasil['user'], $warisan)));
+        $this->buangCacheToko($terkena);
+
+        return $this->balas($json, true, 'Toko ' . $hasil['nama'] . ' dihapus.'
+            . ($hasil['lembar'] > 0 ? ' ' . $hasil['lembar'] . ' lembar checklist ikut terhapus.' : '')
+            . ($hasil['tautan'] > 0 ? ' ' . $hasil['tautan'] . ' tautan CS dilepas.' : ''),
+            ['id_toko' => $id_toko, 'lembar' => $hasil['lembar'], 'tautan' => $hasil['tautan']]);
     }
 
     /**
@@ -368,35 +299,81 @@ class Checklist extends BaseController
             throw PageNotFoundException::forPageNotFound();
         }
 
-        $model   = new TokoOnlineModel();
-        $id_toko = (int) $this->request->getPost('id_toko');
-        $nama    = trim((string) $this->request->getPost('nama'));
-        $juragan = (int) $this->request->getPost('juragan_id');
+        $model    = new TokoOnlineModel();
+        $id_toko  = (int) $this->request->getPost('id_toko');
+        $nama     = trim((string) $this->request->getPost('nama'));
 
         if ($nama === '') {
             return redirect()->back()->with('galat', 'Nama tokonya diisi dulu.')->withInput();
         }
 
-        if ($juragan > 0 && ! $this->bolehToko($juragan)) {
-            return redirect()->back()->with('galat', 'Juragan itu tidak boleh ditautkan oleh akun ini.')->withInput();
+        // Platform datang dari dua tempat: pilihan di dropdown, atau isian
+        // "Tambah platform" yang hanya dirender untuk Superadmin. Yang diketik
+        // disimpan ke asal_order, jadi pilihannya ikut bertambah untuk toko lain
+        $superadmin = (string) session()->get('level') === 'superadmin';
+        $pilih      = trim((string) $this->request->getPost('platform'));
+        $ketik      = $superadmin ? trim((string) $this->request->getPost('platform_baru')) : '';
+
+        if ($pilih === self::PLATFORM_BARU) {
+            if ($ketik === '') {
+                return redirect()->back()
+                    ->with('galat', 'Nama platform barunya diisi dulu, atau pilih "Tanpa platform".')
+                    ->withInput();
+            }
+
+            $platform = $this->platformTetap($ketik, true);
+        } else {
+            $platform = $this->platformTetap($pilih, false);
         }
 
-        if ($id_toko > 0 && $model->satu($id_toko) === null) {
+        if ($platform === null) {
+            return redirect()->back()->with('galat',
+                'Platform "' . ($pilih === self::PLATFORM_BARU ? $ketik : $pilih)
+                . '" belum terdaftar. Hanya Superadmin yang bisa menambah platform baru.')->withInput();
+        }
+
+        $lama = $id_toko > 0 ? $model->satu($id_toko) : null;
+
+        if ($id_toko > 0 && $lama === null) {
             throw PageNotFoundException::forPageNotFound();
         }
 
-        $id_toko = $model->simpan([
-            'juragan_id' => $juragan,
-            'platform'   => (string) $this->request->getPost('platform'),
-            'nama'       => $nama,
-            'url'        => (string) $this->request->getPost('url'),
-            'catatan'    => (string) $this->request->getPost('catatan'),
-            'aktif'      => (string) $this->request->getPost('aktif') === '0' ? 0 : 1,
-        ], (int) session()->get('id'), $id_toko);
+        // juragan tidak lagi dipilih dari popus toko: toko baru berdiri sendiri,
+        // sedangkan toko lama tetap memakai juragan yang sudah menempel supaya
+        // akses warisan dan labelnya di daftar tidak hilang saat disunting
+        $juragan = $lama !== null && $lama['juragan_id'] !== null ? (int) $lama['juragan_id'] : 0;
+
+        // satu juragan hanya boleh punya satu toko per platform (kunci unik
+        // juragan_id_platform). Ditolak di sini dengan nama tokonya, bukan
+        // dibiarkan meledak sebagai galat basis data di tengah penyimpanan
+        $kembar = $model->kembar($juragan, $platform, $id_toko);
+
+        if ($kembar !== null) {
+            return redirect()->back()->with('galat',
+                'Toko ' . (string) $kembar['nama'] . ' sudah memakai '
+                . ($platform === '' ? 'pilihan tanpa platform' : 'platform ' . $platform)
+                . ' untuk juragan itu. Sunting toko itu, atau pilih platform lain.')->withInput();
+        }
+
+        try {
+            $id_toko = $model->simpan([
+                'juragan_id' => $juragan,
+                'platform'   => $platform,
+                'nama'       => $nama,
+                'url'        => (string) $this->request->getPost('url'),
+                'catatan'    => (string) $this->request->getPost('catatan'),
+                'aktif'      => (string) $this->request->getPost('aktif') === '0' ? 0 : 1,
+            ], (int) session()->get('id'), $id_toko);
+        } catch (DatabaseException $e) {
+            // dua penyunting bisa menyimpan di saat yang sama; pemeriksaan di atas
+            // tidak melihat baris yang belum tersimpan, kunci uniknya yang melihat
+            return redirect()->back()->with('galat',
+                'Kombinasi juragan dan platform itu baru saja dipakai toko lain. Muat ulang halamannya, lalu simpan lagi.')->withInput();
+        }
 
         $ubah = $this->tautkanCs($id_toko, (array) $this->request->getPost('cs'));
 
-        return redirect()->to(site_url('admin/checklist/aturan'))
+        return redirect()->to(site_url('admin/checklist?tab=kelola'))
             ->with('sukses', 'Toko disimpan.' . ($ubah > 0 ? ' ' . $ubah . ' tautan CS diperbarui.' : ''));
     }
 
@@ -528,26 +505,18 @@ class Checklist extends BaseController
     }
 
     /**
-     * Memegang toko berarti akun itu bisa bekerja di tokonya pada semua halaman,
-     * jadi yang boleh mengubah tautannya hanya Superadmin.
-     */
-    private function bolehDelegasi(): bool
-    {
-        return (string) session()->get('level') === 'superadmin';
-    }
-
-    /**
-     * Bahan satu aksi delegasi, sudah lolos pagar. null menjawab dua hal
-     * sekaligus: tokonya tidak ada dan akunnya bukan Admin/CS.
+     * Bahan satu tautan langsung toko-akun, sudah lolos pagar. null menjawab dua
+     * hal sekaligus: tokonya tidak ada dan akunnya bukan Admin/CS.
      *
      * Akun nonaktif ikut lolos di sini karena mencabut tautannya justru masih
-     * perlu — yang boleh ditambahkan hanya yang aktif, itu dijaga delegasi().
+     * perlu; menambah pemegang hanya lewat popus sunting toko, yang daftarnya
+     * memang cuma berisi akun aktif.
      *
      * @return array{0:int,1:int,2:string,3:?int}|null id_toko, id akun, nama, juragan_id
      */
-    private function bahanDelegasi(): ?array
+    private function bahanTautan(): ?array
     {
-        if (! $this->bolehDelegasi()) {
+        if (! $this->bolehKelola()) {
             throw PageNotFoundException::forPageNotFound();
         }
 
@@ -561,6 +530,45 @@ class Checklist extends BaseController
         }
 
         return [$id_toko, $user, $akun->name . ' (' . $akun->level . ')', $toko['juragan_id']];
+    }
+
+    /**
+     * Apakah akun ini memegang juragan toko tersebut — jalur warisan, bukan
+     * tautan langsung. Dipakai untuk menjelaskan ke orang kenapa sebuah akun
+     * tetap bisa membuka toko walau tautannya dicabut.
+     */
+    private function pegangLewatJuragan(int $user, ?int $juragan_id): bool
+    {
+        if ($juragan_id === null) {
+            return false;
+        }
+
+        foreach ((new JuraganModel())->pengelola([(int) $juragan_id])[(int) $juragan_id] ?? [] as $daftar) {
+            foreach ($daftar as $a) {
+                if ((int) $a['id'] === $user) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Semua juragan untuk label di daftar toko: label harus tetap menyebut nama
+     * juragan toko milik orang lain yang ikut tampil di layar.
+     *
+     * @return array<int, string>
+     */
+    private function petaJuragan(): array
+    {
+        $peta = [];
+
+        foreach ((new JuraganModel())->orderBy('nama_juragan', 'ASC')->findAll() as $j) {
+            $peta[(int) $j->id_juragan] = (string) $j->nama_juragan;
+        }
+
+        return $peta;
     }
 
     /** @return array<int, string> id akun => "nama (level)", khusus Admin/CS yang aktif */
@@ -643,29 +651,128 @@ class Checklist extends BaseController
     {
         $platform = [];
 
-        foreach ((new LabelAsal())->where('status', 1)->orderBy('label', 'ASC')->findAll() as $a) {
+        // status asal_order adalah ENUM('0','1'): angka 1 di sini dibandingkan
+        // MySQL dengan indeks enum, bukan isinya, jadi harus benar-benar '1'
+        // — kalau tidak, daftar platformnya kosong dan hanya "Tanpa platform"
+        // yang tersisa di popus
+        foreach ((new LabelAsal())->where('status', '1')->orderBy('label', 'ASC')->findAll() as $a) {
             $platform[(string) $a->label] = (string) $a->label;
         }
 
         return $platform;
     }
 
-    /** @return array<int, string> */
-    private function tokoId(): array
+    /**
+     * Rincian semua platform di asal_order, termasuk yang sudah disembunyikan.
+     *
+     * Yang dimatikan tetap ditampilkan (redup, bertanda "nonaktif") supaya
+     * Superadmin bisa memakainya lagi tanpa menebak nama lamanya. Jumlah toko
+     * ikut ditulis: itulah alasan sebuah platform tidak boleh hilang diam-diam.
+     *
+     * @return list<array{id: int, label: string, aktif: bool, toko: int}>
+     */
+    private function platformTersimpan(): array
     {
-        $ids = $this->tokoBoleh();
+        $pakai = (new TokoOnlineModel())->jumlahPerPlatform();
+        $baris = [];
 
-        if ($ids === []) {
-            return [];
+        foreach ((new LabelAsal())->orderBy('label', 'ASC')->findAll() as $a) {
+            $label   = (string) $a->label;
+            $baris[] = [
+                'id'    => (int) $a->id,
+                'label' => $label,
+                'aktif' => (string) $a->status === '1',
+                'toko'  => $pakai[$label] ?? 0,
+            ];
         }
 
-        $peta = [];
+        return $baris;
+    }
 
-        foreach ((new \App\Models\JuraganModel())->whereIn('id_juragan', $ids)->orderBy('nama_juragan', 'ASC')->findAll() as $t) {
-            $peta[(int) $t->id_juragan] = $t->nama_juragan;
+    /**
+     * Sembunyikan / pakai lagi satu platform (khusus Superadmin).
+     *
+     * Barisnya tidak dihapus: label_invoice.source_id menunjuk ke asal_order.id,
+     * jadi nota lama harus tetap menemukan asalnya. "Hapus" di layar berarti
+     * pilihan itu hilang dari dropdown platform, bukan datanya lenyap.
+     */
+    public function platformUbah()
+    {
+        if ((string) session()->get('level') !== 'superadmin') {
+            throw PageNotFoundException::forPageNotFound();
         }
 
-        return $peta;
+        $id    = (int) $this->request->getPost('id');
+        $hidup = (string) $this->request->getPost('aktif') === '1';
+
+        $model = new LabelAsal();
+        $label = $id > 0 ? $model->find($id) : null;
+
+        if ($label === null) {
+            return $this->response->setJSON(['ok' => false, 'pesan' => 'Platform itu sudah tidak ada.']);
+        }
+
+        $model->update($id, ['status' => $hidup ? '1' : '0']);
+
+        return $this->response->setJSON([
+            'ok'    => true,
+            'id'    => $id,
+            'label' => (string) $label->label,
+            'aktif' => $hidup,
+            'pesan' => $hidup
+                ? 'Platform ' . (string) $label->label . ' dipakai lagi di daftar pilihan.'
+                : 'Platform ' . (string) $label->label . ' disembunyikan. Toko yang memakainya tidak berubah.',
+        ]);
+    }
+
+    /**
+     * Nama platform yang benar-benar dipakai sebuah toko.
+     *
+     * Yang sudah terdaftar dikembalikan apa adanya (label lama menang, supaya
+     * "shopee" tidak melahirkan kembaran "Shopee"). Yang belum ada hanya
+     * diterima dari Superadmin, dan langsung disimpan ke asal_order — itulah
+     * arti "tambah platform": pilihannya ikut bertambah untuk toko berikutnya.
+     * Label yang sempat dimatikan dihidupkan lagi, bukan digandakan.
+     *
+     * @return string|null null kalau nama itu tidak dikenal dan tidak boleh dibuat
+     */
+    private function platformTetap(string $diketik, bool $bolehTambah): ?string
+    {
+        $nama = mb_substr(trim(preg_replace('/\s+/u', ' ', $diketik) ?? ''), 0, 25);
+
+        if ($nama === '') {
+            return '';
+        }
+
+        $model = new LabelAsal();
+        $kecil = mb_strtolower($nama);
+
+        foreach ($model->findAll() as $a) {
+            if (mb_strtolower((string) $a->label) !== $kecil) {
+                continue;
+            }
+
+            if ((string) $a->status !== '1') {
+                // label lama yang sempat dimatikan dihidupkan lagi oleh Superadmin;
+                // akun lain cukup memakainya untuk toko ini tanpa mengubah pilihan
+                // platform yang dilihat semua orang
+                if (! $bolehTambah) {
+                    return (string) $a->label;
+                }
+
+                $model->update($a->id, ['status' => '1']);
+            }
+
+            return (string) $a->label;
+        }
+
+        if (! $bolehTambah) {
+            return null;
+        }
+
+        $model->insert(['label' => $nama, 'status' => '1']);
+
+        return $nama;
     }
 
     /**
