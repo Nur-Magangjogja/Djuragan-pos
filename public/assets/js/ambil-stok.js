@@ -2,17 +2,28 @@
  * Panel "Ambil dari stok produk" di modal tambah orderan.
  *
  * Ditulis satu kali karena modalnya sama di tiga halaman (Tulis admin, Tulis CS,
- * Sunting admin) dan dipasang lewat stok_panel_form(). Yang dicarinya hanya varian
- * stok milik toko yang sedang dipilih di form, polanya sengaja disamakan dengan
- * cari-pelanggan.js: debounce, token permintaan supaya jawaban yang terlambat
- * dibuang, dan saran dirender lewat .text() supaya nama barang tidak pernah jadi
- * markup.
+ * Sunting admin) dan dipasang lewat stok_panel_form(). Pemilihnya satu combobox:
+ * kolom yang bisa diketik untuk menyaring sekaligus membuka daftar varian milik
+ * toko + kolam yang sedang dipilih di form. Seluruh isi kolam diambil sekali per
+ * kombinasi itu, jadi mengetik hanya menyaring data yang sudah ada di halaman -
+ * tidak ada permintaan baru untuk tiap huruf.
+ *
+ * Daftar yang kosong dijawab apa adanya ("Tidak ada produk"), bukan dengan
+ * kotak kosong; toko yang belum dipilih dan kegagalan memuat juga punya
+ * kabarnya sendiri.
+ *
+ * Panel dibuka dari pancingan "Ambil dari stok produk?" dan ditutup dari tombol
+ * "Tutup" di kanan kepalanya. "Tutup" menyimpan pilihan yang sudah diambil,
+ * sedangkan "Tulis manual" melepas taunya ke stok.
  *
  * Memilih varian mengisi kode, harga, dan ukuran kolom isian lalu menyimpan
  * id_stok-nya di hidden [name="stok_produk"]; halaman pemanggil baris orderan
  * membacanya lewat window.STOK.ambil() dan mengirimnya sebagai produk[k][stok_id].
  * Kalau setelah itu pengguna mengubah kode/harga/ukuran sendiri, taunya ke stok
  * dilepas lagi - barisnya sudah tidak menggambarkan varian itu.
+ *
+ * Semua teks yang datang dari basis data dirender lewat .text(), tidak pernah
+ * lewat HTML, karena kode produk boleh berisi karakter apa pun.
  */
 (function ($) {
   "use strict";
@@ -23,18 +34,35 @@
     return;
   }
 
-  var $cari = $panel.find(".stok-cari"),
+  var $katalog = $panel.find(".stok-katalog"),
+    $daftar = $panel.find(".stok-daftar"),
+    $wadah = $panel.find(".stok-pilih"),
+    $panah = $panel.find(".stok-panah"),
     $id = $panel.find(".stok-id"),
-    $saran = $panel.find(".saran-stok"),
     $catatan = $panel.find(".stok-catatan"),
+    $galat = $panel.find(".stok-galat"),
     $acuan = $panel.find(".foto-acuan"),
     $isi = $panel.find(".stok-foto-isi"),
     $batal = $panel.find(".stok-batal"),
+    $tutup = $panel.find(".stok-tutup"),
     $pemicu = $(".stok-pemicu"),
     $buka = $(".stok-buka"),
     alamatCari = $panel.data("cari"),
     alamatBaca = $panel.data("baca"),
     token = 0,
+    penanda = 0,
+    // seluruh varian kolam toko ini, hasil saringannya, dan baris yang sedang
+    // disorot keyboard
+    daftar = [],
+    tampil = [],
+    sorot = -1,
+    // kunci "juragan|kolam" yang daftarnya sudah dimuat; nama `siap` sengaja
+    // tidak dipakai karena bawaanSinkron() sudah punya variabel lokal itu
+    dimuat = "",
+    kabar = "",
+    // tanda dari server: daftar dipotong di batasnya, jadi isinya tidak tampak
+    // seperti daftar lengkap padahal masih panjang
+    batas = false,
     dipilih = null,
     bawaan = {},
     dimintak = {};
@@ -43,53 +71,182 @@
     return "Rp " + Number(n || 0).toLocaleString("id-ID");
   }
 
-  function saranTampilkan(hasil, pesan) {
-    $saran.empty().removeClass("d-none");
+  /* Teks yang menempel di kolom setelah barang dipilih. */
+  function labelPilihan(v) {
+    return (
+      String(v.kode || "") +
+      (v.ukuran ? " ( " + String(v.ukuran).toUpperCase() + " )" : "")
+    );
+  }
 
-    if (pesan) {
-      $saran.append(
-        $('<div class="list-group-item text-muted small py-2"></div>').text(
-          pesan,
-        ),
+  /* Baris daftar: nama barang sudah dipakai sebagai judul kelompok, jadi di
+     sini yang ditulis hanya ukuran, harga, stok kolam, dan keterangannya. */
+  function labelBaris(v) {
+    return (
+      (String(v.ukuran || "").toUpperCase() || "tanpa ukuran") +
+      " · " +
+      rupiah(v.harga) +
+      " · stok " +
+      (v.kolam === "sewa" ? "sewa " : "") +
+      v.stok +
+      (v.keterangan ? " · " + v.keterangan : "")
+    );
+  }
+
+  function kataSaring() {
+    return $.trim($katalog.val()).toLowerCase();
+  }
+
+  function saring() {
+    var kata = kataSaring();
+
+    tampil =
+      kata === ""
+        ? daftar.slice()
+        : $.grep(daftar, function (v) {
+            return (
+              String(v.kode || "")
+                .toLowerCase()
+                .indexOf(kata) !== -1 ||
+              String(v.ukuran || "")
+                .toLowerCase()
+                .indexOf(kata) !== -1 ||
+              String(v.keterangan || "")
+                .toLowerCase()
+                .indexOf(kata) !== -1
+            );
+          });
+  }
+
+  function gambar() {
+    $daftar.empty();
+    sorot = -1;
+
+    // tiap kali isi berubah, daftar mulai dari atas lagi: kalau tidak, daftar
+    // panjang bisa terbuka di tengah-tengah guliran sebelumnya
+    $daftar.scrollTop(0);
+
+    if (kabar !== "") {
+      $daftar.append(
+        $(
+          '<div class="stok-kosong" role="option" aria-disabled="true"></div>',
+        ).text(kabar),
       );
 
       return;
     }
 
-    $.each(hasil, function (i, v) {
-      var $item = $(
-          '<button type="button" class="list-group-item list-group-item-action text-start py-2"></button>',
-        ).data("stok", v),
-        $judul = $('<span class="d-block fw-bold"></span>').text(
-          v.kode + " ( " + String(v.ukuran).toUpperCase() + " )",
-        ),
-        $meta = $('<span class="d-block small"></span>').text(
-          rupiah(v.harga) +
-            " · stok " +
-            (v.kolam === "sewa" ? "sewa " : "") +
-            v.stok +
-            (v.keterangan ? " · " + v.keterangan : ""),
-        );
+    if (tampil.length === 0) {
+      $daftar.append(
+        $(
+          '<div class="stok-kosong" role="option" aria-disabled="true"></div>',
+        ).text("Tidak ada produk yang cocok"),
+      );
 
-      if (Number(v.stok) <= 0) {
-        $meta
-          .append(" ")
-          .append(
-            $('<span class="badge bg-danger-subtle text-danger"></span>').text(
-              "habis",
-            ),
-          );
+      return;
+    }
+
+    var grup = {};
+
+    $.each(tampil, function (i, v) {
+      var nama = String(v.kode || "").toUpperCase();
+
+      if (!grup[nama]) {
+        grup[nama] = $('<div class="stok-grup"></div>')
+          .text(nama)
+          .appendTo($daftar);
       }
 
-      $item.append($judul).append($meta);
-      $saran.append($item);
+      $('<button type="button" class="stok-item" role="option"></button>')
+        .data("stok", v)
+        .toggleClass("habis", Number(v.stok) <= 0)
+        .append($('<span class="stok-meta"></span>').text(labelBaris(v)))
+        .appendTo(grup[nama]);
     });
+
+    // kabar pemotongan hanya jujur selama saringan tidak mempersempit daftar
+    if (batas && tampil.length === daftar.length) {
+      $daftar.append(
+        $(
+          '<div class="stok-kosong" role="option" aria-disabled="true"></div>',
+        ).text(
+          "Daftar dipotong di " +
+            daftar.length +
+            " varian pertama — ketik nama barang untuk menjangkau sisanya.",
+        ),
+      );
+    }
   }
 
+  function bukaDaftar() {
+    muat(false);
+    saring();
+    gambar();
+    $daftar.removeClass("d-none");
+    $wadah.addClass("terbuka");
+    $katalog.attr("aria-expanded", "true");
+  }
+
+  function tutupDaftar() {
+    $daftar.addClass("d-none").empty();
+    $wadah.removeClass("terbuka");
+    $katalog.attr("aria-expanded", "false");
+    sorot = -1;
+  }
+
+  /* Daftar dibuka-tutup dari satu tempat: klik pada kolom atau pada panahnya.
+     Kolomnya tidak lagi membuka daftar tiap kali mendapat fokus, karena klik
+     pertama selalu memicu focus lalu click berurutan - tanpa penanda itu daftar
+     yang baru dibuka akan langsung ditutup lagi oleh klik yang sama. */
+  function gantiDaftar() {
+    if ($daftar.hasClass("d-none")) {
+      bukaDaftar();
+
+      return;
+    }
+
+    tutupDaftar();
+  }
+
+  /* Sorotan keyboard dijaga tetap terlihat di daftar yang bisa digulir. */
+  function geserSorot(jarak) {
+    var $baris = $daftar.find(".stok-item");
+
+    if ($baris.length === 0) {
+      return;
+    }
+
+    sorot = (sorot + jarak + $baris.length) % $baris.length;
+    $baris.removeClass("aktif").eq(sorot).addClass("aktif");
+
+    var kotak = $daftar[0],
+      baris = $baris.get(sorot);
+
+    if (!baris) {
+      return;
+    }
+
+    if (baris.offsetTop < kotak.scrollTop) {
+      kotak.scrollTop = baris.offsetTop;
+    } else if (
+      baris.offsetTop + baris.offsetHeight >
+      kotak.scrollTop + kotak.clientHeight
+    ) {
+      kotak.scrollTop =
+        baris.offsetTop + baris.offsetHeight - kotak.clientHeight;
+    }
+  }
+
+  /*
+   * Pilihan yang sedang terpakai dilepas: kolom kembali kosong (placeholder
+   * "Pilih Barang" yang muncul) dan isian form yang tadi diisi stok dibersihkan.
+   */
   function kosongkan() {
     dipilih = null;
     $id.val("");
+    $katalog.val("");
     $catatan.addClass("d-none").text("");
+    $galat.addClass("d-none").text("");
     $acuan.addClass("d-none");
     $isi.empty();
     $batal.addClass("d-none");
@@ -97,20 +254,22 @@
 
   /*
    * Panel tidak tampil bawaan (d-none dari stok_panel_form). Pancingan
-   * "Ambil dari stok produk?" membuka panel dan menyembunyikan dirinya lagi;
-   * "Tulis manual" dan penutupan modal mengembalikannya ke keadaan lipat.
+   * "Ambil dari stok produk?" membuka panel, memuat daftarnya kalau belum,
+   * dan menyembunyikan dirinya lagi; "Tutup" mengembalikannya ke keadaan lipat
+   * tanpa mengubah pilihan yang sudah diambil.
    */
   function bukaPanel() {
     $panel.removeClass("d-none");
     $pemicu.addClass("d-none");
     $buka.attr("aria-expanded", "true");
+    muat(false);
   }
 
   function tutupPanel() {
+    tutupDaftar();
     $panel.addClass("d-none");
     $pemicu.removeClass("d-none");
     $buka.attr("aria-expanded", "false");
-    $saran.addClass("d-none").empty();
   }
 
   function fotoMuat(id) {
@@ -160,7 +319,7 @@
    * jadi dua ukuran dari kartu yang sama tidak boleh tampil dobel.
    */
   function stokTerpakai() {
-    var aktif = {};
+    var pakai = {};
 
     $('#iForm input[name^="produk["][name$="[stok_id]"]').each(function () {
       var id = parseInt(this.value, 10);
@@ -174,11 +333,11 @@
       );
 
       if (kode !== "") {
-        aktif[kode] = id;
+        pakai[kode] = id;
       }
     });
 
-    return aktif;
+    return pakai;
   }
 
   function bawaanSinkron() {
@@ -215,6 +374,12 @@
     window.FOTO.bawaan_sedia(siap);
   }
 
+  /*
+   * Menempelkan satu varian ke form. Kode, harga, dan ukuran kolom isian
+   * diisi; harga masih boleh dinegosiasi setelah ini tanpa memutus taunya ke
+   * stok, tapi mengubah kode atau ukuran memang berarti barisnya tidak lagi
+   * menggambarkan varian itu (lihat pemantau di bawah).
+   */
   function isi(v) {
     var $ukuran = $("#ukuran"),
       nilai = String(v.ukuran || ""),
@@ -224,17 +389,10 @@
 
     dipilih = v;
     $id.val(v.id_stok);
+    $katalog.val(labelPilihan(v));
+    $galat.addClass("d-none").text("");
 
-    // kode bisa saja belum ikut tercantum di dropdown katalog produk (kolam
-    // ini hanya membawa 40 teratas), jadi opsinya diselipkan dulu supaya
-    // val() benar-benar kebaca oleh halaman pemilih item
-    var $kode = $("#kode_produk");
-
-    if ($kode.is("select") && $kode.find('option[value="' + window.CSS.escape(v.kode) + '"]').length === 0) {
-      $("<option>").val(v.kode).text(v.kode + " \u00B7 (di luar katalog)").appendTo($kode);
-    }
-
-    $kode.val(v.kode);
+    $("#kode_produk").val(v.kode);
     $("#harga_satuan").val(v.harga);
 
     // ukuran stok bisa saja belum terdaftar di dropdown (barang baru), jadi
@@ -262,66 +420,89 @@
           " ( " +
           String(v.ukuran).toUpperCase() +
           " ) · " +
-          rupiah(v.harga),
+          rupiah(v.harga) +
+          " · stok tersedia " +
+          v.stok,
       );
     $batal.removeClass("d-none");
-    $saran.addClass("d-none").empty();
-    $cari.val("");
 
     fotoMuat(v.id_stok);
   }
 
-  function cari() {
-    var q = $.trim($cari.val()),
-      juragan = parseInt($('select[name="juragan"]').val(), 10) || 0,
-      // tipe pesanan menentukan kolam yang dicari: unit jual atau unit sewa
-      tipe = $("#tipe_pesanan").val() || "",
-      jalan = ++token;
-
-    if (q.length < 2) {
-      $saran.addClass("d-none").empty();
-
+  function pilih(v) {
+    if (!v) {
       return;
     }
 
-    if (juragan < 1) {
-      saranTampilkan([], "Pilih juragan dulu ya.");
-
-      return;
-    }
-
-    $.getJSON(alamatCari, { q: q, juragan_id: juragan, tipe: tipe })
-      .done(function (b) {
-        if (token !== jalan) {
-          return;
-        }
-
-        var hasil = (b && b.results) || [];
-
-        saranTampilkan(
-          hasil,
-          hasil.length === 0
-            ? "Barang itu belum dipantau stoknya di toko ini."
-            : "",
-        );
-      })
-      .fail(function () {
-        if (token !== jalan) {
-          return;
-        }
-
-        saranTampilkan([], "Pencarian gagal, coba lagi.");
-      });
+    tutupDaftar();
+    isi(v);
   }
 
-  var saatKetik = (function () {
-    var timer;
+  /*
+   * Daftar varian satu toko + satu kolam dimuat sekali per kombinasi; ganti
+   * toko atau ganti jenis layanan membuat kunci ini basi, jadi pemanggil cukup
+   * mengosongkan `dimuat`. `q` sengaja tidak dikirim: tanpanya api/stok/cari
+   * menjawab seluruh isi kolam, dan penyaringannya dikerjakan di sini.
+   */
+  function muat(paksa) {
+    var juragan = parseInt($('select[name="juragan"]').val(), 10) || 0,
+      tipe = $("#tipe_pesanan").val() || "",
+      kunci = juragan + "|" + tipe;
 
-    return function () {
-      clearTimeout(timer);
-      timer = setTimeout(cari, 300);
-    };
-  })();
+    if (juragan < 1) {
+      dimuat = "";
+      daftar = [];
+      batas = false;
+      kabar = "Pilih juragan dulu ya.";
+
+      return;
+    }
+
+    if (!paksa && dimuat === kunci) {
+      // daftar sudah terpasang: kabar lama dihitung ulang dari isinya, bukan
+      // dikosongkan buta -- toko tanpa produk memang "Tidak ada produk"
+      kabar = daftar.length === 0 ? "Tidak ada produk" : "";
+
+      return;
+    }
+
+    dimuat = kunci;
+    daftar = [];
+    kabar = "Memuat daftar produk…";
+    saring();
+    gambar();
+
+    var jalan = ++penanda;
+
+    $.getJSON(alamatCari, { juragan_id: juragan, tipe: tipe })
+      .done(function (b) {
+        // permintaan yang lebih baru sudah menyusul: jawaban lama dibuang
+        if (penanda !== jalan) {
+          return;
+        }
+
+        daftar = (b && b.results) || [];
+        batas = !!(b && b.terbatas);
+        // toko yang belum punya produk dipantau dijawab apa adanya, di dalam
+        // daftarnya langsung
+        kabar = daftar.length === 0 ? "Tidak ada produk" : "";
+        saring();
+        gambar();
+      })
+      .fail(function () {
+        if (penanda !== jalan) {
+          return;
+        }
+
+        // jangan mengunci kunci ini: percobaan berikutnya boleh mengulang
+        dimuat = "";
+        daftar = [];
+        batas = false;
+        kabar = "Daftar produk gagal dimuat, coba buka lagi.";
+        saring();
+        gambar();
+      });
+  }
 
   // mengubah identitas baris (kode atau ukuran) berarti taunya ke stok sudah
   // tidak cocok lagi, jadi taunya dilepas; harga boleh dinegosiasikan per
@@ -339,36 +520,170 @@
   });
 
   /*
-   * Tipe pesanan menentukan kolam stok yang dicari (unit jual atau unit sewa),
-   * jadi ganti tipe membuat semuanya basi: harga dan unit yang tadi diambil
-   * berasal dari kolam yang lama, dan saran yang masih terbuka menampilkan
+   * Tipe pesanan menentukan kolam stok yang ditawarkan (unit jual atau unit
+   * sewa), jadi ganti tipe membuat semuanya basi: harga dan unit yang tadi
+   * diambil berasal dari kolam yang lama, dan daftar yang terbuka menampilkan
    * kolam yang salah.
    */
   $("#tipe_pesanan").on("change", function () {
-    $saran.addClass("d-none").empty();
+    dimuat = "";
 
     if (dipilih) {
       kosongkan();
     }
-  });
 
-  $cari.on("input", saatKetik).on("focus", function () {
-    if ($.trim($cari.val()).length >= 2) {
-      cari();
+    if (!$panel.hasClass("d-none")) {
+      muat(true);
     }
   });
 
-  $saran.on("click", "button", function (e) {
+  /*
+   * Toko menentukan daftar varian yang ditawarkan, dan varian dari toko lain
+   * tidak boleh tertinggal di baris ini, jadi ganti toko juga memaksa daftar
+   * dimuat ulang.
+   */
+  $('select[name="juragan"]').on("change", function () {
+    dimuat = "";
+
+    if (dipilih) {
+      kosongkan();
+    }
+
+    if (!$panel.hasClass("d-none")) {
+      muat(true);
+    }
+  });
+
+  /*
+   * Kolomnya dua wajah: kosong = sedang mencari, berisi label = sudah terpilih.
+   * Saat fokus masuk ke kolom yang masih menampilkan label, label itu dibersihkan
+   * dulu supaya seluruh daftar terlihat lagi; kalau tidak jadi memilih, label
+   * dipasang kembali saat kolom ditinggalkan. Membuka daftarnya sendiri dikerjakan
+   * oleh klik (lihat gantiDaftar), bukan oleh fokus.
+   */
+  $katalog.on("focus", function () {
+    if (dipilih && $katalog.val() === labelPilihan(dipilih)) {
+      $katalog.val("");
+    }
+  });
+
+  $katalog.on("click", function () {
+    gantiDaftar();
+  });
+
+  /*
+   * Panah ikut membuka-tutup. mousedown-nya ditahan supaya kolom tidak kehilangan
+   * fokus dulu: tanpa itu blur menutup daftar, lalu click membukanya lagi, dan
+   * klik kedua tidak pernah bisa menutup.
+   */
+  $panah.on("mousedown", function (e) {
     e.preventDefault();
+  });
 
-    var v = $(this).data("stok");
+  $panah.on("click", function (e) {
+    e.preventDefault();
+    gantiDaftar();
+  });
 
-    if (v) {
-      isi(v);
+  $katalog.on("input", function () {
+    $galat.addClass("d-none").text("");
+
+    if ($daftar.hasClass("d-none")) {
+      bukaDaftar();
+
+      return;
+    }
+
+    saring();
+    gambar();
+  });
+
+  $katalog.on("keydown", function (e) {
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault();
+
+        if ($daftar.hasClass("d-none")) {
+          bukaDaftar();
+        } else {
+          geserSorot(1);
+        }
+
+        break;
+
+      case "ArrowUp":
+        e.preventDefault();
+        geserSorot(-1);
+
+        break;
+
+      case "Enter": {
+        if ($daftar.hasClass("d-none")) {
+          return;
+        }
+
+        e.preventDefault();
+
+        var $aktif = $daftar.find(".stok-item.aktif");
+
+        if ($aktif.length > 0) {
+          pilih($aktif.first().data("stok"));
+        }
+
+        break;
+      }
+
+      case "Escape":
+        // daftar yang masih terbuka duluan yang ditutup, bukan modalnya
+        if (!$daftar.hasClass("d-none")) {
+          e.stopPropagation();
+          tutupDaftar();
+        }
+
+        break;
+
+      case "Tab":
+        tutupDaftar();
+
+        break;
     }
   });
 
-  $buka.on("click", bukaPanel);
+  // blur dipakai untuk menutup daftar sekaligus membereskan isian kolom:
+  // klik baris daftar tidak sampai ke sini karena mousedown-nya ditahan
+  $katalog.on("blur", function () {
+    tutupDaftar();
+
+    $katalog.val(dipilih ? labelPilihan(dipilih) : "");
+  });
+
+  // mousedown (bukan click) + preventDefault: pilihan terbaca sebelum kolom
+  // sempat kehilangan fokus
+  $daftar.on("mousedown", ".stok-item", function (e) {
+    e.preventDefault();
+    pilih($(this).data("stok"));
+  });
+
+  $(document).on("mousedown", function (e) {
+    if ($(e.target).closest(".stok-pilih").length === 0) {
+      // lewat tutupDaftar(): kalau kelas .terbuka ditinggal, panahnya tetap
+      // menghadap atas seolah daftarnya masih terbuka
+      tutupDaftar();
+    }
+  });
+
+  $buka.on("click", function () {
+    bukaPanel();
+    $katalog.trigger("focus");
+
+    // pancingan itu memang maksudnya "tunjukkan daftarnya sekarang"
+    bukaDaftar();
+  });
+
+  // "Tutup" melipat panel apa adanya: pilihan yang sudah diambil tetap terpakai
+  $tutup.on("click", function () {
+    tutupPanel();
+  });
 
   // "Tulis manual" melepas tautan stok sekaligus melipat panelnya kembali
   $batal.on("click", function () {
@@ -388,12 +703,6 @@
     setTimeout(bawaanSinkron, 0);
   });
 
-  $(document).on("mousedown", function (e) {
-    if ($(e.target).closest(".stok-panel").length === 0) {
-      $saran.addClass("d-none");
-    }
-  });
-
   window.STOK = {
     /** id_stok yang sedang terpakai di modal, '' kalau ditulis manual. */
     ambil: function () {
@@ -410,12 +719,31 @@
     },
 
     /**
+     * Kabar merah di dalam panel, dipakai halaman form ketika baris hendak
+     * disimpan tanpa produk. Panel dibuka dulu supaya pesannya terlihat.
+     */
+    kabari: function (teks) {
+      bukaPanel();
+      $galat.removeClass("d-none").text(teks || "");
+      $katalog.trigger("focus");
+      bukaDaftar();
+    },
+
+    /**
      * Segarkan daftar foto bawaan dari baris yang masih ada. Dipanggil setelah
      * baris dibuang programatik (ganti tipe layanan) supaya foto produk baris
      * itu tidak tertinggal di panel "Foto Orderan".
      */
     sinkronFoto: function () {
       bawaanSinkron();
+    },
+
+    /**
+     * Muat ulang daftar (mis. saat modal dibuka, karena toko bisa saja baru
+     * dipilih lewat draf).
+     */
+    segar: function () {
+      muat(true);
     },
 
     /**
@@ -427,13 +755,26 @@
     tata: function (id, kolam) {
       if (!id) {
         kosongkan();
-        tutupPanel();
+        bukaPanel();
+
+        // baris manual tetap butuh pemilihnya terbuka, dan kode yang sedang
+        // terpakai di baris itu disebutkan supaya orang tidak menebak-nebak
+        var kode = $.trim($("#kode_produk").val() || "");
+
+        if (kode !== "") {
+          $catatan
+            .removeClass("d-none")
+            .text(
+              "Baris ini ditulis manual: " +
+                kode +
+                ". Pilih barang di daftar untuk menautkannya ke stok.",
+            );
+        }
 
         return;
       }
 
       ++token;
-      bukaPanel();
 
       dipilih = {
         id_stok: Number(id),
@@ -443,8 +784,12 @@
       };
 
       $id.val(id);
+      $katalog.val(labelPilihan(dipilih));
       $catatan.removeClass("d-none").text("Baris ini memakai stok produk.");
       $batal.removeClass("d-none");
+
+      // dibuka setelah `dipilih` terisi supaya labelnya ikut terpasang
+      bukaPanel();
 
       fotoMuat(id);
     },

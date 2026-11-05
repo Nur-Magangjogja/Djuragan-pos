@@ -77,16 +77,9 @@ $session  = \Config\Services::session();
         }
     }
 
-    /* Strip katalog preview sudah dihapus; penanda stok menipis kini duduk di
-       dropdown produk modal: opsi ber-stok 1 dicetak merah (teks merah di bawah
-       dropdown menemani, karena warna <option> tidak konsisten antar browser). */
-    #kode_produk option.stok-menipis {
-        color: #b81c16;
-        font-weight: 700;
-    }
-    #kodeProdukInfo.text-danger {
-        color: #b81c16 !important;
-    }
+    /* Strip katalog preview dan dropdown "Produk" di modal sudah dilepas:
+       pemilih produk satu-satunya kini combobox di panel "Ambil dari stok
+       produk", yang juga memuat kode, harga, ukuran, dan stok yang sama. */
 </style>
 <?= $this->endSection() ?>
 
@@ -610,19 +603,18 @@ $session  = \Config\Services::session();
             <?= form_open('', ['id' => 'nambahProduk']); ?>
             <div class="modal-body">
                 <?= stok_panel_form() ?>
+                <?php /* kode produk tidak lagi dipilih lewat dropdown sendiri:
+                       combobox di panel atas yang mengisinya. Fieldnya tetap ada -
+                       nama lama yang dibaca pembuat baris - tapi tersembunyi, dan
+                       keharusannya kini dijaga JS di bawah, bukan atribut required
+                       (browser tidak bisa menampilkan galat pada isian tersembunyi) */ ?>
+                <?= '<input type="hidden" name="kode_produk" id="kode_produk" value="">'; ?>
                 <div class="row gx-2 gy-2">
-                    <div class="col-12">
-                        <?= form_label('Produk', 'kode_produk', ['class' => 'form-label']); ?>
-                        <?= '<select name="kode_produk" id="kode_produk" class="form-select" required="">';
-                        echo '<option value="">Pilih produk</option>';
-                        echo '</select>'; ?>
-                        <div class="form-text" id="kodeProdukInfo"></div>
-                    </div>
-                    <div class="col-6 col-sm-6 col-md-3">
+                    <div class="col-12 col-sm-5">
                         <?= form_label('Harga Satuan', 'harga_satuan', ['class' => 'form-label']); ?>
                         <?= form_input(['name' => 'harga_satuan', 'min' => '0', 'id' => 'harga_satuan', 'class' => 'form-control', 'required' => '', 'placeholder' => 'cth: ' . random_element(['225000', '280000', '295000', '320000']), 'type' => 'number']); ?>
                     </div>
-                    <div class="col-6 col-sm-6 col-md-3">
+                    <div class="col-12 col-sm-4">
                         <?= form_label('Ukuran', 'ukuran', ['class' => 'form-label']); ?>
                         <?= '<select name="ukuran" class="form-select" id="ukuran" required="">';
                         echo '<option value="" disabled="" selected="">Pilih ukuran</option>';
@@ -639,7 +631,7 @@ $session  = \Config\Services::session();
                         echo '</select>';
                         ?>
                     </div>
-                    <div class="col-6 col-sm-6 col-md-3">
+                    <div class="col-12 col-sm-3">
                         <?= form_label('QTY', 'QTY', ['class' => 'form-label']); ?>
                         <?= form_input(['name' => 'QTY', 'id' => 'QTY', 'class' => 'form-control', 'required' => '', 'placeholder' => 'cth: ' . mt_rand(1, 20), 'type' => 'number', 'min' => '1']); ?>
                     </div>
@@ -720,7 +712,6 @@ $link_invoice        = site_url('admin/invoices/lihat/');
 $link_post_pelanggan = site_url('pelanggan/baru');
 $link_data_pelanggan = rtrim(site_url('pelanggan/data'), '/') . '/';
 $link_stok_jumlah    = site_url('api/stok/jumlah');
-$link_stok_katalog   = site_url('api/stok/katalog');
 // nama field token CSRF: tidak boleh ikut disimpan/dipulihkan draf, sebab tiap
 // muat halaman token-nya berganti dan menimpa yang baru bikin simpan ditolak.
 $nama_csrf           = csrf_token();
@@ -820,93 +811,14 @@ $js = <<< JS
     		if (window.drafTundaJuragan) { window.drafTundaJuragan(); }
     	});
 
-    	// dropdown produk di modal tambah item: isi katalog toko terpilih, tiap
-    	// opsi membawa nama, harga awal, dan stok; stok tinggal 1 ditandai merah
-    	function muatDropdownProduk() {
-    		var sel = $('#kode_produk');
-    		if (sel.length === 0 || sel[0].tagName !== 'SELECT') {
-    			return;
-    		}
-
-    		var j = parseInt($('select[name="juragan"]').val(), 10) || 0,
-    			lama = sel.data('pending') || sel.val();
-
-    		sel.removeData('pending');
-    		sel.find('option').slice(1).remove();
-
-    		if (j < 1) {
-    			return;
-    		}
-
-    		$.getJSON('{$link_stok_katalog}', { juragan_id: j }, function(res) {
-    			var data = (res && res.data) || [],
-    				seen = {};
-
-    			$.each(data, function(i, p) {
-    				if (seen[p.kode]) {
-    					return;
-    				}
-    				seen[p.kode] = true;
-
-    				var stok = Number(p.stok || 0),
-    					teks = p.kode + ' \u00B7 Rp ' + Number(p.harga || 0).toLocaleString('id-ID') + ' \u00B7 Stok ' + stok;
-
-    				$('<option/>', { value: p.kode, text: teks })
-    					.data('harga', p.harga || 0)
-    					.data('stok', stok)
-    					.toggleClass('stok-menipis', stok === 1)
-    					.appendTo(sel);
-    			});
-
-    			// baris manual / edit: kode di luar katalog tetap bisa terpilih lagi
-    			if (lama && sel.find('option[value="' + window.CSS.escape(lama) + '"]').length === 0) {
-    				$('<option/>', { value: lama, text: lama + ' \u00B7 (di luar katalog)' }).data('harga', '').data('stok', '').appendTo(sel);
-    			}
-
-    			if (lama) {
-    				sel.val(lama);
-    				tataInfoStok();
-    			}
-    		});
-    	}
-
-    	// harga katalog ikut tersalin saat produk dipilih; masih boleh dinegosiasi.
-    	// nama variabel js di blok ini tanpa awalan $: seluruh skrip hidup dalam
-    	// heredoc php, jadi nama berawalan dollar di sini akan diinterpolasi sbg variabel php
-    	$(document).on('change', '#kode_produk', function() {
-    		var opsi = $(this).find('option:selected');
-    		if (opsi.data('harga') !== undefined && String(opsi.data('harga')) !== '') {
-    			$('#harga_satuan').val(opsi.data('harga'));
-    		}
-    		tataInfoStok();
-    	});
-
-    	// penanda stok menipis juga ditulis di bawah dropdown: warna <option>
-    	// tidak konsisten antar browser, jadi teks merah inilah yang dijamin tampil
-    	function tataInfoStok() {
-    		var opsi = $('#kode_produk').find('option:selected'),
-    			stok = opsi.data('stok'),
-    			info = $('#kodeProdukInfo');
-
-    		if (stok === undefined || String(opsi.val()) === '') {
-    			info.empty().removeClass('text-danger fw-semibold');
-    			return;
-    		}
-
-    		info.text('Stok tersedia: ' + Number(stok))
-    			.toggleClass('text-danger fw-semibold', Number(stok) === 1);
-    	}
-
+    	// pemilih produk di modal kini satu saja: combobox di panel "Ambil dari
+    	// stok produk" (public/assets/js/ambil-stok.js). Dropdown katalog yang dulu
+    	// duduk di luar panel sudah dilepas bersama isi-opsinya, penanda stok
+    	// menipisnya, dan teks stoknya: daftar varian di combobox itu sudah memuat
+    	// kode, harga, ukuran, dan stok yang sama, plus bisa diketik untuk menyaring.
     	$('#tambahProduk').on('show.bs.modal', function() {
-    		muatDropdownProduk();
-    	});
-
-    	// ganti toko: pilihan produk lama tidak berlaku lagi
-    	$('select[name="juragan"]').on('change', function() {
-    		var sel = $('#kode_produk');
-    		sel.find('option').slice(1).remove();
-    		sel.val('');
-    		tataInfoStok();
+    		// toko bisa saja baru dipasangkan dari draf, jadi daftarnya dimuat ulang
+    		if (window.STOK && STOK.segar) { STOK.segar(); }
     	});
 
 
@@ -1480,6 +1392,16 @@ $js = <<< JS
     			k = rowEdit ? rowEdit.attr('data-kunci') : uniqId(),
     			tb = $('.list-orderan');
 
+    		// kode produk tidak lagi punya dropdown dengan atribut required: yang
+    		// menahan baris kosong sekarang kabar di panel stok, karena isian
+    		// tersembunyi tidak bisa ditampilkan sebagai galat oleh peramban
+    		if ($.trim(String(d || '')) === '') {
+    			if (window.STOK && STOK.kabari) {
+    				STOK.kabari('Pilih dulu salah satu produk di daftar "Ambil dari stok produk".');
+    			}
+    			return;
+    		}
+
     		fpro.find('#customDetail .ri-field').each(function(){
     			var key = $(this).data('key'),
     				v = $.trim($(this).val() || '');
@@ -1554,7 +1476,7 @@ $js = <<< JS
     			}
     		});
 
-    		(fpro.find('[name="kode_produk"]').data('pending', d.kode).val(d.kode)),
+    		(fpro.find('[name="kode_produk"]').val(d.kode)),
     		fpro.find('[name="harga_satuan"]').val(d.harga),
     		fpro.find('[name="QTY"]').val(d.qty),
     		fpro.find('[name="ukuran"]').val(d.ukuran).trigger('change'),

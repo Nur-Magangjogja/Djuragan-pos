@@ -41,7 +41,9 @@ class Download extends BaseController
      * invoice". Nota dicari hanya bermodal nomor, tapi aksesnya dikunci token
      * HMAC (lihat token_invoice_publik) yang mengikat nomor + id nota, sehingga
      * menebak nota orang lain tidak mungkin. Yang dirender persis satu nota ini,
-     * tidak ada daftar atau data lain yang ikut terbawa.
+     * tidak ada daftar atau data lain yang ikut terbawa. `publik=true` menyalakan
+     * lapisan gaya layar di template: dokumen yang sama tetap dicetak Dompdf apa
+     * adanya, hanya versi web yang dirapikan untuk desktop dan HP.
      */
     public function nota($seri = '', $token = '')
     {
@@ -72,7 +74,7 @@ class Download extends BaseController
             throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
         }
 
-        return view('template/invoice', ['invoice' => $nota]);
+        return view('template/invoice', ['invoice' => $nota, 'publik' => true]);
     }
 
     /**

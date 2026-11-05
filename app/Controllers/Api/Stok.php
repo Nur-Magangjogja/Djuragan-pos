@@ -17,13 +17,16 @@ use App\Models\StokModel;
 class Stok extends BaseController
 {
     /**
-     * GET api/stok/cari?q=<kata>&juragan_id=<id>&tipe=<pembuatan|sewa>
+     * GET api/stok/cari[?q=<kata>]&juragan_id=<id>&tipe=<pembuatan|sewa>
      *
      * Jawaban sengaja formasinya sama dengan pencarian pelanggan
      * (query + results) supaya JS di form tidak perlu dua pola baca.
      *
      * Tipe pesanan memilih kolam stok: hanya varian kolam itu yang ditawarkan,
-     * lengkap dengan harganya dan unitnya yang masih bisa diambil.
+     * lengkap dengan harganya dan unitnya yang masih bisa diambil. `q` boleh
+     * dikosongkan untuk mengambil seluruh isi kolam -- itu yang dipakai
+     * dropdown "Ambil dari stok produk" supaya orang bisa melihat barang apa
+     * saja yang dipantau di toko ini tanpa harus mengetik lebih dulu.
      */
     public function cari()
     {
@@ -34,13 +37,18 @@ class Stok extends BaseController
 
         // orderan ditulis untuk satu toko, jadi tokonya harus dipilih dulu dan
         // harus toko milik akun ini; kalau tidak, jawabannya kosong, bukan semua
-        if ($cari === '' || $juragan < 1 || ! in_array($juragan, $ids, true)) {
-            return $this->response->setJSON(['query' => $cari, 'results' => []]);
+        if ($juragan < 1 || ! in_array($juragan, $ids, true)) {
+            return $this->response->setJSON(['query' => $cari, 'results' => [], 'terbatas' => false]);
         }
 
+        // tanpa kata kunci daftar utuh dibatasi longgar, tapi tetap ada batasnya:
+        // satu toko bisa punya ribuan varian, dan daftar sepanjang itu tidak bisa
+        // digulir masuk akal. `terbatas` ikut dijawab supaya form bisa jujur
+        // menyebut daftarnya dipotong, bukan tampak seperti daftar lengkap
+        $batas = $cari === '' ? 500 : 12;
         $hasil = [];
 
-        foreach ((new StokModel())->saran($ids, $juragan, $cari, 12, $kolam) as $b) {
+        foreach ((new StokModel())->saran($ids, $juragan, $cari, $batas, $kolam) as $b) {
             $hasil[] = [
                 'id_stok'   => (int) $b['id_stok'],
                 'juragan_id' => (int) $b['juragan_id'],
@@ -55,7 +63,11 @@ class Stok extends BaseController
             ];
         }
 
-        return $this->response->setJSON(['query' => $cari, 'results' => $hasil]);
+        return $this->response->setJSON([
+            'query'    => $cari,
+            'results'  => $hasil,
+            'terbatas' => count($hasil) >= $batas,
+        ]);
     }
 
     /**

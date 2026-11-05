@@ -98,12 +98,14 @@ class Validation extends BaseConfig
         'nama_juragan' => 'required|min_length[3]|max_length[60]',
         'bank'         => 'required',
     ];
-    // rekening dipilih dengan kotak centang, jadi kabarnya ikut bahasa halaman
+    // rekening dipilih dengan kotak centang dan tidak wajib semuanya: 'required'
+    // pada array berarti "harus ada minimal satu", jadi form ditolak hanya kalau
+    // daftar centangnya kosong sama sekali (CI4: required([]) === false)
     public $addJuragan_errors = [
-        'bank' => ['required' => 'Centang minimal satu rekening.'],
+        'bank' => ['required' => 'Pilih minimal 1 bank.'],
     ];
     public $editJuragan_errors = [
-        'bank' => ['required' => 'Centang minimal satu rekening.'],
+        'bank' => ['required' => 'Pilih minimal 1 bank.'],
     ];
     public $addPengguna = [
         'username' => 'required|min_length[3]|max_length[100]|is_unique[user.username]|alpha_dash',

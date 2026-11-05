@@ -16,6 +16,7 @@ $isCklAktif      = url_is('admin/checklist*');
 $isSopAktif     = url_is('admin/sop*');
 $isTrxAktif      = url_is('admin/invoices*') || url_is('admin/cod*');
 $isProdukAktif   = url_is('admin/produk*');
+$isPoinAktif     = url_is('admin/poin*');
 $isCrmAktif      = url_is('admin/crm*') || $diReminderKerja;
 $isKpiAktif      = url_is('admin/kpi*');
 $isLaporanAktif  = url_is('admin/laporan*');
@@ -52,9 +53,17 @@ $transaksiSubmenu = [
     ['admin/cod', 'Pencatatan COD', 'fa-truck-fast', str_starts_with($di_halaman, 'admin/cod')],
 ];
 
-// Katalog Produk bukan submenu lagi: satu tautan langsung, sama seperti sidebar CS.
-// Laporan Poin gaji duduk sendiri sebagai menu utama karena hak bukanya khusus
-// Superadmin (rute admin/poin), sementara katalognya sendiri boleh dibuka Admin.
+// Menu Produk. Katalog dan Laporan Poin dulu berdiri sebagai dua menu utama;
+// keduanya sekarang menyatu di satu induk "Produk". Bentuk submenu hanya untuk
+// Superadmin, karena Laporan Poin (rute admin/poin) memang hak khusus Superadmin
+// — Admin biasa tetap memakai satu tautan langsung ke katalognya.
+$produkSubmenu = [
+    ['admin/produk', 'Katalog Produk', 'fa-box-alt', $isProdukAktif],
+];
+if ($levelSesi === 'superadmin') {
+    $produkSubmenu[] = ['admin/poin', 'Laporan Poin', 'fa-coins', $isPoinAktif];
+}
+$isProdukGrupAktif = $isProdukAktif || $isPoinAktif;
 
 // Submenu KPI: Ringkasan dan Ranking untuk admin & superadmin. Menentukan target
 // tetap hak Superadmin, jadi menunya tidak dirender untuk yang lain.
@@ -225,17 +234,31 @@ if ($levelSesi === 'superadmin') {
                     </ul>
                 </div>
             </li>
-            <li class="nav-item">
-                <a class="sidebar-link <?= $isProdukAktif ? 'active' : '' ?>" href="<?= site_url('admin/produk') ?>">
-                    <i class="sidebar-link-icon fal fa-box-alt"></i>
-                    <span>Katalog Produk</span>
-                </a>
-            </li>
             <?php if ($levelSesi === 'superadmin') : ?>
                 <li class="nav-item">
-                    <a class="sidebar-link <?= str_starts_with($di_halaman, 'admin/poin') ? 'active' : '' ?>" href="<?= site_url('admin/poin') ?>">
-                        <i class="sidebar-link-icon fal fa-coins"></i>
-                        <span>Laporan Poin</span>
+                    <a class="sidebar-link <?= $isProdukGrupAktif ? 'active' : '' ?>" data-bs-toggle="collapse" href="#submenuProduk" role="button" aria-expanded="<?= $isProdukGrupAktif ? 'true' : 'false' ?>" aria-controls="submenuProduk">
+                        <i class="sidebar-link-icon fal fa-box-alt"></i>
+                        <span>Produk</span>
+                        <i class="fal fa-chevron-down sidebar-chevron"></i>
+                    </a>
+                    <div class="collapse <?= $isProdukGrupAktif ? 'show' : '' ?>" id="submenuProduk">
+                        <ul class="sidebar-submenu">
+                            <?php foreach ($produkSubmenu as [$url, $label, $ikon, $aktif]) : ?>
+                                <li class="submenu-item">
+                                    <a class="sidebar-submenu-link <?= $aktif ? 'active' : '' ?>" href="<?= site_url($url) ?>">
+                                        <i class="fal <?= $ikon ?>"></i>
+                                        <span><?= esc($label) ?></span>
+                                    </a>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </div>
+                </li>
+            <?php else : ?>
+                <li class="nav-item">
+                    <a class="sidebar-link <?= $isProdukAktif ? 'active' : '' ?>" href="<?= site_url('admin/produk') ?>">
+                        <i class="sidebar-link-icon fal fa-box-alt"></i>
+                        <span>Katalog Produk</span>
                     </a>
                 </li>
             <?php endif; ?>

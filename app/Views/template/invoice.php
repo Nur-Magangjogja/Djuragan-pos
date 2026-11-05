@@ -8,9 +8,27 @@ use App\Libraries\Ongkir;
  * dideklarasikan di sini agar analyzer (Intelephense P1008) tidak salah lapor.
  *
  * @var object $invoice  satu baris nota dari InvoiceModel::getAll()
+ * @var bool   $publik   true kalau dokumen disajikan sebagai halaman web (tautan
+ *                       nota); PDF tidak mengirim variabel ini sama sekali
  */
 
-$html_logo = '<img src="' . str_replace('\\', '/', rtrim(FCPATH, '/\\')) . '/assets/img/logo-invoice.png" width="92" height="92" />';
+/* Dua jalan baca gambar: Dompdf mengambil berkas dari disk (pengunduhan remote
+   mati), sedangkan peramban butuh URL -- path absolut disk akan tampil sebagai
+   gambar rusak. Karena itu src-nya dibedakan dari mode penyajian. Alamat untuk
+   peramban dibangun dari lokasi front controller pada request yang sedang
+   dilayani, bukan dari app.baseURL: tautan nota bisa dibuka lewat domain,
+   tunnel, atau localhost, dan baseURL yang tertinggal tidak boleh membuat
+   logonya pecah. */
+$publik = ! empty($publik);
+
+if ($publik) {
+    $akar = rtrim(str_replace('\\', '/', dirname((string) ($_SERVER['SCRIPT_NAME'] ?? 'index.php'))), '/');
+    $logo = $akar . '/assets/img/logo-invoice.png';
+} else {
+    $logo = str_replace('\\', '/', rtrim(FCPATH, '/\\')) . '/assets/img/logo-invoice.png';
+}
+
+$html_logo = '<img class="logo" src="' . $logo . '" width="92" height="92" alt="Djuragan POS" />';
 
 // QR berisi nomor nota apa adanya: hasil scan langsung bisa ditempel ke kolom
 // cari Transaksi (pencocokan persis invoice.seri). Render gagal = tanpa QR.
@@ -191,6 +209,235 @@ $html_qr = Barcode::qrDataUri((string) $invoice->seri, 160);
         }
     </style>
 
+    <?php if ($publik) : ?>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <?php /* tautan nota disebar ke pelanggan satu per satu; tidak boleh
+                  terjaring mesin pencari walau alamatnya bisa dibuka umum */ ?>
+        <meta name="robots" content="noindex, nofollow">
+
+        <style type="text/css">
+            /* Lapisan layar. Blok ini hanya dicetak saat dokumen jadi halaman
+               publik, jadi berkas PDF hasil Dompdf tetap persis seperti dulu.
+               Yang diubah cuma tipografi, ruang, dan tata letak saat sempit. */
+            html {
+                background: #e8ecf1;
+            }
+
+            body {
+                background: #ffffff;
+                border-radius: 14px;
+                box-shadow: 0 10px 28px rgba(18, 35, 46, .10);
+                color: #1f2933;
+                font-size: 14px;
+                line-height: 1.55;
+                margin: 24px auto 48px;
+                max-width: 880px;
+                padding: 30px 34px 38px;
+            }
+
+            .logo {
+                height: 76px;
+                width: 76px;
+            }
+
+            table {
+                font-size: 14px;
+            }
+
+            .toko {
+                font-size: 18px;
+            }
+
+            .alamat {
+                font-size: 12.5px;
+                line-height: 1.5;
+            }
+
+            .judul {
+                font-size: 26px;
+                letter-spacing: 4px;
+            }
+
+            .nomor {
+                font-size: 13px;
+            }
+
+            .cap {
+                font-size: 11px;
+            }
+
+            .isi {
+                line-height: 1.65;
+            }
+
+            .kotak {
+                border-radius: 0 10px 10px 0;
+                padding: 12px 14px;
+            }
+
+            .stempel {
+                border-radius: 10px;
+                padding: 10px 16px;
+                width: auto;
+            }
+
+            .stempel .besar {
+                font-size: 15px;
+            }
+
+            .stempel .kecil {
+                font-size: 11.5px;
+            }
+
+            table.rapi th {
+                font-size: 11.5px;
+                padding: 10px 12px;
+            }
+
+            table.rapi td {
+                padding: 10px 12px;
+            }
+
+            .gelap {
+                font-size: 15px;
+            }
+
+            .kaki {
+                font-size: 11.5px;
+                padding-top: 16px;
+            }
+
+            .scan img {
+                height: 92px;
+                width: 92px;
+            }
+
+            .lampiran {
+                margin-top: 30px;
+                page-break-before: auto;
+            }
+
+            @media (max-width: 640px) {
+                html {
+                    background: #ffffff;
+                }
+
+                body {
+                    border-radius: 0;
+                    box-shadow: none;
+                    margin: 0;
+                    max-width: none;
+                    padding: 18px 14px 30px;
+                }
+
+                .judul {
+                    font-size: 21px;
+                    letter-spacing: 2px;
+                }
+
+                .logo {
+                    height: 56px;
+                    width: 56px;
+                }
+
+                /* kop, kotak keterangan, QR, dan kaki: satu kolom per baris */
+                .ring > tbody > tr > td,
+                .info > tbody > tr > td,
+                .scan > tbody > tr > td,
+                .kaki > tbody > tr > td {
+                    display: block;
+                    text-align: left !important;
+                    width: auto !important;
+                }
+
+                .ring .stempel {
+                    display: inline-block;
+                    margin-top: 14px;
+                }
+
+                .info > tbody > tr > td + td,
+                .scan > tbody > tr > td + td {
+                    margin-top: 12px;
+                }
+
+                .kaki > tbody > tr > td + td {
+                    margin-top: 2px;
+                }
+
+                /* daftar barang & ukuran rombongan: tiap baris jadi kartu */
+                table.rapi,
+                table.rapi > tbody,
+                table.rapi > tfoot {
+                    display: block;
+                }
+
+                table.rapi > thead {
+                    display: none;
+                }
+
+                table.rapi > tbody > tr {
+                    border: 1px solid #e3e8ec;
+                    border-radius: 12px;
+                    display: block;
+                    margin-bottom: 10px;
+                    padding: 10px 12px;
+                }
+
+                table.rapi > tbody > tr > td {
+                    border: 0;
+                    display: block;
+                    padding: 0;
+                    width: auto !important;
+                }
+
+                table.rapi > tbody > tr:not(.biaya) > td + td {
+                    margin-top: 6px;
+                }
+
+                /* label kolom dipindah ke depan nilainya, karena kepala
+                   tabelnya sudah tidak terlihat di layar sempit */
+                table.rapi > tbody > tr > td[data-label] {
+                    align-items: baseline;
+                    display: flex;
+                    justify-content: space-between;
+                }
+
+                table.rapi > tbody > tr > td[data-label]::before {
+                    color: #6b7a89;
+                    content: attr(data-label);
+                    flex: 0 0 auto;
+                    font-size: 11px;
+                    font-weight: 700;
+                    letter-spacing: .8px;
+                    margin-right: 14px;
+                    text-transform: uppercase;
+                }
+
+                table.rapi > tbody > tr.biaya,
+                table.rapi > tfoot > tr {
+                    align-items: baseline;
+                    display: flex;
+                    justify-content: space-between;
+                }
+
+                table.rapi > tfoot > tr > td {
+                    border-bottom: 1px solid #e6eaee;
+                    display: block;
+                    padding: 10px 12px;
+                    width: auto !important;
+                }
+
+                /* baris total: baris flex menyisakan celah di antara dua
+                   selnya, jadi gelapnya dinaikkan sampai ke barisnya */
+                table.rapi > tfoot > tr.total-akhir,
+                table.rapi > tfoot > tr.total-akhir > td {
+                    background: #12232e;
+                    color: #ffffff;
+                }
+            }
+        </style>
+    <?php endif; ?>
+
 </head>
 
 <body>
@@ -258,7 +505,7 @@ $html_qr = Barcode::qrDataUri((string) $invoice->seri, 160);
         </tr>
     </table>
 
-    <table>
+    <table class="ring">
         <tr>
             <td width="58%" valign="middle">
                 <div class="judul">INVOICE</div>
@@ -281,7 +528,7 @@ $html_qr = Barcode::qrDataUri((string) $invoice->seri, 160);
 
     <br>
 
-    <table>
+    <table class="info">
         <tr>
             <td class="kotak" width="50%">
                 <div class="cap">Pemesan</div>
@@ -318,7 +565,7 @@ $html_qr = Barcode::qrDataUri((string) $invoice->seri, 160);
     <?php if ($jadwal_sewa !== []) { ?>
         <br>
 
-        <table>
+        <table class="info">
             <tr>
                 <td class="kotak">
                     <div class="cap">Jadwal Sewa</div>
@@ -371,9 +618,9 @@ $html_qr = Barcode::qrDataUri((string) $invoice->seri, 160);
                             </div>
                         <?php } ?>
                     </td>
-                    <td class="tengah"><?= (int) $b->qty ?></td>
-                    <td class="angka"><?= number_to_currency($b->harga, 'IDR') ?></td>
-                    <td class="angka"><?= number_to_currency($b->harga * $b->qty, 'IDR') ?></td>
+                    <td class="tengah" data-label="Qty"><?= (int) $b->qty ?></td>
+                    <td class="angka" data-label="Harga"><?= number_to_currency($b->harga, 'IDR') ?></td>
+                    <td class="angka" data-label="Subtotal"><?= number_to_currency($b->harga * $b->qty, 'IDR') ?></td>
                 </tr>
             <?php endforeach; ?>
 
@@ -384,10 +631,8 @@ $html_qr = Barcode::qrDataUri((string) $invoice->seri, 160);
                     ? 'Ongkir'
                     : ($c->label === 'null' || empty($c->label) ? 'Biaya lainnya' : $c->label);
                 ?>
-                <tr>
-                    <td><span class="abu"><?= esc($nama_biaya) ?></span></td>
-                    <td></td>
-                    <td></td>
+                <tr class="biaya">
+                    <td colspan="3"><span class="abu"><?= esc($nama_biaya) ?></span></td>
                     <td class="angka <?= $c->nominal < 0 ? 'merah' : ''; ?>"><?= number_to_currency($c->nominal, 'IDR') ?></td>
                 </tr>
             <?php endforeach; ?>
@@ -398,7 +643,7 @@ $html_qr = Barcode::qrDataUri((string) $invoice->seri, 160);
                 <td class="angka abu" colspan="3">Subtotal barang</td>
                 <td class="angka"><?= number_to_currency($harga_barang, 'IDR') ?></td>
             </tr>
-            <tr>
+            <tr class="total-akhir">
                 <td class="gelap angka" colspan="3">Total tagihan</td>
                 <td class="gelap angka"><?= number_to_currency($wajib_bayar, 'IDR') ?></td>
             </tr>
@@ -454,10 +699,10 @@ $html_qr = Barcode::qrDataUri((string) $invoice->seri, 160);
                 <tbody>
                     <?php foreach ($anggota as $i => $o) { ?>
                         <tr class="<?= $i % 2 ? 'selang' : ''; ?>">
-                            <td class="tengah"><?= $i + 1 ?></td>
-                            <td><?= esc($o->nama) ?></td>
-                            <td class="tengah"><?= esc($o->nomor ?: '-') ?></td>
-                            <td>
+                            <td class="tengah" data-label="No"><?= $i + 1 ?></td>
+                            <td data-label="Nama"><?= esc($o->nama) ?></td>
+                            <td class="tengah" data-label="Nomor"><?= esc($o->nomor ?: '-') ?></td>
+                            <td data-label="Ukuran">
                                 <?php if (empty($o->nilai)) { ?>
                                     <span class="abu">belum diukur</span>
                                 <?php } else { ?>
@@ -466,7 +711,7 @@ $html_qr = Barcode::qrDataUri((string) $invoice->seri, 160);
                                     <?php } ?>
                                 <?php } ?>
                             </td>
-                            <td><?= esc($o->catatan ?: '-') ?></td>
+                            <td data-label="Catatan"><?= esc($o->catatan ?: '-') ?></td>
                         </tr>
                     <?php } ?>
                 </tbody>
@@ -482,7 +727,7 @@ $html_qr = Barcode::qrDataUri((string) $invoice->seri, 160);
     </table>
 
     <?php if ($html_qr !== '') { ?>
-        <table style="margin-top: 10px;">
+        <table class="scan" style="margin-top: 10px;">
             <tr>
                 <td width="70" align="center" style="border: 1px solid #d6dde4; padding: 4px;">
                     <img src="<?= $html_qr ?>" width="60" height="60" alt="QR <?= esc($invoice->seri) ?>" />

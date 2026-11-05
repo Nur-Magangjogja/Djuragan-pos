@@ -1580,41 +1580,53 @@ if (! function_exists('stok_panel_form')) {
      * Panel "Ambil dari stok produk" di modal tambah orderan.
      *
      * Dipakai modal yang sama di halaman Tulis admin, Tulis CS, dan Sunting,
-     * jadi markupnya satu tempat saja seperti panel foto. Isinya cuma kolom
-     * cari + daftar saran + contoh foto; pengisian kolomnya yang dikerjakan
+     * jadi markupnya satu tempat saja seperti panel foto. Isinya combobox
+     * varian + catatan + contoh foto; seluruh perilakunya dikerjakan
      * public/assets/js/ambil-stok.js.
      *
-     * Daftar saran ditampilkan sebagai blok di bawah kolom (bukan layer mengambang)
-     * karena ia hidup di dalam modal, yang punya scroll-nya sendiri.
+     * Pemilih produk cukup satu: kolom ini bisa diketik untuk menyaring dan
+     * sekaligus membuka daftar, jadi dropdown "Produk" yang dulu duduk di luar
+     * panel tidak diperlukan lagi. Placeholder kontrolnya "Pilih Barang"; di
+     * dalam daftar tidak ada lagi entri "pilih barang" karena baris pertama
+     * daftar memang sudah barang sungguhan. Toko tanpa produk dijawab "Tidak
+     * ada produk" di dalam daftar, bukan dengan kotak kosong tanpa kabar.
+     *
+     * Panel dibuka dari pancingan "Ambil dari stok produk?" dan ditutup lewat
+     * "Tutup" -- pilihan yang sudah diambil tetap tersimpan -- atau lewat
+     * "Tulis manual" yang juga melepas taunya ke stok.
      *
      * tautan API-nya dibacakan JS dari data-cari/data-baca, jadi halaman yang
      * tidak memasang panelnya (mis. halaman lama) tidak memanggil apa pun.
      */
     function stok_panel_form(): string
     {
-        // Panel tidak lagi tampil bawaan: yang muncul dulu hanya pancingan
-        // "Ambil dari stok produk?". Panel baru dibuka saat pancingan diklik
-        // (dijaga ambil-stok.js), supaya jalur manual lewat dropdown produk
-        // tidak tertutupi. Ditutup lagi lewat tombol "Tulis manual".
         return '<div class="stok-pemicu mb-3">'
             . '<button type="button" class="btn btn-link text-decoration-none p-0 small fw-semibold stok-buka"'
-            . ' aria-expanded="false"><i class="fal fa-boxes me-1"></i>Ambil dari stok produk?</button>'
+            . ' aria-expanded="false" aria-controls="stok_panel"><i class="fal fa-boxes me-1"></i>Ambil dari stok produk?</button>'
             . '</div>'
             . '<div class="stok-panel d-none rounded-[0.85rem] border border-dashed border-[#dbe3ee] bg-ink-50 px-3 pb-3 pt-2 mb-3"'
+            . ' id="stok_panel"'
             . ' data-cari="' . esc(site_url('api/stok/cari'), 'attr') . '"'
             . ' data-baca="' . esc(site_url('api/produk-foto/baca'), 'attr') . '">'
-            . '<div class="d-flex flex-wrap align-items-end gap-2">'
-            . '<div class="flex-grow-1">'
-            . '<label class="form-label text-xs text-ink-500 mb-1" for="stok_cari">Ambil dari stok produk</label>'
-            . '<input type="text" class="form-control stok-cari" id="stok_cari" autocomplete="off"'
-            . ' placeholder="Ketik nama barang yang dipantau, cth: JAS HITAM">'
+            . '<div class="d-flex flex-wrap align-items-center justify-content-between gap-2">'
+            . '<label class="form-label text-xs text-ink-500 mb-0" for="stok_katalog">Ambil dari stok produk</label>'
+            . '<button type="button" class="btn btn-sm btn-link text-decoration-none p-0 small fw-semibold stok-tutup text-ink-500"'
+            . ' title="Tutup pilihan stok" aria-label="Tutup pilihan stok"><i class="fal fa-times me-1"></i>Tutup</button>'
+            . '</div>'
+            . '<div class="d-flex flex-wrap align-items-start gap-2 mt-1">'
+            . '<div class="stok-pilih flex-grow-1">'
+            . '<input type="text" class="form-control stok-katalog" id="stok_katalog" role="combobox"'
+            . ' aria-expanded="false" aria-controls="stok_daftar" aria-autocomplete="list"'
+            . ' autocomplete="off" placeholder="Pilih Barang">'
+            . '<span class="stok-panah" aria-hidden="true"><i class="fal fa-chevron-down"></i></span>'
+            . '<div class="stok-daftar d-none" id="stok_daftar" role="listbox"></div>'
+            . '</div>'
+            . '<button type="button" class="btn btn-link text-decoration-none stok-batal d-none p-0 small mt-2">Tulis manual</button>'
+            . '</div>'
             . '<input type="hidden" name="stok_produk" class="stok-id" value="">'
-            . '</div>'
-            . '<button type="button" class="btn btn-link text-decoration-none stok-batal d-none p-0 small">Tulis manual</button>'
-            . '</div>'
+            . '<div class="stok-galat small d-none" role="alert"></div>'
             . '<p class="small text-muted mb-0 mt-2">'
-            . 'Opsional. Pilih barang yang sudah dipantau stoknya</p>'
-            . '<div class="list-group list-group-flush saran-stok mt-2 d-none" style="max-height:13rem;overflow:auto"></div>'
+            . 'Opsional. Ketik untuk mencari; daftarnya berisi barang yang stoknya dipantau di toko ini.</p>'
             . '<div class="stok-catatan small mt-2 d-none"></div>'
             . '<div class="foto-acuan mt-2 d-none">'
             . '<div class="small text-muted mb-1"><i class="fal fa-images me-1 text-primary"></i>Contoh bentuk barang ini ikut tersalin ke orderan setelah disimpan.</div>'
