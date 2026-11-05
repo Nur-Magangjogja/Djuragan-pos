@@ -1592,7 +1592,15 @@ if (! function_exists('stok_panel_form')) {
      */
     function stok_panel_form(): string
     {
-        return '<div class="stok-panel rounded-[0.85rem] border border-dashed border-[#dbe3ee] bg-ink-50 px-3 pb-3 pt-2 mb-3"'
+        // Panel tidak lagi tampil bawaan: yang muncul dulu hanya pancingan
+        // "Ambil dari stok produk?". Panel baru dibuka saat pancingan diklik
+        // (dijaga ambil-stok.js), supaya jalur manual lewat dropdown produk
+        // tidak tertutupi. Ditutup lagi lewat tombol "Tulis manual".
+        return '<div class="stok-pemicu mb-3">'
+            . '<button type="button" class="btn btn-link text-decoration-none p-0 small fw-semibold stok-buka"'
+            . ' aria-expanded="false"><i class="fal fa-boxes me-1"></i>Ambil dari stok produk?</button>'
+            . '</div>'
+            . '<div class="stok-panel d-none rounded-[0.85rem] border border-dashed border-[#dbe3ee] bg-ink-50 px-3 pb-3 pt-2 mb-3"'
             . ' data-cari="' . esc(site_url('api/stok/cari'), 'attr') . '"'
             . ' data-baca="' . esc(site_url('api/produk-foto/baca'), 'attr') . '">'
             . '<div class="d-flex flex-wrap align-items-end gap-2">'
@@ -1613,6 +1621,32 @@ if (! function_exists('stok_panel_form')) {
             . '<div class="d-flex flex-wrap gap-2 stok-foto-isi"></div>'
             . '</div>'
             . '</div>';
+    }
+}
+
+if (! function_exists('token_invoice_publik')) {
+    /**
+     * Token untuk tautan invoice publik: HMAC nota + id_invoice memakai kunci
+     * enkripsi aplikasi, lalu dipotong supaya URL tetap ringkas tapi sulit
+     * ditebak. Sengaja deterministik (tanpa kolom baru) supaya tautan bisa
+     * dibuat ulang kapan pun dan tetap cocok saat diverifikasi server.
+     */
+    function token_invoice_publik(int $id_invoice, string $seri): string
+    {
+        return substr(hash_hmac('sha256', $id_invoice . '|' . $seri, (string) config('Encryption')->key), 0, 32);
+    }
+}
+
+if (! function_exists('tautan_invoice_publik')) {
+    /**
+     * Alamat invoice yang bisa dibuka tanpa login. Dipakai tombol "Salin tautan
+     * invoice" dan template pesan WA, jadi pelanggan cukup membuka link untuk
+     * melihat nota miliknya tanpa perlu akun. Token mengikat satu nota tertentu
+     * sehingga nota orang lain tidak bisa diakses dengan menebak nomor.
+     */
+    function tautan_invoice_publik(int $id_invoice, string $seri): string
+    {
+        return site_url('nota/' . rawurlencode($seri) . '/' . token_invoice_publik($id_invoice, $seri));
     }
 }
 

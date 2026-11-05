@@ -360,11 +360,11 @@ class Invoices extends BaseController
                 $taut = tautkan_stok($produk['baris'], (int) $juragan_id);
                 $peta = sinkron_dibeli($invoice_id, $taut);
 
-                // qty dijaga terhadap unit yang masih tersedia; galat ini ikut
-                // menggulungkan seluruh tulisan orderan. Kolam yang dipakai ikut
-                // tipe orderan supaya stok sewa tidak termakan order pembuatan.
+                // Djuragan hanya kategori; pengambilan dari stok produk bersifat
+                // opsional, jadi kecukupan stok TIDAK lagi membatalkan tulisan
+                // orderan. Baris yang tak punya stok tetap tersimpan sebagai
+                // catatan manual. Kolam/tautan tetap dirapikan di atas.
                 $galat  = array_merge(
-                    (new StokModel())->lebih($taut, StokModel::kolamDariTipe($rincian['tipe'] ?? null), $invoice_id),
                     simpan_ukuran_produk($invoice_id, $peta, $produk['ukuran']),
                     simpan_anggota($invoice_id, $this->request->getPost('anggota_dikirim'), $this->request->getPost('anggota'))
                 );
@@ -504,10 +504,9 @@ class Invoices extends BaseController
             $taut = tautkan_stok($produk['baris'], (int) $this->request->getPost('juragan'));
             $peta = sinkron_dibeli($invoice_id, $taut);
 
-            // pemakaian nota ini sendiri tidak dihitung ulang saat memeriksa sisa
-            // rak, jadi menyunting nota yang sudah keluar tetap boleh
+            // sama seperti save(): stok hanya kategori pelengkap, bukan syarat
+            // menyimpan — sunting nota toko tanpa stok tetap boleh disimpan
             $galat  = array_merge(
-                (new StokModel())->lebih($taut, StokModel::kolamDariTipe(is_array($rincian_invoice) ? ($rincian_invoice['tipe'] ?? null) : null), $invoice_id),
                 simpan_ukuran_produk($invoice_id, $peta, $produk['ukuran']),
                 simpan_anggota($invoice_id, $this->request->getPost('anggota_dikirim'), $this->request->getPost('anggota'))
             );

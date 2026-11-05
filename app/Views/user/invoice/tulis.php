@@ -77,65 +77,15 @@ $session  = \Config\Services::session();
         }
     }
 
-    /* Strip katalog produk toko, muncul di bawah pemilih juragan: kartu kecil
-       (gambar + nama + stok) yang bisa digulir mendatar. */
-    .katalog-juragan { margin-top: .15rem; }
-    .katalog-juragan-scroll {
-        display: flex;
-        gap: .6rem;
-        overflow-x: auto;
-        padding: .35rem .15rem .6rem;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: thin;
-    }
-    .katalog-kartu {
-        flex: 0 0 auto;
-        width: 6.5rem;
-        background: #fff;
-        border: 1px solid #e2e8f0;
-        border-radius: .8rem;
-        padding: .4rem;
-        text-align: center;
-    }
-    .katalog-kartu img,
-    .katalog-kartu .kk-inisial {
-        width: 100%;
-        height: 5rem;
-        object-fit: cover;
-        border-radius: .55rem;
-        display: block;
-    }
-    .katalog-kartu .kk-inisial {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: #f1f5f9;
-        color: #64748b;
+    /* Strip katalog preview sudah dihapus; penanda stok menipis kini duduk di
+       dropdown produk modal: opsi ber-stok 1 dicetak merah (teks merah di bawah
+       dropdown menemani, karena warna <option> tidak konsisten antar browser). */
+    #kode_produk option.stok-menipis {
+        color: #b81c16;
         font-weight: 700;
-        font-size: 1.4rem;
     }
-    .katalog-kartu .kk-nama {
-        margin-top: .35rem;
-        font-size: .78rem;
-        font-weight: 600;
-        color: #334155;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    .katalog-kartu .kk-jenis {
-        font-size: .7rem;
-        font-weight: 600;
-        color: #475569;
-    }
-    .katalog-kartu .kk-stok {
-        font-size: .72rem;
-        color: #64748b;
-    }
-    .katalog-juragan-info {
-        font-size: .78rem;
-        color: #94a3b8;
-        padding: .2rem .15rem;
+    #kodeProdukInfo.text-danger {
+        color: #b81c16 !important;
     }
 </style>
 <?= $this->endSection() ?>
@@ -171,7 +121,8 @@ $session  = \Config\Services::session();
                         </div>
                     </div>
 
-                    <?= '<div id="katalogJuragan" class="katalog-juragan d-none" aria-live="polite"></div>' ?>
+                    <?php /* strip katalog preview sudah dilepas: pemilihan produk
+                     kini lewat dropdown di modal tambah item (lihat kode_produk) */ ?>
                     <div class="row gx-2">
                         <div class="col">
                             <?php
@@ -656,9 +607,12 @@ $session  = \Config\Services::session();
             <div class="modal-body">
                 <?= stok_panel_form() ?>
                 <div class="row gx-2 gy-2">
-                    <div class="col-6 col-sm-6 col-md-3">
-                        <?= form_label('Kode Produk', 'kode_produk', ['class' => 'form-label']); ?>
-                        <?= form_input(['name' => 'kode_produk', 'id' => 'kode_produk', 'class' => 'form-control', 'required' => '', 'placeholder' => 'cth: ' . random_element(['SK-45', 'BK-01', 'Z-01'])]); ?>
+                    <div class="col-12">
+                        <?= form_label('Produk', 'kode_produk', ['class' => 'form-label']); ?>
+                        <?= '<select name="kode_produk" id="kode_produk" class="form-select" required="">';
+                        echo '<option value="">Pilih produk</option>';
+                        echo '</select>'; ?>
+                        <div class="form-text" id="kodeProdukInfo"></div>
                     </div>
                     <div class="col-6 col-sm-6 col-md-3">
                         <?= form_label('Harga Satuan', 'harga_satuan', ['class' => 'form-label']); ?>
@@ -857,77 +811,98 @@ $js = <<< JS
     		$.each(b[{$current_user_id}].juragan,function(c,x){
     			$('<option />',{value:x.id,text:x.nama}).data('nama', x.nama).appendTo($('select[name="juragan"]'));
     		});
-    		isiJumlahProduk();
     		// opsi tiba: pasang pilihan dari draf yang tadi ditahan
     		if (window.drafTundaJuragan) { window.drafTundaJuragan(); }
     	});
 
-    	// angka indikator jumlah produk di tiap opsi dropdown juragan
-    	function isiJumlahProduk() {
-    		$.getJSON('{$link_stok_jumlah}', function(res) {
-    			var peta = (res && res.data) || {};
-    			$('select[name="juragan"] option').each(function() {
-    				if (this.value === '') {
+    	// dropdown produk di modal tambah item: isi katalog toko terpilih, tiap
+    	// opsi membawa nama, harga awal, dan stok; stok tinggal 1 ditandai merah
+    	function muatDropdownProduk() {
+    		var sel = $('#kode_produk');
+    		if (sel.length === 0 || sel[0].tagName !== 'SELECT') {
+    			return;
+    		}
+
+    		var j = parseInt($('select[name="juragan"]').val(), 10) || 0,
+    			lama = sel.data('pending') || sel.val();
+
+    		sel.removeData('pending');
+    		sel.find('option').slice(1).remove();
+
+    		if (j < 1) {
+    			return;
+    		}
+
+    		$.getJSON('{$link_stok_katalog}', { juragan_id: j }, function(res) {
+    			var data = (res && res.data) || [],
+    				seen = {};
+
+    			$.each(data, function(i, p) {
+    				if (seen[p.kode]) {
     					return;
     				}
-    				var nama = $(this).data('nama') || this.text;
-    				var n = peta[this.value];
-    				$(this).text(nama + ' (' + (n ? n : 0) + ')');
-    			});
-    		});
-    	}
+    				seen[p.kode] = true;
 
-    	// strip katalog produk toko terpilih, digulir mendatar; ikut disegarkan
-    	// saat tipe layanan ganti karena kolam (jual/sewa) menentukan stoknya
-    	function muatKatalogJuragan() {
-    		var el = $('#katalogJuragan');
-    		if (el.length === 0) {
-    			return;
-    		}
-    		var j = parseInt($('select[name="juragan"]').val(), 10) || 0;
-    		if (j < 1) {
-    			el.addClass('d-none').empty();
-    			return;
-    		}
-    		el.removeClass('d-none').html('<div class="katalog-juragan-info">Memuat katalog...</div>');
-    		$.getJSON('{$link_stok_katalog}', { juragan_id: j }, function(res) {
-    			var data = (res && res.data) || [];
-    			if (data.length === 0) {
-    				el.html('<div class="katalog-juragan-info">Toko ini belum punya produk tercatat.</div>');
-    				return;
+    				var stok = Number(p.stok || 0),
+    					teks = p.kode + ' \u00B7 Rp ' + Number(p.harga || 0).toLocaleString('id-ID') + ' \u00B7 Stok ' + stok;
+
+    				$('<option/>', { value: p.kode, text: teks })
+    					.data('harga', p.harga || 0)
+    					.data('stok', stok)
+    					.toggleClass('stok-menipis', stok === 1)
+    					.appendTo(sel);
+    			});
+
+    			// baris manual / edit: kode di luar katalog tetap bisa terpilih lagi
+    			if (lama && sel.find('option[value="' + window.CSS.escape(lama) + '"]').length === 0) {
+    				$('<option/>', { value: lama, text: lama + ' \u00B7 (di luar katalog)' }).data('harga', '').data('stok', '').appendTo(sel);
     			}
-    			var html = '<div class="katalog-juragan-scroll">';
-    			$.each(data, function(i, p) {
-    				var gambar = p.foto
-    					? '<img src="' + kkEsc(p.foto) + '" alt="" loading="lazy">'
-    					: '<span class="kk-inisial">' + kkInisial(p.kode) + '</span>';
-    				html += '<div class="katalog-kartu">' + gambar
-    					+ '<div class="kk-nama" title="' + kkEsc(p.kode) + '">' + kkEsc(p.kode) + '</div>'
-    					+ '<div class="kk-jenis">Jenis: ' + kkEsc(p.jenis || '-') + '</div>'
-    					+ '<div class="kk-stok">Stok ' + (p.stok || 0) + '</div>'
-    					+ '</div>';
-    			});
-    			html += '</div>';
-    			el.html(html);
-    		}).fail(function() {
-    			el.html('<div class="katalog-juragan-info">Gagal memuat katalog.</div>');
+
+    			if (lama) {
+    				sel.val(lama);
+    				tataInfoStok();
+    			}
     		});
     	}
 
-    	function kkEsc(s) {
-    		return String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, function(m) {
-    			return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
-    		});
+    	// harga katalog ikut tersalin saat produk dipilih; masih boleh dinegosiasi.
+    	// nama variabel js di blok ini tanpa awalan $: seluruh skrip hidup dalam
+    	// heredoc php, jadi nama berawalan dollar di sini akan diinterpolasi sbg variabel php
+    	$(document).on('change', '#kode_produk', function() {
+    		var opsi = $(this).find('option:selected');
+    		if (opsi.data('harga') !== undefined && String(opsi.data('harga')) !== '') {
+    			$('#harga_satuan').val(opsi.data('harga'));
+    		}
+    		tataInfoStok();
+    	});
+
+    	// penanda stok menipis juga ditulis di bawah dropdown: warna <option>
+    	// tidak konsisten antar browser, jadi teks merah inilah yang dijamin tampil
+    	function tataInfoStok() {
+    		var opsi = $('#kode_produk').find('option:selected'),
+    			stok = opsi.data('stok'),
+    			info = $('#kodeProdukInfo');
+
+    		if (stok === undefined || String(opsi.val()) === '') {
+    			info.empty().removeClass('text-danger fw-semibold');
+    			return;
+    		}
+
+    		info.text('Stok tersedia: ' + Number(stok))
+    			.toggleClass('text-danger fw-semibold', Number(stok) === 1);
     	}
 
-    	function kkInisial(kode) {
-    		kode = String(kode || '?').trim();
-    		return kkEsc((kode.slice(0, 2).toUpperCase()) || '?');
-    	}
+    	$('#tambahProduk').on('show.bs.modal', function() {
+    		muatDropdownProduk();
+    	});
 
-    	$('select[name="juragan"]').on('change', muatKatalogJuragan);
-
-    	// strip katalog tidak lagi ikut tipe: semua produk tampil sekaligus
+    	// ganti toko: pilihan produk lama tidak berlaku lagi
+    	$('select[name="juragan"]').on('change', function() {
+    		var sel = $('#kode_produk');
+    		sel.find('option').slice(1).remove();
+    		sel.val('');
+    		tataInfoStok();
+    	});
 
 
 
@@ -1528,11 +1503,13 @@ $js = <<< JS
     	$(document).on('click','.hapus_row',function(){
     		this.closest('tr').remove(),
     		$(this).hasClass('orderan')&&(
-    			pl=$('.list-orderan').data('length'),
-    			$('.list-orderan').data('length',
-    			ps-1),
+    			// panjang baru dihitung dari baris yang tersisa, bukan variabel lama:
+    			// sebelumnya baris sisa salah, listOrder() ikut menyembunyikan blok
+    			// subtotal sehingga total terlihat tidak berkurang
+    			$('.list-orderan').data('length', $('.list-orderan').children('tr[data-kunci]').length + 1),
     			listOrder(),
-    			subtotal()
+    			subtotal(),
+    			window.STOK&&STOK.sinkronFoto&&STOK.sinkronFoto()
     		),
     		totalbiaya();
     	});
@@ -1563,7 +1540,7 @@ $js = <<< JS
     			}
     		});
 
-    		fpro.find('[name="kode_produk"]').val(d.kode),
+    		(fpro.find('[name="kode_produk"]').data('pending', d.kode).val(d.kode)),
     		fpro.find('[name="harga_satuan"]').val(d.harga),
     		fpro.find('[name="QTY"]').val(d.qty),
     		fpro.find('[name="ukuran"]').val(d.ukuran).trigger('change'),

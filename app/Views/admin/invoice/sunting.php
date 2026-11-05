@@ -1579,11 +1579,13 @@ $js = <<< JS
     	$(document).on('click','.hapus_row',function(){
     		this.closest('tr').remove(),
     		$(this).hasClass('orderan')&&(
-    			pl=$('.list-orderan').data('length'),
-    			$('.list-orderan').data('length',
-    			ps-1),
+    			// panjang baru dihitung dari baris yang tersisa, bukan variabel lama:
+    			// sebelumnya baris sisa salah, listOrder() ikut menyembunyikan blok
+    			// subtotal sehingga total terlihat tidak berkurang
+    			$('.list-orderan').data('length', $('.list-orderan').children('tr[data-kunci]').length + 1),
     			listOrder(),
-    			subtotal()
+    			subtotal(),
+    			window.STOK&&STOK.sinkronFoto&&STOK.sinkronFoto()
     		),
     		totalbiaya();
     	});

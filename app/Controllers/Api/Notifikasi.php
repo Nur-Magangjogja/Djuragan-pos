@@ -73,11 +73,22 @@ class Notifikasi extends \CodeIgniter\Controller
 
     /**
      * Hapus satu notifikasi milik akun yang login, khusus yang sudah terbaca.
-     * Layar pengaturan (Admin/Superadmin) yang menghapus seluruh kotak; tombol
-     * kecil di halaman daftar hanya membereskan punya sendiri.
+     * Hanya sisi manajemen (Admin/Superadmin): CS tidak lagi membereskan
+     * kotaknya sendiri — kotak CS dibersihkan dari Pengaturan Notifikasi
+     * (sapu manual) atau lewat penjadwalan otomatis (sapuJadwal, cron
+     * `php spark notif:bersihkan`). Pagar ini di server; tombolnya sendiri
+     * memang tidak dirender untuk CS di halaman daftar.
      */
     public function hapus()
     {
+        if (! in_array((string) session()->get('level'), ['admin', 'superadmin'], true)) {
+            return $this->respond([
+                'status'   => 'DITOLAK',
+                'pesan'    => 'Notifikasi hanya bisa dihapus dari sisi manajemen.',
+                'terhapus' => 0,
+            ], 403);
+        }
+
         $notifikasi = new \App\Models\NotifikasiModel();
         $id         = (int) $this->request->getPost('id');
         $terhapus   = $id > 0 ? $notifikasi->hapusSatu($id, (int) session()->get('id')) : 0;

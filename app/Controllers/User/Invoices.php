@@ -10,7 +10,6 @@ use App\Models\JuraganModel;
 use App\Models\NotifikasiModel;
 use App\Models\PembayaranModel;
 use App\Models\PoinPenjualanModel;
-use App\Models\StokModel;
 use App\Models\UkuranKomponenModel;
 use App\Models\UserModel;
 use CodeIgniter\I18n\Time;
@@ -101,10 +100,10 @@ class Invoices extends BaseController
                 $taut = tautkan_stok($produk['baris'], (int) $juragan_id);
                 $peta = sinkron_dibeli($invoice_id, $taut);
 
-                // sama seperti admin: qty yang melebihi unit tersedia membatalkan
-                // seluruh tulisan orderan, dan kolam stoknya ikut tipe orderan
+                // sama seperti admin: Djuragan hanya kategori dan pengambilan dari
+                // stok produk opsional, jadi kecukupan stok tidak membatalkan
+                // penyimpanan orderan
                 $galat  = array_merge(
-                    (new StokModel())->lebih($taut, StokModel::kolamDariTipe($rincian['tipe'] ?? null), $invoice_id),
                     simpan_ukuran_produk($invoice_id, $peta, $produk['ukuran']),
                     simpan_anggota($invoice_id, $this->request->getPost('anggota_dikirim'), $this->request->getPost('anggota'))
                 );

@@ -30,6 +30,8 @@
     $acuan = $panel.find(".foto-acuan"),
     $isi = $panel.find(".stok-foto-isi"),
     $batal = $panel.find(".stok-batal"),
+    $pemicu = $(".stok-pemicu"),
+    $buka = $(".stok-buka"),
     alamatCari = $panel.data("cari"),
     alamatBaca = $panel.data("baca"),
     token = 0,
@@ -91,6 +93,24 @@
     $acuan.addClass("d-none");
     $isi.empty();
     $batal.addClass("d-none");
+  }
+
+  /*
+   * Panel tidak tampil bawaan (d-none dari stok_panel_form). Pancingan
+   * "Ambil dari stok produk?" membuka panel dan menyembunyikan dirinya lagi;
+   * "Tulis manual" dan penutupan modal mengembalikannya ke keadaan lipat.
+   */
+  function bukaPanel() {
+    $panel.removeClass("d-none");
+    $pemicu.addClass("d-none");
+    $buka.attr("aria-expanded", "true");
+  }
+
+  function tutupPanel() {
+    $panel.addClass("d-none");
+    $pemicu.removeClass("d-none");
+    $buka.attr("aria-expanded", "false");
+    $saran.addClass("d-none").empty();
   }
 
   function fotoMuat(id) {
@@ -205,7 +225,16 @@
     dipilih = v;
     $id.val(v.id_stok);
 
-    $("#kode_produk").val(v.kode);
+    // kode bisa saja belum ikut tercantum di dropdown katalog produk (kolam
+    // ini hanya membawa 40 teratas), jadi opsinya diselipkan dulu supaya
+    // val() benar-benar kebaca oleh halaman pemilih item
+    var $kode = $("#kode_produk");
+
+    if ($kode.is("select") && $kode.find('option[value="' + window.CSS.escape(v.kode) + '"]').length === 0) {
+      $("<option>").val(v.kode).text(v.kode + " \u00B7 (di luar katalog)").appendTo($kode);
+    }
+
+    $kode.val(v.kode);
     $("#harga_satuan").val(v.harga);
 
     // ukuran stok bisa saja belum terdaftar di dropdown (barang baru), jadi
@@ -339,11 +368,18 @@
     }
   });
 
-  $batal.on("click", kosongkan);
+  $buka.on("click", bukaPanel);
+
+  // "Tulis manual" melepas tautan stok sekaligus melipat panelnya kembali
+  $batal.on("click", function () {
+    kosongkan();
+    tutupPanel();
+  });
 
   // baris baru selalu mulai bersih; edit memanggil STOK.tata() setelahnya
   $("#tambahProduk").on("hidden.bs.modal", function () {
     kosongkan();
+    tutupPanel();
     bawaanSinkron();
   });
 
@@ -391,11 +427,13 @@
     tata: function (id, kolam) {
       if (!id) {
         kosongkan();
+        tutupPanel();
 
         return;
       }
 
       ++token;
+      bukaPanel();
 
       dipilih = {
         id_stok: Number(id),

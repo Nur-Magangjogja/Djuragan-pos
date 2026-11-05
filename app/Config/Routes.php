@@ -494,6 +494,10 @@ $routes->get('download/invoice/(:any)', 'Download::invoice/$1', ['filter' => 'au
 // satu nota yang sama dicetak jadi dua dokumen: invoice untuk pelanggan (memuat uang),
 // lembar kerja untuk penjahit (hanya spesifikasi jahit, tanpa harga)
 $routes->get('download/penjahit/(:any)', 'Download::penjahit/$1', ['filter' => 'auth:admin,superadmin,user']);
+// tautan yang dikirim ke pelanggan lewat tombol "Salin tautan invoice": sengaja
+// TANPA filter auth supaya bisa dibuka tanpa login; akses tetap terkunci token
+// HMAC di dalam URL (Download::nota), jadi nota orang lain tidak tertebak
+$routes->get('nota/(:any)/(:any)', 'Download::nota/$1/$2');
 $routes->get('pelanggan/cari', 'Pelanggan::cari', ['filter' => 'auth:admin,superadmin,user']);
 $routes->get('pelanggan/data/(:num)', 'Pelanggan::data/$1', ['filter' => 'auth:admin,superadmin,user']);
 $routes->post('pelanggan/baru', 'Pelanggan::baru', ['filter' => 'auth:admin,superadmin,user']);

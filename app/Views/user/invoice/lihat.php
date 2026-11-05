@@ -431,7 +431,7 @@ $kelolaTransaksi = wewenang_sunting_transaksi();
                                 <a class="inline-flex cursor-pointer items-center gap-1 rounded-[0.7rem] border border-ink-200 bg-ink-50 px-2.5 py-1 text-sm text-ink-700 transition hover:bg-ink-100 hover:text-ink-900" href="<?= site_url('download/invoice/' . $pesanan->seri) ?>" target="_blank" rel="noopener" title="Cetak invoice untuk pelanggan">
                                     <i class="fal fa-print text-ink-500"></i> <span class="hidden md:inline">Invoice</span>
                                 </a>
-                                <button type="button" class="inline-flex cursor-pointer items-center gap-1 rounded-[0.7rem] border border-ink-200 bg-ink-50 px-2 py-1 text-sm text-ink-700 transition hover:bg-ink-100 hover:text-ink-900 salinTautan" data-link="<?= esc(site_url('download/invoice/' . $pesanan->seri), 'attr') ?>" title="Salin tautan invoice">
+                                <button type="button" class="inline-flex cursor-pointer items-center gap-1 rounded-[0.7rem] border border-ink-200 bg-ink-50 px-2 py-1 text-sm text-ink-700 transition hover:bg-ink-100 hover:text-ink-900 salinTautan" data-link="<?= esc(tautan_invoice_publik((int) $pesanan->id_invoice, (string) $pesanan->seri), 'attr') ?>" title="Salin tautan invoice">
                                     <i class="fal fa-copy text-ink-500"></i><span class="sr-only">Salin tautan</span>
                                 </button>
                             </div>
