@@ -81,15 +81,39 @@
    Di HP, tabel digeser ke samping membuat kolom kanannya tidak terbaca, jadi
    tiap baris ditumpuk jadi kartu dan setiap sel menampilkan label kolomnya
    (data-label), ditambah nama pelanggan yang boleh turun baris. */
-/* Tabel halaman ini tidak boleh melebar sampai memunculkan scroll horizontal:
-   style.css memaksa judul kolom nowrap sehingga kolom kanan terpotong keluar.
-   Judul boleh turun baris dan teks panjang dipotong di tengah kata. */
-.fup-halaman .fup-tabel th {
-    white-space: normal !important;
-}
-.fup-halaman .fup-tabel td,
-.fup-halaman .fup-tabel th {
-    overflow-wrap: anywhere;
+/* Tabel Follow-up di Layar Desktop (>=768px): rapi, proporsional, dan teks tidak pecah/terpotong */
+@media (min-width: 768px) {
+    .fup-tabel th {
+        white-space: nowrap !important;
+        font-size: 0.76rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #475467;
+        background-color: #f8fafc !important;
+        padding: 0.85rem 1rem !important;
+        vertical-align: middle;
+        border-bottom: 1px solid #eaecf0 !important;
+    }
+    .fup-tabel td {
+        padding: 0.85rem 1rem !important;
+        vertical-align: middle;
+        font-size: 0.875rem;
+        border-bottom: 1px solid #f2f4f7;
+    }
+    .fup-tabel .text-nowrap {
+        white-space: nowrap !important;
+    }
+    .btn-kirim-tagihan {
+        white-space: nowrap !important;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.35rem;
+        padding: 0.4rem 0.85rem;
+        font-weight: 600;
+        border-radius: 6px;
+    }
 }
 @media (max-width: 767.98px) {
     .fup-tabel thead {
@@ -366,22 +390,22 @@
                     <?php endif; ?>
                 <?php else: ?>
                     <div class="table-responsive">
-                        <table class="table table-hover align-middle border fup-tabel">
+                        <table class="table table-hover align-middle border fup-tabel mb-0">
                             <thead class="table-light">
                                 <tr>
-                                    <th>Jatuh Tempo</th>
-                                    <th>Customer</th>
-                                    <th>Kategori Tindakan</th>
+                                    <th style="min-width: 140px;">Jatuh Tempo</th>
+                                    <th style="min-width: 180px;">Customer</th>
+                                    <th style="min-width: 150px;">Kategori Tindakan</th>
                                     <th>Judul & Instruksi</th>
-                                    <th>Status</th>
-                                    <th>Staff PIC</th>
-                                    <th class="text-center">Aksi</th>
+                                    <th class="text-center" style="min-width: 110px;">Status</th>
+                                    <th style="min-width: 120px;">Staff PIC</th>
+                                    <th class="text-center" style="min-width: 100px;">Aksi</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <?php foreach ($followupList as $f): ?>
                                     <tr>
-                                        <td data-label="Jatuh Tempo">
+                                        <td data-label="Jatuh Tempo" class="text-nowrap">
                                             <span class="fw-bold <?= $f['tanggal_jatuh_tempo'] < date('Y-m-d') && $f['status'] === 'menunggu' ? 'text-danger' : 'text-dark' ?>">
                                                 <?= date('d/m/Y', strtotime($f['tanggal_jatuh_tempo'])) ?>
                                             </span>
@@ -396,12 +420,12 @@
                                                 <?= esc($f['nama_pelanggan']) ?>
                                             </a>
                                             <?php if (!empty($f['nomor_wa'])): ?>
-                                                <div class="small text-muted">
+                                                <div class="small text-muted text-nowrap">
                                                     <i class="fab fa-whatsapp text-success me-1"></i><?= esc($f['nomor_wa']) ?>
                                                 </div>
                                             <?php endif; ?>
                                         </td>
-                                        <td data-label="Kategori Tindakan">
+                                        <td data-label="Kategori Tindakan" class="text-nowrap">
                                             <span class="badge bg-light text-dark border">
                                                 <?= ucfirst(str_replace('_', ' ', $f['kategori'])) ?>
                                             </span>
@@ -412,17 +436,17 @@
                                                 <div class="small text-muted fup-catatan" style="white-space: pre-wrap;"><?= esc($f['catatan']) ?></div>
                                             <?php endif; ?>
                                         </td>
-                                        <td data-label="Status">
+                                        <td data-label="Status" class="text-center text-nowrap">
                                             <?php if ($f['status'] === 'selesai'): ?>
                                                 <span class="badge bg-success"><i class="fal fa-check me-1"></i> Selesai</span>
                                             <?php else: ?>
                                                 <span class="badge bg-warning text-dark"><i class="fal fa-clock me-1"></i> Menunggu</span>
                                             <?php endif; ?>
                                         </td>
-                                        <td class="small text-muted" data-label="Staff PIC">
+                                        <td class="small text-muted text-nowrap" data-label="Staff PIC">
                                             <?= esc($f['nama_staff'] ?? 'Staff') ?>
                                         </td>
-                                        <td class="text-center" data-label="Aksi">
+                                        <td class="text-center text-nowrap" data-label="Aksi">
                                             <a href="<?= site_url('admin/crm/pelanggan/' . $f['pelanggan_id']) ?>" class="btn btn-sm btn-outline-primary me-2" title="Buka Profil 360">
                                                 <i class="fal fa-id-card"></i>
                                             </a>
@@ -502,33 +526,33 @@
                     <?php endif; ?>
                 <?php else: ?>
                     <div class="table-responsive">
-                        <table class="table table-hover align-middle border fup-tabel">
+                        <table class="table table-hover align-middle border fup-tabel mb-0">
                             <thead class="table-light">
                                 <tr>
-                                    <th>Invoice</th>
-                                    <th>Pelanggan</th>
-                                    <th>Status Barang</th>
-                                    <th>Nomor WhatsApp</th>
-                                    <th class="text-end">Total Tagihan</th>
-                                    <th class="text-end">Telah Dibayar</th>
-                                    <th class="text-end">Sisa Piutang</th>
-                                    <th class="text-center">Aksi Tagih</th>
+                                    <th style="min-width: 140px;">Invoice</th>
+                                    <th style="min-width: 180px;">Pelanggan</th>
+                                    <th class="text-center" style="min-width: 130px;">Status Barang</th>
+                                    <th style="min-width: 150px;">Nomor WhatsApp</th>
+                                    <th class="text-end" style="min-width: 130px;">Total Tagihan</th>
+                                    <th class="text-end" style="min-width: 130px;">Telah Dibayar</th>
+                                    <th class="text-end" style="min-width: 130px;">Sisa Piutang</th>
+                                    <th class="text-center" style="min-width: 140px;">Aksi Tagih</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <?php foreach ($invoicesTagihan as $inv): ?>
                                     <tr>
-                                        <td data-label="Invoice">
+                                        <td data-label="Invoice" class="text-nowrap">
                                             <span class="fw-bold text-dark">#<?= esc($inv['seri']) ?></span>
                                             <div class="small text-muted"><?= date('d/m/Y', strtotime($inv['tanggal_pesan'])) ?></div>
                                         </td>
                                         <td data-label="Pelanggan">
-                                            <a href="<?= site_url('admin/crm/pelanggan/' . $inv['id_pelanggan']) ?>" class="fw-bold text-decoration-none">
+                                            <a href="<?= site_url('admin/crm/pelanggan/' . $inv['id_pelanggan']) ?>" class="fw-bold text-decoration-none text-primary">
                                                 <?= esc($inv['nama_pelanggan']) ?>
                                             </a>
                                             <div class="small text-muted"><?= esc($inv['nama_juragan']) ?></div>
                                         </td>
-                                        <td data-label="Status Barang">
+                                        <td data-label="Status Barang" class="text-center text-nowrap">
                                             <?php
                                             // penanda yang sama dengan tab "Siap Diambil" di Tracking
                                             // Transaksi: tahap packing selesai, atau paket sudah dikirim
@@ -544,25 +568,25 @@
                                             ?>
                                             <span class="badge bg-<?= $wama ?>"><?= esc($teks) ?></span>
                                         </td>
-                                        <td data-label="Nomor WhatsApp">
+                                        <td data-label="Nomor WhatsApp" class="text-nowrap">
                                             <?php if (!empty($inv['nomor_hp'])): ?>
-                                                <i class="fab fa-whatsapp text-success me-1"></i><?= esc($inv['nomor_hp']) ?>
+                                                <i class="fab fa-whatsapp text-success me-1"></i><span class="font-monospace"><?= esc($inv['nomor_hp']) ?></span>
                                             <?php else: ?>
                                                 <span class="badge bg-secondary">Tanpa Nomor</span>
                                             <?php endif; ?>
                                         </td>
-                                        <td class="text-end fw-semibold" data-label="Total Tagihan">
+                                        <td class="text-end fw-semibold text-nowrap" data-label="Total Tagihan">
                                             Rp <?= number_format($inv['total_tagihan'], 0, ',', '.') ?>
                                         </td>
-                                        <td class="text-end text-success" data-label="Telah Dibayar">
+                                        <td class="text-end text-success text-nowrap" data-label="Telah Dibayar">
                                             Rp <?= number_format($inv['telah_dibayar'], 0, ',', '.') ?>
                                         </td>
-                                        <td class="text-end text-danger fw-bold" data-label="Sisa Piutang">
+                                        <td class="text-end text-danger fw-bold text-nowrap" data-label="Sisa Piutang">
                                             Rp <?= number_format($inv['sisa_tagihan'], 0, ',', '.') ?>
                                         </td>
-                                        <td class="text-center" data-label="Aksi Tagih">
+                                        <td class="text-center text-nowrap" data-label="Aksi Tagih">
                                             <?php if (!empty($inv['nomor_hp'])): ?>
-                                                <button class="btn btn-sm btn-outline-success fw-semibold btn-kirim-tagihan"
+                                                <button class="btn btn-sm btn-outline-success fw-semibold text-nowrap btn-kirim-tagihan"
                                                         data-id="<?= $inv['id_invoice'] ?>"
                                                         data-seri="<?= esc($inv['seri']) ?>"
                                                         data-nama="<?= esc($inv['nama_pelanggan']) ?>"

@@ -23,6 +23,10 @@ $id_edit = $edit !== null ? (int) $edit['id_template'] : 0;
 <style>
     .tpl-halaman { max-width: 1060px; }
     .tpl-head { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-bottom: 1rem; }
+    /* blok judul menempati barisnya sendiri: keterangan halaman panjang, jadi kalau
+       dibiarkan hanya satu pil yang muat di sampingnya dan yang kedua jatuh
+       sendirian ke baris berikutnya */
+    .tpl-head > .me-auto { flex: 1 1 100%; }
     .tpl-head p { margin: .3rem 0 0; font-size: .9rem; color: #64748b; }
 
     .tpl-kartu {
@@ -56,6 +60,12 @@ $id_edit = $edit !== null ? (int) $edit['id_template'] : 0;
     .tpl-kosong i { font-size: 2rem; display: block; margin-bottom: .5rem; }
     .pil-tpl { display: inline-block; padding: .16rem .55rem; border-radius: 999px; font-size: .7rem; font-weight: 700; background: #eef1f6; color: #475569; }
     .pil-mati { background: #fdf1f0; color: #b81c16; }
+
+    /* pola rumah: di layar sempit ikon di depan judul dibuang, tombol back tetap
+       karena ia <a>, bukan <i> */
+    @media (max-width: 991.98px) {
+        .tpl-halaman h1 > i { display: none; }
+    }
 </style>
 <?= $this->endSection() ?>
 
@@ -66,12 +76,10 @@ $id_edit = $edit !== null ? (int) $edit['id_template'] : 0;
 
     <div class="tpl-head">
         <div class="me-auto">
-            <h1 class="h3 mt-5"><i class="fal fa-layer-group me-1 text-brand-500"></i> <?= esc($title) ?></h1>
+            <h1 class="h3 mt-5"><a class="judul-balik" href="<?= esc(site_url('admin/tugas')) ?>"
+                    title="Kembali ke antrean tugas" aria-label="Kembali ke antrean tugas"><i class="fal fa-arrow-left"></i></a><i class="fal fa-layer-group me-1 text-brand-500"></i> <?= esc($title) ?></h1>
             <p>Pekerjaan yang selalu berulang cukup ditulis sekali di sini, lalu dituang ke daftar Tugas lain-lain untuk satu toko pada satu tanggal.</p>
         </div>
-        <a class="btn btn-sm btn-outline-secondary rounded-pill" href="<?= esc(site_url('admin/tugas')) ?>">
-            <i class="fal fa-arrow-left me-1"></i> Tugas lain-lain
-        </a>
         <a class="btn btn-sm btn-outline-secondary rounded-pill" href="<?= esc(site_url('admin/sop')) ?>">
             <i class="fal fa-book-open me-1"></i> Pustaka SOP
         </a>

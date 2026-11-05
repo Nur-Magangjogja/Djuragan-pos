@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * Variabel di bawah ini diisi dari Kpi::index() lewat view('admin/kpi/index', $data).
  * CodeIgniter memanggil extract() di dalam system/View/View.php, jadi analyzers tidak
@@ -195,28 +195,28 @@ $tooltip = [
         ? (float) $gr['tim_nilai'] <= (float) $gr['tim_target']
         : (float) $gr['tim_nilai'] >= (float) $gr['tim_target']);
 
-    /* Susunan kartu (permintaan 2026-10-29):
-       - "Pesanan diproses" naik ke baris pertama bersama dua kartu GMV —
-         ketiganya berbagi satu baris (col-lg-4), bukan melebar sendiri;
+    /* Susunan kartu (permintaan 2026-10-29, lalu 2026-10-30):
+       - empat kartu yang tersisa berbagi SATU baris di >=1200px (col-xl-3 = 242px
+         di wadah 970px), jadi tidak ada ruang kosong di bawahnya; di 992-1199px
+         dua per baris karena angka "Rp 190.566.650" (fs-5 = 140px) patah tiga
+         baris kalau kotaknya dipaksa 171px;
        - blok "Ringkasan GMV Tim CS" duduk di slot itu juga, bersebelahan dengan
          kartu "GMV Tim CS" per orang;
-       - "Waktu penyelesaian tindak lanjut" mengisi slot milik "Pesanan
-         diproses" yang lama, yaitu posisi kedua dari baris empat kartu.
+       - kartu "Waktu penyelesaian tindak lanjut" dihapus dari halaman ini atas
+         permintaan; angkanya tetap ada di tabel rekap, grafik perbandingan, dan
+         halaman detailnya.
        Daftar sisanya diambil dari $kartu, jadi indikator baru yang ditambahkan
-       model nanti ikut tampil (jatuh ke kelompok terakhir), bukan hilang. */
+       model nanti ikut tampil di baris yang sama, bukan hilang. */
     $sisa = array_diff_key($kartu, array_flip(['order_diproses', 'gmv_cs', 'resolution_time']));
     $kartu_urut = array_merge(
         ['order_diproses' => $kartu['order_diproses'], 'gmv_tim' => null, 'gmv_cs' => $kartu['gmv_cs']],
-        array_slice($sisa, 0, 1, true),
-        ['resolution_time' => $kartu['resolution_time']],
-        array_slice($sisa, 1, null, true)
+        $sisa
     );
-    $lebar_kartu = ['order_diproses' => 'col-6 col-lg-4', 'gmv_cs' => 'col-6 col-lg-4'];
     ?>
     <div class="row gx-2 gy-3 mb-4">
         <?php foreach ($kartu_urut as $kunci => $k) { ?>
             <?php if ($kunci === 'gmv_tim') { ?>
-                <div class="col-6 col-lg-4">
+                <div class="col-6 col-lg-6 col-xl-3">
                     <div class="h-100 rounded-3 border border-ink-200 bg-white px-3 py-2">
                         <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
                             <div>
@@ -224,14 +224,15 @@ $tooltip = [
                                     <i class="fal fa-users me-1"></i> Ringkasan GMV Tim CS
                                 </div>
                                 <div class="fs-5 fw-bold kpi-angka mt-1"><?= $pcs($gr['tim_nilai']) ?></div>
+                                <?php if (! $timPunya) : ?>
+                                    <div class="small text-muted">target Tim CS belum diisi</div>
+                                <?php endif; ?>
                                 <div class="small text-muted">
                                     Gabungan <?= (int) $gr['jumlah_pegawai'] ?> CS &middot; periode <?= esc($s['awal']) ?>&ndash;<?= esc($s['akhir']) ?>
                                 </div>
                             </div>
-                            <div class="text-end">
-                                <?php if (! $timPunya) : ?>
-                                    <div class="small text-muted">target Tim CS belum diisi</div>
-                                <?php else : ?>
+                            <?php if ($timPunya) : ?>
+                                <div class="text-end">
                                     <div class="small">Target Tim: <strong><?= $pcs($gr['tim_target']) ?></strong></div>
                                     <div class="small">
                                         Capaian <strong><?= number_format((float) $timCapai, 1, ',', '.') ?>%</strong>
@@ -239,11 +240,8 @@ $tooltip = [
                                             &middot; <?= $timSentuh ? 'target tercapai' : 'belum tercapai' ?>
                                         </span>
                                     </div>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                        <div class="small text-muted mt-1">
-                            Pcs produk katalog dari nota lunas, bukan nominal rupiah. Angka per karyawan dibandingkan terhadap target <em>per CS</em> lewat kolom status di tabel rekap di bawah — terpisah dari target tim ini.
+                                </div>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
@@ -261,7 +259,7 @@ $tooltip = [
                     : 'Pcs produk katalog yang diatribusikan ke satu CS ini, dibandingkan target per CS.')
                 : ($tooltip[$kunci] ?? 'Angka dihitung dari catatan yang tersimpan di database.');
             ?>
-            <div class="<?= $lebar_kartu[$kunci] ?? 'col-6 col-xl-3' ?>">
+            <div class="col-6 col-lg-6 col-xl-3">
                 <div class="h-100 rounded-3 border border-ink-200 bg-white px-3 py-2">
                     <div class="text-muted small text-uppercase" title="<?= esc($tip) ?>">
                         <?= esc($label) ?>

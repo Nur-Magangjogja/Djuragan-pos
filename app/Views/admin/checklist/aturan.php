@@ -12,8 +12,12 @@
  * @var string $title  judul halaman
  * @var string $jenis  'toko' atau 'email'
  * @var array  $butir  hasil ChecklistModel::semuaButir()
- * @var array  $toko   id_toko => nama toko milik akun ini
- * @var array  $meta   ChecklistModel::JENIS
+ * @var array  $toko     id_toko => baris toko yang boleh dibuka akun ini
+ * @var array  $meta     ChecklistModel::JENIS
+ * @var array  $platform daftar marketplace untuk popus toko
+ * @var array  $pegawai  id akun => "nama (level)" — calon pemegang toko
+ * @var array  $pemegang id_toko => akun yang boleh membuka lembaran toko itu
+ * @var array  $juragan  id_juragan => nama, untuk menautkan toko ke pemiliknya
  * @var string $kabar  pesan sukses flash (string kosong kalau tidak ada)
  * @var string $galat  pesan gagal flash (string kosong kalau tidak ada)
  */
@@ -59,6 +63,38 @@ $level = (string) session()->get('level');
     .ckl-nonaktif .ckl-nomor, .ckl-nonaktif .ckl-judul-butir { opacity: .55; }
     .ckl-nomor { font-size: .74rem; color: #94a3b8; }
     .ckl-judul-butir { font-weight: 700; color: #0f172a; font-size: .9rem; }
+
+    /* kartu daftar toko + popusnya */
+    .ckl-judul-aksi { display: flex; align-items: center; gap: .6rem; }
+    .ckl-judul-aksi .btn { text-transform: none; letter-spacing: 0; font-weight: 600; }
+    .ckl-toko-list { max-height: 22rem; overflow-y: auto; }
+    .ckl-toko-baris {
+        display: flex; flex-wrap: wrap; align-items: center; gap: .5rem;
+        padding: .6rem 1rem; border-bottom: 1px solid #eef1f6;
+    }
+    .ckl-toko-baris:last-child { border-bottom: 0; }
+    .ckl-toko-baris strong { font-size: .88rem; color: #0f172a; }
+    .ckl-toko-baris > .me-auto { flex: 1 1 200px; min-width: 0; }
+    .ckl-toko-kenal { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .25rem; }
+    .pil-toko {
+        display: inline-block; padding: .12rem .5rem; border-radius: 999px;
+        background: #eef1f6; color: #475569; font-size: .7rem; font-weight: 600;
+    }
+    .pil-toko-juragan { background: #f1f5f9; color: #334155; }
+    .ckl-toko-kosong { font-size: .74rem; color: #94a3b8; }
+    .ckl-cs {
+        display: flex; flex-direction: column; gap: .25rem; max-height: 11rem; overflow-y: auto;
+        padding: .5rem .6rem; border: 1px solid #e2e8f0; border-radius: .7rem; background: #fbfcfe;
+    }
+    .ckl-cs-baris { display: flex; align-items: center; gap: .45rem; font-size: .8rem; color: #334155; margin: 0; }
+
+    @media (max-width: 991.98px) {
+        .ckl-toko-baris > .btn { margin-left: 0; }
+    }
+
+    @media (min-width: 992px) {
+        #modalToko .modal-content { max-height: 80vh; }
+    }
     .ckl-sub { font-size: .76rem; color: #64748b; margin-top: .1rem; }
     .pil-ckl { display: inline-block; padding: .16rem .55rem; border-radius: 999px; font-size: .7rem; font-weight: 700; white-space: nowrap; }
     .p-umum { background: #eef1f6; color: #475569; }
@@ -118,8 +154,8 @@ $level = (string) session()->get('level');
                     <label for="baru-toko">Toko</label>
                     <select class="form-select form-select-sm" id="baru-toko" name="toko_id">
                         <option value="0">Umum (semua toko)</option>
-                        <?php foreach ($toko as $id_toko => $nama_t) : ?>
-                            <option value="<?= (int) $id_toko ?>"><?= esc($nama_t) ?></option>
+                        <?php foreach ($toko as $id_toko => $t) : ?>
+                            <option value="<?= (int) $id_toko ?>"><?= esc($t['nama']) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
@@ -165,7 +201,7 @@ $level = (string) session()->get('level');
                         <?php if ($b['hint']) : ?><span><i class="fal fa-info-circle"></i> <?= esc($b['hint']) ?></span><?php endif; ?>
                         <?php if ($jenis === 'toko') : ?>
                             <?php if ($b['toko_id']) : ?>
-                                <span class="pil-ckl p-khusus"><i class="fal fa-store"></i> <?= esc($b['nama_juragan'] ?: 'toko #' . (int) $b['toko_id']) ?></span>
+                                <span class="pil-ckl p-khusus"><i class="fal fa-store"></i> <?= esc($b['nama_toko'] ?: 'toko #' . (int) $b['toko_id']) ?></span>
                             <?php else : ?>
                                 <span class="pil-ckl p-umum">Umum</span>
                             <?php endif; ?>
@@ -193,9 +229,9 @@ $level = (string) session()->get('level');
                                 <label for="toko-<?= (int) $b['id_item'] ?>">Toko</label>
                                 <select class="form-select form-select-sm" id="toko-<?= (int) $b['id_item'] ?>" name="toko_id">
                                     <option value="0">Umum (semua toko)</option>
-                                    <?php foreach ($toko as $id_toko => $nama_t) : ?>
+                                    <?php foreach ($toko as $id_toko => $t) : ?>
                                         <option value="<?= (int) $id_toko ?>" <?= (int) $b['toko_id'] === (int) $id_toko ? 'selected' : '' ?>>
-                                            <?= esc($nama_t) ?>
+                                            <?= esc($t['nama']) ?>
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
@@ -247,7 +283,177 @@ $level = (string) session()->get('level');
                 </div>
             <?php endforeach; ?>
         <?php endif; ?>
-    </div>
+    <?php if ($jenis === 'toko') : ?>
+        <!-- toko checklist dikelola di sini: namanya bebas dan juragan boleh dikosongkan,
+           jadi templat "butir khusus toko" bisa menunjuk ke toko yang belum ada di
+           daftar juragan sama sekali -->
+        <div class="ckl-kartu">
+            <div class="ckl-judul ckl-judul-aksi">
+                <span>Daftar toko (<?= count($toko) ?>)</span>
+                <button type="button" class="btn btn-sm btn-dark ms-auto"
+                    data-bs-toggle="modal" data-bs-target="#modalToko" data-id="0">
+                    <i class="fal fa-plus me-1"></i> Tambah toko
+                </button>
+            </div>
+            <div class="ckl-toko-list">
+                <?php foreach ($toko as $id_toko => $t) : ?>
+                    <?php
+                    $kenal     = $pemegang[(int) $id_toko] ?? [];
+                    $punya_cs  = [];
+
+                    foreach ($kenal as $o) {
+                        if ($o['sumber'] === 'tautan') {
+                            $punya_cs[] = (int) $o['id'];
+                        }
+                    }
+                    ?>
+                    <div class="ckl-toko-baris">
+                        <div class="me-auto">
+                            <strong><?= esc($t['nama']) ?></strong>
+                            <?php if ($t['platform'] !== '') : ?>
+                                <span class="pil-toko"><?= esc($t['platform']) ?></span>
+                            <?php endif; ?>
+                            <?php if ($t['juragan_id'] !== null && isset($juragan[(int) $t['juragan_id']])) : ?>
+                                <span class="pil-toko pil-toko-juragan"><?= esc($juragan[(int) $t['juragan_id']]) ?></span>
+                            <?php endif; ?>
+                            <div class="ckl-toko-kenal">
+                                <?php if ($kenal === []) : ?>
+                                    <span class="ckl-toko-kosong">belum ada yang boleh membuka lembaran toko ini</span>
+                                <?php else : ?>
+                                    <?php foreach ($kenal as $o) : ?>
+                                        <span class="pil-toko"><?= esc($o['nama']) ?></span>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill"
+                            data-bs-toggle="modal" data-bs-target="#modalToko"
+                            data-id="<?= (int) $id_toko ?>"
+                            data-nama="<?= esc($t['nama'], 'attr') ?>"
+                            data-platform="<?= esc($t['platform'], 'attr') ?>"
+                            data-juragan="<?= (int) ($t['juragan_id'] ?? 0) ?>"
+                            data-cs="<?= implode(',', $punya_cs) ?>"
+                            title="Sunting toko ini" aria-label="Sunting toko <?= esc($t['nama']) ?>">
+                            <i class="fal fa-pen"></i>
+                        </button>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+
+        <div class="modal fade" id="modalToko" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+                <div class="modal-content">
+                    <?= form_open('admin/checklist/toko-simpan') ?>
+                        <input type="hidden" name="id_toko" id="tk-id" value="0">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="modalTokoJudul">Tambah toko baru</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+                        </div>
+                        <div class="modal-body">
+                            <label class="form-label small fw-bold" for="tk-nama">Nama toko <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control form-control-sm" id="tk-nama" name="nama"
+                                maxlength="120" placeholder="mis. Toko Jaket Kota" required>
+
+                            <div class="row g-2 mt-1">
+                                <div class="col-6">
+                                    <label class="form-label small fw-bold" for="tk-platform">Platform</label>
+                                    <select class="form-select form-select-sm" id="tk-platform" name="platform">
+                                        <option value="">Tanpa platform</option>
+                                        <?php foreach ($platform as $p) : ?>
+                                            <option value="<?= esc($p) ?>"><?= esc($p) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small fw-bold" for="tk-juragan">Juragan</label>
+                                    <select class="form-select form-select-sm" id="tk-juragan" name="juragan_id">
+                                        <option value="0">Tidak ada (toko berdiri sendiri)</option>
+                                        <?php foreach ($juragan as $id_j => $nama_j) : ?>
+                                            <option value="<?= (int) $id_j ?>"><?= esc($nama_j) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <label class="form-label small fw-bold mt-2" for="tk-aktif">Status</label>
+                            <select class="form-select form-select-sm" id="tk-aktif" name="aktif">
+                                <option value="1">Aktif</option>
+                                <option value="0">Dimatikan</option>
+                            </select>
+
+                            <label class="form-label small fw-bold mt-2" for="tk-cs-0">CS yang boleh membuka lembaran toko ini</label>
+                            <div class="ckl-cs" id="tk-cs">
+                                <?php $i = 0; ?>
+                                <?php foreach ($pegawai as $id_u => $nama_u) : ?>
+                                    <label class="ckl-cs-baris" for="tk-cs-<?= $i ?>">
+                                        <input class="form-check-input mt-0" type="checkbox" id="tk-cs-<?= $i ?>"
+                                            name="cs[]" value="<?= (int) $id_u ?>">
+                                        <?= esc($nama_u) ?>
+                                    </label>
+                                    <?php $i++; ?>
+                                <?php endforeach; ?>
+                                <?php if ($pegawai === []) : ?>
+                                    <span class="ckl-toko-kosong">belum ada akun Admin/CS aktif</span>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-sm btn-link text-decoration-none" data-bs-dismiss="modal">Batal</button>
+                            <button type="submit" class="btn btn-sm btn-dark" id="modalTokoSimpan"><i class="fal fa-plus me-1"></i> Simpan</button>
+                        </div>
+                    <?= form_close() ?>
+                </div>
+            </div>
+        </div>
+
+        <script>
+    (function () {
+        var modal = document.getElementById('modalToko');
+
+        if (! modal) {
+            return;
+        }
+
+        var isi = function (key, fallback) {
+            var value = modal.querySelector('#' + key).value;
+            return value === '' ? fallback : value;
+        };
+
+        modal.addEventListener('show.bs.modal', function (event) {
+            var pemicu = event.relatedTarget;
+
+            if (! pemicu) {
+                return;
+            }
+
+            var id = pemicu.getAttribute('data-id') || '0';
+
+            modal.querySelector('#tk-id').value        = id;
+            modal.querySelector('#tk-nama').value      = pemicu.getAttribute('data-nama') || '';
+            modal.querySelector('#tk-platform').value  = isi('tk-platform', '');
+            modal.querySelector('#tk-aktif').value     = '1';
+
+            if (id !== '0') {
+                modal.querySelector('#tk-platform').value = pemicu.getAttribute('data-platform') || '';
+                modal.querySelector('#tk-juragan').value  = pemicu.getAttribute('data-juragan') || '0';
+            } else {
+                modal.querySelector('#tk-juragan').value  = '0';
+            }
+
+            var mau = (pemicu.getAttribute('data-cs') || '').split(',');
+            modal.querySelectorAll('#tk-cs input[type="checkbox"]').forEach(function (kotak) {
+                kotak.checked = mau.indexOf(kotak.value) > -1;
+            });
+
+            modal.querySelector('#modalTokoJudul').textContent = id === '0' ? 'Tambah toko baru' : 'Sunting toko';
+            modal.querySelector('#modalTokoSimpan').innerHTML  = id === '0'
+                ? '<i class="fal fa-plus me-1"></i> Simpan'
+                : '<i class="fal fa-save me-1"></i> Simpan';
+        });
+    }());
+        </script>
+    <?php endif; ?>
 
 </div>
 

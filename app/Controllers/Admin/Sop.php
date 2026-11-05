@@ -9,9 +9,9 @@ use CodeIgniter\Exceptions\PageNotFoundException;
 /**
  * Pustaka SOP.
  *
- * CS membaca aturannya, Admin menulisnya. Dokumen yang sudah tidak dipakai tidak
- * pernah dihapus — hanya dimatikan, supaya tugas lama yang menyebut sebuah SOP
- * tetap bisa ditelusuri orangnya.
+ * CS membaca aturannya, Admin menulisnya. Dokumen yang sudah tidak dipakai bisa
+ * sekadar dimatikan supaya tidak tampil ke CS, dan Admin punya hapus permanen
+ * sebagai jalan keluar terakhir.
  */
 class Sop extends BaseController
 {
@@ -26,21 +26,47 @@ class Sop extends BaseController
         $baris = $model->daftar([
             'aktif'    => $kelola ? '' : 1,
             'untuk'    => $kelola ? '' : ((string) session()->get('level') === 'cs' ? 'cs' : 'admin'),
-            'kategori' => (string) $this->request->getGet('kategori'),
             'cari'     => $cari,
         ]);
 
         return view('admin/sop/index', [
             'title'    => 'SOP & Panduan',
-            'baris'    => $baris,
+            'sop_grup' => SopModel::grup($baris),
+            'sop_kelola' => $kelola,
+            // halaman ini menampilkan daftar lengkap, jadi panelnya tidak perlu lapisan
+            'sop_modal' => false,
+            'sop_tampil' => count($baris),
+            // bahan form sunting popus: satu kali di halaman ini, diisi ulang per kartu
+            'sop_bahan' => $kelola ? $this->bahanSunting($baris) : [],
             'cari'     => $cari,
-            'kategori' => (string) $this->request->getGet('kategori'),
-            'daftar_kategori' => $model->kategori(),
-            'untuk'    => SopModel::UNTUK,
             'kelola'   => $kelola,
+            'kategori_sop' => SopModel::KATEGORI,
             'kabar'    => (string) session()->getFlashdata('sukses'),
             'galat'    => (string) session()->getFlashdata('galat'),
         ]);
+    }
+
+    /**
+     * Nilai yang dibutuhkan popus sunting per dokumen. Isinya dikirim sebagai satu
+     * blok JSON di halaman, jadi tidak ada atribut panjang di tiap kartu.
+     *
+     * @param list<array<string, mixed>> $baris
+     * @return array<int, array<string, string>>
+     */
+    private function bahanSunting(array $baris): array
+    {
+        $bahan = [];
+
+        foreach ($baris as $s) {
+            $bahan[(int) $s['id_sop']] = [
+                'judul'    => (string) $s['judul'],
+                'kategori' => SopModel::kategori_satu($s['kategori'] ?? ''),
+                'isi'      => SopModel::teks($s['isi'] ?? null),
+                'aktif'    => (string) (int) $s['aktif'],
+            ];
+        }
+
+        return $bahan;
     }
 
     public function lihat(int $id)
@@ -60,6 +86,10 @@ class Sop extends BaseController
             'sop'    => $sop,
             'untuk'  => SopModel::UNTUK,
             'kelola' => $kelola,
+            'kategori_sop' => SopModel::KATEGORI,
+            'sop_kategori' => SopModel::kategori_satu($sop['kategori'] ?? ''),
+            'sop_teks'     => SopModel::teks($sop['isi'] ?? null),
+            'sop_poin'     => SopModel::poin($sop['isi'] ?? null),
             'kabar'  => (string) session()->getFlashdata('sukses'),
             'galat'  => (string) session()->getFlashdata('galat'),
         ]);
@@ -82,12 +112,12 @@ class Sop extends BaseController
             throw PageNotFoundException::forPageNotFound();
         }
 
+        // satu dokumen = satu judul + isi (satu baris = satu poin). 'untuk' dan
+        // 'urut' tidak dikirim form, jadi nilai lamanya dibiarkan apa adanya
         $tersimpan = $model->simpan([
             'judul'    => $judul,
             'isi'      => (string) $this->request->getPost('isi'),
             'kategori' => (string) $this->request->getPost('kategori'),
-            'untuk'    => (string) $this->request->getPost('untuk'),
-            'urut'     => (int) $this->request->getPost('urut'),
             'aktif'    => (int) $this->request->getPost('aktif'),
         ], (int) session()->get('id'), $id);
 
@@ -106,6 +136,35 @@ class Sop extends BaseController
         $model->setAktif($id, (string) $this->request->getPost('aktif') === '1');
 
         return redirect()->to(site_url('admin/sop'))->with('sukses', 'Status SOP diperbarui.');
+    }
+
+    /** Hapus permanen satu dokumen (Admin & Superadmin). */
+    public function hapus()
+    {
+        $model = new SopModel();
+        $id    = (int) $this->request->getPost('id_sop');
+        $sop   = $model->satu($id);
+
+        if ($sop === null) {
+            return redirect()->to(site_url('admin/sop'))->with('galat', 'Dokumennya sudah tidak ada.');
+        }
+
+        $model->hapus($id);
+
+        return redirect()->to(site_url('admin/sop'))->with('sukses', 'SOP "' . $sop['judul'] . '" dihapus.');
+    }
+
+    /**
+     * Simpan urutan kartu hasil seret-lepas. Jawabannya JSON karena dipanggil
+     * dari skrip panel tanpa memuat ulang halaman; angkanya sendiri sudah benar
+     * begitu DOM-nya ditata ulang, jadi tidak perlu HTML yang dikirim balik.
+     */
+    public function urut()
+    {
+        $model = new SopModel();
+        $nomor = $model->simpanUrut((array) $this->request->getPost('id'));
+
+        return $this->response->setJSON(['tersimpan' => $nomor]);
     }
 
     // ------------------------------------------------------------------ dalam

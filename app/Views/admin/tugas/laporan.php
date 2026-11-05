@@ -37,6 +37,11 @@ $dibaca = static function ($detik): string {
     .lp-halaman { max-width: 1180px; }
     .lp-head { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-bottom: 1rem; }
     .lp-head p { margin: .3rem 0 0; font-size: .9rem; color: #64748b; }
+    /* pola rumah: di layar sempit ikon di depan judul dibuang, tombol back tetap
+       karena ia <a>, bukan <i> */
+    @media (max-width: 991.98px) {
+        .lp-halaman h1 > i { display: none; }
+    }
 
     .lp-saring { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .55rem; margin-bottom: 1rem; }
     .lp-saring .lapangan { display: flex; flex-direction: column; gap: .2rem; }
@@ -74,12 +79,10 @@ $dibaca = static function ($detik): string {
 
     <div class="lp-head">
         <div class="me-auto">
-            <h1 class="h3 mt-5"><i class="fal fa-chart-line me-1 text-brand-500"></i> <?= esc($title) ?></h1>
+            <h1 class="h3 mt-5"><a class="judul-balik" href="<?= esc(site_url('admin/tugas')) ?>"
+                    title="Kembali ke antrean tugas" aria-label="Kembali ke antrean tugas"><i class="fal fa-arrow-left"></i></a><i class="fal fa-chart-line me-1 text-brand-500"></i> <?= esc($title) ?></h1>
             <p>Semua perpindahan tugas tercatat di sini: siapa mengambil, siapa menetapkan, apa yang dioper.</p>
         </div>
-        <a class="btn btn-sm btn-outline-secondary rounded-pill" href="<?= esc(site_url('admin/tugas')) ?>">
-            <i class="fal fa-list-check me-1"></i> Antrean
-        </a>
         <a class="btn btn-sm btn-outline-secondary rounded-pill" href="<?= esc(site_url('admin/tugas/dasbor')) ?>">
             <i class="fal fa-gauge me-1"></i> Dasbor
         </a>

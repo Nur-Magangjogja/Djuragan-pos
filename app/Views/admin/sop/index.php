@@ -1,17 +1,16 @@
 <?php
 
 /**
- * Daftar SOP.
+ * Daftar SOP: dua panel bernomor, SOP dan PANDUAN.
  *
- * @var string                    $title           judul halaman
- * @var list<array<string, mixed>> $baris          baris hasil query
- * @var string                    $cari            kata kunci pencarian
- * @var string                    $kategori        kelompok terpilih
- * @var array<int, string>        $daftar_kategori daftar kelompok yang pernah dipakai
- * @var array<string, string>     $untuk           peta kode -> label peran
- * @var bool                      $kelola          apakah boleh mengelola
- * @var string                    $kabar           pesan sukses flash
- * @var string                    $galat           pesan gagal flash
+ * @var string                                    $title           judul halaman
+ * @var array<string, list<array<string, mixed>>> $sop_grup
+ * @var bool                                      $sop_kelola
+ * @var bool                                      $kelola
+ * @var string                                    $cari            kata kunci pencarian
+ * @var array<int, string>                        $kategori_sop    dua pilihan kategori di form
+ * @var string                                    $kabar           pesan sukses flash
+ * @var string                                    $galat           pesan gagal flash
  */
 
 $level = (string) session()->get('level');
@@ -21,7 +20,12 @@ $level = (string) session()->get('level');
 <?= $this->section('css') ?>
 <style>
     .sop-halaman { max-width: 980px; }
-    .sop-head { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-bottom: 1rem; }
+    /* tombol di kanan kepala halaman digeser kiri 72px: lonceng notifikasi desktop
+       melayang di pojok kanan atas dan menutupinya begitu jendela tidak terlalu lebar */
+    .sop-head { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-bottom: 1rem; padding-right: 4.5rem; }
+    /* blok judul boleh memendek (keterangan turun satu baris) supaya kedua tombol
+       tetap satu baris di kanan, tidak jatuh jadi dua baris */
+    .sop-head > .me-auto { flex: 1 1 0; min-width: 0; }
     .sop-head p { margin: .3rem 0 0; font-size: .9rem; color: #64748b; }
     .sop-saring { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .55rem; margin-bottom: 1rem; }
     .sop-saring .lapangan { display: flex; flex-direction: column; gap: .2rem; }
@@ -33,17 +37,24 @@ $level = (string) session()->get('level');
         box-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 8px 24px -12px rgba(15, 23, 42, .12);
         overflow: hidden;
     }
-    .sop-baris { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; padding: .85rem 1rem; border-bottom: 1px solid #f1f5f9; }
-    .sop-baris:last-child { border-bottom: 0; }
-    .sop-judul { font-weight: 700; color: #0f172a; text-decoration: none; font-size: .92rem; }
-    .sop-judul:hover { color: #da251d; }
-    .sop-sub { font-size: .76rem; color: #64748b; display: flex; flex-wrap: wrap; gap: .2rem .6rem; margin-top: .15rem; }
-    .sop-mati .sop-judul { color: #94a3b8; text-decoration: line-through; }
-    .sop-aksi { display: inline-flex; align-items: center; gap: .35rem; margin-left: auto; }
-    .pil-sop { display: inline-block; padding: .16rem .55rem; border-radius: 999px; font-size: .7rem; font-weight: 700; background: #eef1f6; color: #475569; }
-    .pil-mati { background: #fdf1f0; color: #b81c16; }
+    .sop-kartu > .sop-panel-luar { padding: 1rem; }
     .sop-kosong { padding: 2.6rem 1rem; text-align: center; color: #94a3b8; }
     .sop-kosong i { font-size: 2rem; display: block; margin-bottom: .5rem; }
+
+    /* di layar sempit judul menempati barisnya sendiri lalu kedua tombol berbagi
+       baris berikutnya, satu menempel tepi kiri dan satunya tepi kanan; jarak ke
+       lonceng tidak diperlukan lagi karena lonceng melayang hanya di desktop */
+    @media (max-width: 991.98px) {
+        .sop-head { padding-right: 0; }
+        .sop-head h1 > i { display: none; }
+        .sop-head > .me-auto { flex: 1 1 100%; }
+        .sop-head > a.btn, .sop-head > button.btn { flex: 1 1 0; min-width: 0; }
+
+        /* baris cari ikut menutup lebar kartu: kolom input yang membesar, tombol
+           tetap selebar teksnya di ujung kanan supaya tidak ada sisa kosong */
+        .sop-saring > .lapangan:first-child { flex: 1 1 0; min-width: 0; }
+        .sop-saring .form-control { max-width: none; width: 100%; }
+    }
 </style>
 <?= $this->endSection() ?>
 
@@ -80,60 +91,26 @@ $level = (string) session()->get('level');
             <input type="search" class="form-control form-control-sm" id="cari" name="cari" value="<?= esc($cari) ?>"
                 placeholder="judul atau isi">
         </div>
-        <?php if ($daftar_kategori !== []) : ?>
-            <div class="lapangan">
-                <label for="kategori">Kelompok</label>
-                <select class="form-select form-select-sm" id="kategori" name="kategori">
-                    <option value="">Semua kelompok</option>
-                    <?php foreach ($daftar_kategori as $k) : ?>
-                        <option value="<?= esc($k) ?>" <?= $kategori === $k ? 'selected' : '' ?>><?= esc($k) ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-        <?php endif; ?>
         <div class="lapangan">
             <label>&nbsp;</label>
-            <div class="d-inline-flex gap-2 align-items-center">
+            <!-- sejajar dan setinggi: tombol ikon saja lebih pendek karena garis
+                 FontAwesome memakai line-height:1, jadi keduanya direntangkan -->
+            <div class="d-inline-flex gap-2 align-items-stretch">
                 <button type="submit" class="btn btn-sm btn-dark"><i class="fal fa-search"></i> Cari</button>
-                <a class="btn btn-sm btn-link text-decoration-none" href="<?= esc(site_url('admin/sop')) ?>">Ulangi</a>
+                <a class="btn btn-sm btn-dark text-decoration-none" href="<?= esc(site_url('admin/sop')) ?>"
+                    title="Ulangi" aria-label="Ulangi"><i class="fal fa-sync"></i></a>
             </div>
         </div>
     </form>
 
     <div class="sop-kartu">
-        <?php if ($baris === []) : ?>
+        <?php if ($sop_grup['SOP'] === [] && $sop_grup['PANDUAN'] === []) : ?>
             <div class="sop-kosong">
                 <i class="fal fa-book-open"></i>
                 Belum ada SOP<?= $kelola ? ' — buat dokumen pertama di tombol kanan atas' : '' ?>.
             </div>
         <?php else : ?>
-            <?php foreach ($baris as $s) : ?>
-                <?php $mati = (int) $s['aktif'] !== 1; ?>
-                <div class="sop-baris <?= $mati ? 'sop-mati' : '' ?>">
-                    <div class="me-auto">
-                        <a class="sop-judul" href="<?= esc(site_url('admin/sop/' . (int) $s['id_sop'])) ?>"><?= esc($s['judul']) ?></a>
-                        <div class="sop-sub">
-                            <span class="pil-sop"><?= esc($s['kategori']) ?></span>
-                            <span class="pil-sop"><?= esc($untuk[$s['untuk']] ?? $s['untuk']) ?></span>
-                            <span>urut <?= (int) $s['urut'] ?></span>
-                            <?php if ($s['nama_diubah']) : ?><span>diubah <?= esc($s['nama_diubah']) ?></span><?php endif; ?>
-                            <?php if ($mati) : ?><span class="pil-sop pil-mati">nonaktif</span><?php endif; ?>
-                        </div>
-                    </div>
-                    <div class="sop-aksi">
-                        <?php if ($kelola) : ?>
-                            <?= form_open('admin/sop/aktif') ?>
-                                <input type="hidden" name="id_sop" value="<?= (int) $s['id_sop'] ?>">
-                                <input type="hidden" name="aktif" value="<?= $mati ? '1' : '0' ?>">
-                                <button type="submit" class="btn btn-sm btn-link text-decoration-none <?= $mati ? 'text-success' : 'text-danger' ?>">
-                                    <?= $mati ? 'Nyalakan' : 'Matikan' ?>
-                                </button>
-                            <?= form_close() ?>
-                        <?php endif; ?>
-                        <a class="btn btn-sm btn-link text-decoration-none" href="<?= esc(site_url('admin/sop/' . (int) $s['id_sop'])) ?>">Buka</a>
-                    </div>
-                </div>
-            <?php endforeach; ?>
+            <?= $this->include('admin/sop/panel') ?>
         <?php endif; ?>
     </div>
 
@@ -151,32 +128,24 @@ $level = (string) session()->get('level');
                 <div class="modal-body">
                     <input type="hidden" name="id_sop" value="0">
                     <input type="hidden" name="aktif" value="1">
-                    <div class="mb-2">
-                        <label class="form-label small fw-bold" for="sop-judul">Judul <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control form-control-sm" id="sop-judul" name="judul" maxlength="200" required>
-                    </div>
                     <div class="row g-2">
-                        <div class="col-4">
-                            <label class="form-label small fw-bold" for="sop-kategori">Kelompok</label>
-                            <input type="text" class="form-control form-control-sm" id="sop-kategori" name="kategori" maxlength="40" value="SOP">
+                        <div class="col-12 col-sm-8">
+                            <label class="form-label small fw-bold" for="sop-judul">Judul <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control form-control-sm" id="sop-judul" name="judul" maxlength="200" required>
                         </div>
-                        <div class="col-4">
-                            <label class="form-label small fw-bold" for="sop-untuk">Untuk</label>
-                            <select class="form-select form-select-sm" id="sop-untuk" name="untuk">
-                                <?php foreach ($untuk as $kode => $nama) : ?>
-                                    <option value="<?= esc($kode) ?>"><?= esc($nama) ?></option>
+                        <div class="col-12 col-sm-4">
+                            <label class="form-label small fw-bold" for="sop-kategori">Kategori</label>
+                            <select class="form-select form-select-sm" id="sop-kategori" name="kategori">
+                                <?php foreach ($kategori_sop as $kode) : ?>
+                                    <option value="<?= esc($kode) ?>"><?= esc($kode) ?></option>
                                 <?php endforeach; ?>
                             </select>
-                        </div>
-                        <div class="col-4">
-                            <label class="form-label small fw-bold" for="sop-urut">Urut</label>
-                            <input type="number" class="form-control form-control-sm" id="sop-urut" name="urut" min="0" max="9999" value="0">
                         </div>
                     </div>
                     <div class="mt-2">
                         <label class="form-label small fw-bold" for="sop-isi">Isi</label>
                         <textarea class="form-control form-control-sm" id="sop-isi" name="isi" rows="10"
-                            placeholder="Tulis langkahnya satu per satu. Baris baru ikut tersimpan."></textarea>
+                            placeholder="Tulis satu aturan per baris. Setiap baris jadi satu poin."></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">

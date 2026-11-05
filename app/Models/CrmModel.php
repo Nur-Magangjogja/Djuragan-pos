@@ -377,7 +377,9 @@ class CrmModel extends Model
         ) bc ON bc.invoice_id = inv.id_invoice
         LEFT JOIN (
             SELECT invoice_id, SUM(total_pembayaran) as total_bayar 
-            FROM `{$pBay}` GROUP BY invoice_id
+            FROM `{$pBay}` 
+            WHERE status = '3'
+            GROUP BY invoice_id
         ) pm ON pm.invoice_id = inv.id_invoice
         WHERE inv.pemesan_id = ? AND inv.deleted_at IS NULL
         ORDER BY inv.tanggal_pesan DESC";
@@ -448,6 +450,7 @@ class CrmModel extends Model
             inv.keterangan,
             inv.rincian,
             jur.nama_juragan,
+            jur.juragan AS slug_juragan,
             COALESCE(b.total_barang, 0) + COALESCE(bc.total_biaya, 0) as total_tagihan,
             COALESCE(pm.total_bayar, 0) as telah_dibayar,
             (COALESCE(b.total_barang, 0) + COALESCE(bc.total_biaya, 0)) - COALESCE(pm.total_bayar, 0) as sisa_tagihan
@@ -463,7 +466,9 @@ class CrmModel extends Model
         ) bc ON bc.invoice_id = inv.id_invoice
         LEFT JOIN (
             SELECT invoice_id, SUM(total_pembayaran) as total_bayar 
-            FROM `{$pBay}` GROUP BY invoice_id
+            FROM `{$pBay}` 
+            WHERE status = '3'
+            GROUP BY invoice_id
         ) pm ON pm.invoice_id = inv.id_invoice
         WHERE inv.pemesan_id = ? AND inv.deleted_at IS NULL
         ORDER BY inv.tanggal_pesan DESC, inv.id_invoice DESC";
@@ -1278,10 +1283,13 @@ class CrmModel extends Model
         ) bc ON bc.invoice_id = inv.id_invoice
         LEFT JOIN (
             SELECT invoice_id, SUM(total_pembayaran) as total_bayar 
-            FROM `{$pBay}` GROUP BY invoice_id
+            FROM `{$pBay}` 
+            WHERE status = '3'
+            GROUP BY invoice_id
         ) pm ON pm.invoice_id = inv.id_invoice
         WHERE inv.deleted_at IS NULL 
           AND inv.status_pembayaran IN ('1','2','3','4')
+          AND ((COALESCE(b.total_barang, 0) + COALESCE(bc.total_biaya, 0)) - COALESCE(pm.total_bayar, 0)) > 0
           {$hanya}
           {$whereCari}
         {$urut}
@@ -1300,6 +1308,9 @@ class CrmModel extends Model
     {
         $pInv  = $this->db->prefixTable('invoice');
         $pPel  = $this->db->prefixTable('pelanggan');
+        $pDib  = $this->db->prefixTable('dibeli');
+        $pBi   = $this->db->prefixTable('biaya');
+        $pBay  = $this->db->prefixTable('pembayaran');
         $pKon  = $this->db->prefixTable('pelanggan_kontak');
 
         $whereCari = '';
@@ -1319,8 +1330,23 @@ class CrmModel extends Model
             SELECT pelanggan_id, MIN(nomor_pure) as nomor 
             FROM `{$pKon}` GROUP BY pelanggan_id
         ) kon ON kon.pelanggan_id = pel.id_pelanggan
+        LEFT JOIN (
+            SELECT invoice_id, SUM(qty * harga) as total_barang 
+            FROM `{$pDib}` GROUP BY invoice_id
+        ) b ON b.invoice_id = inv.id_invoice
+        LEFT JOIN (
+            SELECT invoice_id, SUM(nominal) as total_biaya 
+            FROM `{$pBi}` GROUP BY invoice_id
+        ) bc ON bc.invoice_id = inv.id_invoice
+        LEFT JOIN (
+            SELECT invoice_id, SUM(total_pembayaran) as total_bayar 
+            FROM `{$pBay}` 
+            WHERE status = '3'
+            GROUP BY invoice_id
+        ) pm ON pm.invoice_id = inv.id_invoice
         WHERE inv.deleted_at IS NULL 
           AND inv.status_pembayaran IN ('1','2','3','4')
+          AND ((COALESCE(b.total_barang, 0) + COALESCE(bc.total_biaya, 0)) - COALESCE(pm.total_bayar, 0)) > 0
           {$hanya}
           {$whereCari}";
 
@@ -1375,7 +1401,9 @@ class CrmModel extends Model
         ) bc ON bc.invoice_id = inv.id_invoice
         LEFT JOIN (
             SELECT invoice_id, SUM(total_pembayaran) as total_bayar 
-            FROM `{$pBay}` GROUP BY invoice_id
+            FROM `{$pBay}` 
+            WHERE status = '3'
+            GROUP BY invoice_id
         ) pm ON pm.invoice_id = inv.id_invoice
         LEFT JOIN (
             SELECT invoice_id, kurir, resi, tanggal_kirim 

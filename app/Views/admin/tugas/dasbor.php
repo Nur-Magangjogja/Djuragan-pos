@@ -18,7 +18,6 @@
  * @var int    $sesi        lembar Cek Toko yang belum ditutup
  * @var array<string, mixed>|null $shift      jam shift saya hari ini
  * @var list<array<string, mixed>> $regu      jam shift semua CS hari ini
- * @var int    $pengenalan  toko yang belum dikenali CS-nya
  * @var array<string, array<string, string>> $meta  label status/jenis/prioritas
  * @var string $kabar       pesan sukses flash (string kosong kalau tidak ada)
  * @var string $galat       pesan gagal flash (string kosong kalau tidak ada)
@@ -35,10 +34,6 @@ $tiles = [
     ['Lewat tenggat', (int) ($ringkas['terlambat'] ?? 0), 'fa-triangle-exclamation', 'belum beres tapi sudah telat'],
     ['Cek Toko hari ini', (int) $sesi, 'fa-ballot-check', 'lembar toko yang belum ditutup'],
 ];
-
-if ($level !== 'cs') {
-    $tiles[] = ['Toko belum dikenal', (int) $pengenalan, 'fa-store', 'perlu dikenali CS-nya'];
-}
 ?>
 <?= $this->extend('template/main') ?>
 
@@ -90,6 +85,17 @@ if ($level !== 'cs') {
     .s-waiting { background: #f3e8ff; color: #6b21a8; }
     .s-completed { background: #e7f6ec; color: #14663a; }
     .s-cancelled { background: #fdf1f0; color: #b81c16; }
+
+    /* di layar sempit ikon judul dibuang dan kartu statistik disusun dua-dua
+       kanan-kiri: dengan flex + min-width 168px sepasang pun tidak pernah muat
+       (168 + 168 + jarak 9,6 = 345,6px sementara kartu cuma 336px), jadi isinya
+       selalu jatuh satu per baris */
+    @media (max-width: 991.98px) {
+        .dsb-head h1 > i { display: none; }
+        .dsb-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .dsb-tile { min-width: 0; }
+        .dsb-tile:last-child:nth-child(odd) { grid-column: 1 / -1; }
+    }
 </style>
 <?= $this->endSection() ?>
 
@@ -100,7 +106,8 @@ if ($level !== 'cs') {
 
     <div class="dsb-head">
         <div class="me-auto">
-            <h1 class="h3 mt-5"><i class="fal fa-gauge me-1 text-brand-500"></i> <?= esc($title) ?></h1>
+            <h1 class="h3 mt-5"><a class="judul-balik" href="<?= esc(site_url('admin/tugas')) ?>"
+                    title="Kembali ke antrean tugas" aria-label="Kembali ke antrean tugas"><i class="fal fa-arrow-left"></i></a><i class="fal fa-gauge me-1 text-brand-500"></i> <?= esc($title) ?></h1>
             <p><?= $level === 'cs' ? 'Peganganmu hari ini' : 'Kondisi antrean kerja semua CS' ?> &middot; <?= esc(tanggal_rincian($hari)) ?></p>
         </div>
         <?php if ($level !== 'cs') : ?>

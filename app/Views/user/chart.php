@@ -64,28 +64,15 @@ $adaDataJs           = $adaData ? 'true' : 'false';
        garis tepi slate tipis, bayangan lembut, aksen merah merek untuk "bulan
        ini" dan hijau untuk "terkirim". Warna ditulis literal (bukan utility
        Tailwind) agar tidak bergantung pada proses build ulang CSS. */
-    .chart-halaman {
-        max-width: 1120px;
-    }
+    /* baseline, bukan center: h1 di baris ini masih membawa mt-5 (3rem) yang
+       dibutuhkan selector normal judul di style.css, jadi margin box-nya jauh
+       lebih tinggi dari teksnya — kalau dipusatkan, chip tanggal justru naik di
+       atas kata "Chart". */
     .chart-judul-baris {
         display: flex;
         flex-wrap: wrap;
-        align-items: flex-end;
-        justify-content: space-between;
-        gap: .75rem;
-        margin: 1.75rem 0 1.25rem;
-    }
-    .chart-judul h1 {
-        margin: 0;
-        font-size: 1.6rem;
-        font-weight: 800;
-        letter-spacing: -.01em;
-        color: #0f172a;
-    }
-    .chart-judul p {
-        margin: .3rem 0 0;
-        font-size: .9rem;
-        color: #64748b;
+        align-items: baseline;
+        gap: .5rem;
     }
     .chart-periode {
         display: inline-flex;
@@ -94,7 +81,7 @@ $adaDataJs           = $adaData ? 'true' : 'false';
         background: #fff;
         border: 1px solid #e2e8f0;
         border-radius: 999px;
-        padding: .45rem .85rem;
+        padding: .3rem .7rem;
         font-size: .78rem;
         font-weight: 600;
         color: #475569;
@@ -191,8 +178,9 @@ $adaDataJs           = $adaData ? 'true' : 'false';
     }
     .chart-kartu-kepala {
         display: flex;
-        align-items: center;
-        gap: .7rem;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: .35rem .7rem;
         padding: 1rem 1.15rem;
         border-bottom: 1px solid #f1f5f9;
         background: rgba(248, 250, 252, .6);
@@ -226,14 +214,15 @@ $adaDataJs           = $adaData ? 'true' : 'false';
     }
     .chart-legend {
         display: flex;
-        gap: .9rem;
+        flex-wrap: wrap;
+        gap: .5rem .9rem;
         margin-left: auto;
     }
     .chart-legend .item {
         display: inline-flex;
         align-items: center;
         gap: .4rem;
-        font-size: .74rem;
+        font-size: .76rem;
         font-weight: 600;
         color: #475569;
         white-space: nowrap;
@@ -249,6 +238,22 @@ $adaDataJs           = $adaData ? 'true' : 'false';
         height: 340px;
         padding: 1.1rem 1.15rem 1.25rem;
     }
+    @media (max-width: 767.98px) {
+        /* tinggi kanvas sengaja TETAP sama dengan desktop (340px); yang dipangkas
+           cuma jarak dalam kartu supaya sumbu X dapat lebar penuh */
+        .chart-box {
+            padding: .9rem .8rem 1rem;
+        }
+        .chart-kartu-kepala {
+            padding: .8rem .9rem;
+        }
+        /* legendar turun ke baris sendiri: selama ia duduk di kanan, judul kartu
+           terdesak jadi tiga baris ("JUMLAH / ORDERAN" + sub yang patah) */
+        .chart-legend {
+            flex-basis: 100%;
+            margin-left: 0;
+        }
+    }
     .chart-kosong {
         padding: 3rem 1rem;
         text-align: center;
@@ -261,17 +266,17 @@ $adaDataJs           = $adaData ? 'true' : 'false';
 <?= $this->section('content') ?>
 <?= $this->include('user/navbar') ?>
 
-<div class="container-xxl chart-halaman">
+<div class="container-xxl">
 
     <div class="chart-judul-baris">
-        <div class="chart-judul">
-            <h1><?= esc($title) ?></h1>
-            <p>Ringkasan orderan &amp; pengiriman per juragan, bulan ini dibanding bulan lalu.</p>
-        </div>
+        <h1 class="h3 mt-5 mb-0"><?= esc($title) ?></h1>
         <span class="chart-periode">
             <i class="fal fa-calendar"></i> per <?= esc($awalBulanIni) ?> &ndash; <?= esc($akhirBulanIni) ?>
         </span>
     </div>
+    <p class="text-muted small mt-2 mb-4">
+        Ringkasan orderan &amp; pengiriman per juragan, bulan ini dibanding bulan lalu.
+    </p>
 
     <div class="stat-grid">
         <div class="stat-kartu">
@@ -379,6 +384,13 @@ $adaDataJs           = $adaData ? 'true' : 'false';
 <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <?php
 
+/* Sumbu X: SEMUA nama juragan harus tampil (autoSkip:false — tidak ada nama yang
+   hilang) dan tulisannya miring, bukan tegak lurus: min/maxRotation 45-90 membuat
+   Chart.js memakai kemiringan paling kendor yang masih muat, jadi desktop dapat
+   ±45° sementara layar sempit naik sendiri sampai yang perlu. Nama panjang dipotong
+   12 karakter dan lengkapnya tetap muncul di tooltip (callbacks.title mengambil
+   label asli). Huruf sumbu 11px: dengan 21 nama, pitch 14px masih muat di kanvas
+   314px, jadi tidak perlu mengecilkan teks. */
 $js = <<< JS
     $(function() {
         'use strict';
@@ -393,13 +405,17 @@ $js = <<< JS
 
         var warnaLalu = '#cbd5e1';   // slate muda: pembanding (bulan lalu)
 
+        function potong(teks) {
+            return teks.length > 12 ? teks.slice(0, 11) + '…' : teks;
+        }
+
         function buatChart(canvasId, labels, dataLalu, dataIni, warnaIni) {
             var el = document.getElementById(canvasId);
             if (!el || !labels || labels.length === 0) {
-                return;
+                return null;
             }
 
-            new Chart(el.getContext('2d'), {
+            return new Chart(el.getContext('2d'), {
                 type: 'bar',
                 data: {
                     labels: labels,
@@ -438,14 +454,28 @@ $js = <<< JS
                             cornerRadius: 10,
                             displayColors: true,
                             usePointStyle: true,
-                            boxPadding: 4
+                            boxPadding: 4,
+                            callbacks: {
+                                title: function (butir) {
+                                    return labels[butir[0].dataIndex];
+                                }
+                            }
                         }
                     },
                     scales: {
                         x: {
                             grid: { display: false },
                             border: { display: false },
-                            ticks: { color: '#64748b', font: { size: 11 }, autoSkip: false, maxRotation: 40, minRotation: 0 }
+                            ticks: {
+                                color: '#64748b',
+                                font: { size: 11 },
+                                autoSkip: false,
+                                maxRotation: 90,
+                                minRotation: 45,
+                                callback: function (nilai) {
+                                    return potong(this.getLabelForValue(nilai));
+                                }
+                            }
                         },
                         y: {
                             beginAtZero: true,

@@ -10,7 +10,6 @@ use App\Models\InvoiceModel;
 use App\Models\JuraganModel;
 use App\Models\PelangganModel;
 use App\Models\ShiftModel;
-use App\Models\TokoOnlineModel;
 use App\Models\TugasModel;
 use App\Models\TugasTemplateModel;
 use App\Models\UlasanModel;
@@ -760,7 +759,6 @@ class Tugas extends BaseController
             'sesi'      => $ckl->hitungTerbuka($toko, $hari),
             'shift'     => (new ShiftModel())->satu($user, $hari),
             'regu'      => $level === 'cs' ? [] : (new ShiftModel())->padaTanggal($hari),
-            'pengenalan' => (new TokoOnlineModel())->hitungBelumDikenal($user, $toko),
             'meta'      => ['status' => TugasModel::STATUS, 'jenis' => TugasModel::JENIS, 'prioritas' => TugasModel::PRIORITAS],
             'kabar'     => (string) session()->getFlashdata('sukses'),
             'galat'     => (string) session()->getFlashdata('galat'),

@@ -1592,8 +1592,11 @@ body.has-app-sidebar {
   transition: transform 0.2s ease;
 }
 
+/* Arah chevron submenu sudah diatur aturan umum [data-bs-toggle="collapse"]
+   .fa-chevron-down di atas (mentok ke kanan saat tertutup, turun saat terbuka).
+   transform: rotate(180deg) yang lama menumpuk di atas rotate itu sehingga ikonnya
+   malah menghadap ke atas begitu submenunya dibuka. */
 .sidebar-link[aria-expanded="true"] .sidebar-chevron {
-  transform: rotate(180deg);
   color: var(--sidebar-text);
 }
 
@@ -3934,3 +3937,25 @@ tr.varian-sorot td {
 .customBiaya.border-bottom {
   padding: 1rem !important;
 }
+
+/* 21. Isi dokumen SOP yang dibaca — satu dokumen = satu judul + poin, dan poin
+   yang sama dicetak di dua tempat: halaman dokumen (admin/sop/{id}) dan kotak
+   tiap dokumen di panel daftar / kartu dasbor. Karena itu pengaturannya di sini. */
+.sop-baca { padding: 1.15rem 1.25rem 1.3rem; }
+.sop-poin { margin: .35rem 0 0; padding-left: 1.15rem; list-style: disc; font-size: .9rem; line-height: 1.75; color: #1f2937; }
+.sop-poin li { margin: .1rem 0; }
+.sop-poin ::marker { color: #94a3b8; }
+.sop-kosong-isi { margin: 0; font-size: .9rem; color: #94a3b8; }
+
+/* 22. Tombol "kembali" di samping judul halaman.
+   Dipakai submenu Tugas (dasbor, catatan, pengaturan, shift, template, laporan)
+   yang semuanya bermuara ke antrean tugas. Bulat kecil, sejajar teks judul, dan
+   label lengkapnya tetap ada di title/aria-label supaya yang membaca layar tetap
+   tahu tujuannya walau ikonnya saja yang tampil. */
+.judul-balik {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 2rem; height: 2rem; margin-right: .55rem; vertical-align: middle;
+  font-size: .95rem; line-height: 1; text-decoration: none;
+  color: #475569; background: #f4f6f9; border: 1px solid #e2e8f0; border-radius: 999px;
+}
+.judul-balik:hover, .judul-balik:focus-visible { background: #101828; border-color: #101828; color: #fff; }
