@@ -222,9 +222,9 @@ $routes->group('admin', static function ($routes) {
                 $routes->post('nomor-hapus', 'Admin\Whatsapp::hapusNomor');
             });
         });
-        // kategori 2: permintaan ulasan dari nota yang sudah selesai + lunas. Tab
-        // ketiga menampung penagihan (DP belum dikonfirmasi / pelunasan mendekati
-        // tenggat) supaya pekerjaan uang tetap punya satu layar sendiri.
+        // kategori 2: permintaan ulasan dari nota yang dananya sudah masuk (DP,
+        // dicicil, atau lunas). Tab ketiga menampung penagihan (DP belum dikonfirmasi /
+        // pelunasan mendekati tenggat) supaya pekerjaan uang tetap punya satu layar sendiri.
         $routes->group('bintang', static function ($routes) {
             $routes->get('/', 'Admin\Bintang::index');
             $routes->get('jumlah', 'Admin\Bintang::jumlah');
@@ -233,19 +233,28 @@ $routes->group('admin', static function ($routes) {
             $routes->post('selesai/(:num)', 'Admin\Bintang::selesai/$1');
         });
         // kategori 4: catatan cek email. Bukan pemeriksaan akun — hanya catatan apa
-        // yang dilihat di kotak masuk, masuk ke mesin tugas yang sama.
+        // yang dilihat di kotak masuk, masuk ke mesin tugas yang sama. Sengaja tidak
+        // ada rute ambil: catatan ditugaskan ke satu alamat, bukan diperebutkan.
         $routes->group('email', static function ($routes) {
             $routes->get('/', 'Admin\Email::index');
             $routes->get('jumlah', 'Admin\Email::jumlah');
             $routes->post('simpan', 'Admin\Email::simpan');
-            $routes->post('ambil/(:num)', 'Admin\Email::ambil/$1');
             $routes->post('lepas/(:num)', 'Admin\Email::lepas/$1');
             $routes->post('selesai/(:num)', 'Admin\Email::selesai/$1');
+
+            // daftar alamat email + siapa yang memegangnya: khusus Admin/Superadmin.
+            // CS hanya memakai hasilnya lewat layar Cek Email di atas. Menghapus
+            // alamat bukan mematikan: catatan lama dilepas tautannya, tidak ikut hilang.
+            $routes->group('', ['filter' => 'auth:admin,superadmin'], static function ($routes) {
+                $routes->post('daftar', 'Admin\Email::tambahEmail');
+                $routes->post('hapus', 'Admin\Email::hapusEmail');
+                $routes->post('pegang', 'Admin\Email::beriPegang');
+                $routes->post('pegang-copot', 'Admin\Email::copotPegang');
+            });
         });
         $routes->get('cari-pelanggan', 'Admin\Tugas::cariPelanggan');
         $routes->get('catatan', 'Admin\Tugas::catatan');
         $routes->post('catatan', 'Admin\Tugas::simpanCatatan');
-        $routes->post('ulasan/(:num)', 'Admin\Tugas::ulasan/$1');
         // (:num) saja, jadi 'jumlah' di atas tidak pernah dikira id tugas
         $routes->get('(:num)', 'Admin\Tugas::lihat/$1');
         $routes->post('simpan', 'Admin\Tugas::simpan');

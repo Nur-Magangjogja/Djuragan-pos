@@ -217,8 +217,7 @@ class TugasWhatsappModel extends Model
      */
     private static function lepas(string $saatBatal, string $saatOper): string
     {
-        return "CASE WHEN e.jenis = 'dibatalkan' AND t.dikerjakan_oleh IS NOT NULL"
-            . " THEN {$saatBatal} ELSE {$saatOper} END";
+        return TugasModel::penglepas($saatBatal, $saatOper);
     }
 
     /**

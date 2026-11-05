@@ -51,13 +51,20 @@ class TugasModel extends Model
     public const BELUM_SELESAI = ['queued', 'assigned', 'in_progress', 'waiting'];
 
     /**
+     * Kejadian yang berarti "sudah di tangan, tapi tidak sampai selesai" — dasar
+     * tab Tidak Jadi Dikerjakan di layar reminder.
+     */
+    public const JEJAK_LEPAS = ['operan_manual', 'operan_otomatis', 'dibatalkan'];
+
+    /**
      * Kelompok pemicu reminder. Tiap pemicu ditulis di `kunci_unik` dengan awalan
-     * itu (mis. `ulasan-42`), jadi satu tugas hanya pernah lahir dari satu pemicu
-     * dan layar bisa memisahkan permintaan ulasan dari penagihan.
+     * itu (mis. `ulasan-42`), jadi satu tugas hanya pernah lahir dari satu pemicu.
+     * Awalan `dp-` dan `pelunasan-` tidak dipakai lagi: menagih sisa bayar bukan
+     * urusan Reminder Bintang 5, itu dijalankan lewat CRM Follow-Up. Baris tugas
+     * lama dengan awalan itu tetap ada, hanya tidak pernah lahir yang baru.
      */
     public const PEMICU = [
         'ulasan' => ['ulasan-'],
-        'tagih'  => ['dp-', 'pelunasan-'],
     ];
 
     /**
@@ -174,6 +181,37 @@ class TugasModel extends Model
         $peta['terlambat'] = (int) $terlambat->countAllResults();
 
         return $peta;
+    }
+
+    /**
+     * Berapa catatan yang masih menunggu dan yang sudah beres per alamat email,
+     * untuk toko-toko akun ini. Kunci 0 dipakai catatan lama yang belum punya
+     * alamat, supaya jumlah itu tetap kelihatan dan tidak hilang begitu saja.
+     *
+     * @param array<int> $juragan_ids
+     *
+     * @return array<int, array{terbuka: int, selesai: int}>
+     */
+    public function hitungPerEmail(array $juragan_ids): array
+    {
+        $belum = "'" . implode("','", self::BELUM_SELESAI) . "'";
+
+        $b = $this->db->table('crm_tugas t')
+            ->select('COALESCE(t.email_id, 0) AS id_email,'
+                . " SUM(CASE WHEN t.status IN ({$belum}) THEN 1 ELSE 0 END) AS terbuka,"
+                . " SUM(CASE WHEN t.status IN ('completed','cancelled') THEN 1 ELSE 0 END) AS selesai")
+            ->where("t.jenis = 'pemeriksaan_email'")
+            ->groupBy('id_email', false);
+
+        $this->terapkanToko($b, $juragan_ids);
+
+        $hasil = [];
+
+        foreach ($b->get()->getResultArray() as $r) {
+            $hasil[(int) $r['id_email']] = ['terbuka' => (int) $r['terbuka'], 'selesai' => (int) $r['selesai']];
+        }
+
+        return $hasil;
     }
 
     /** @return list<array<string, mixed>> */
@@ -397,6 +435,30 @@ class TugasModel extends Model
             $b->where('t.juragan_id', (int) $s['juragan_id']);
         }
 
+        if (! empty($s['email_id'])) {
+            $b->where('t.email_id', (int) $s['email_id']);
+        }
+
+        // CS hanya mengurus alamat yang didelegasikan kepadanya. Catatan lama yang
+        // belum punya alamat ikut ditampilkan supaya tidak ada yang menghilang.
+        if (isset($s['email_ids'])) {
+            $ids = array_values(array_unique(array_map('intval', (array) $s['email_ids'])));
+
+            if ($ids !== []) {
+                $b->groupStart();
+
+                if (! empty($s['email_ids_atau_null'])) {
+                    $b->where('t.email_id IS NULL')->orWhereIn('t.email_id', $ids);
+                } else {
+                    $b->whereIn('t.email_id', $ids);
+                }
+
+                $b->groupEnd();
+            } elseif (! empty($s['email_ids_atau_null'])) {
+                $b->where('t.email_id IS NULL');
+            }
+        }
+
         // cakupan sesi: tugas tanpa toko (mis. pemeriksaan email bersama) tetap
         // terlihat, tugas toko lain tidak
         if (! empty($s['juragan_ids'])) {
@@ -426,18 +488,8 @@ class TugasModel extends Model
             $b->whereIn('t.status', (array) $s['status_in']);
         }
 
-        if (! empty($s['pemicu']) && isset(self::PEMICU[$s['pemicu']])) {
-            $b->groupStart();
-
-            foreach (array_values(self::PEMICU[$s['pemicu']]) as $i => $awal) {
-                if ($i === 0) {
-                    $b->like('t.kunci_unik', $awal, 'after');
-                } else {
-                    $b->orLike('t.kunci_unik', $awal, 'after');
-                }
-            }
-
-            $b->groupEnd();
+        if (! empty($s['pemicu'])) {
+            $this->saringPemicu($b, (array) $s['pemicu']);
         }
 
         if (! empty($s['pelanggan_id'])) {
@@ -477,12 +529,182 @@ class TugasModel extends Model
         return $b;
     }
 
+    /**
+     * Batasi query ke satu/sekelompok pemicu reminder. Pemicu dikenali dari awalan
+     * `kunci_unik`, jadi satu tugas tidak pernah lahir dari dua pemicu. Kunci yang
+     * tidak dikenal diabaikan (bukan dipakai diam-diam sebagai filter kosong).
+     *
+     * @param list<string> $kunci
+     */
+    private function saringPemicu($b, array $kunci): void
+    {
+        $awalan = [];
+
+        foreach ($kunci as $k) {
+            if (isset(self::PEMICU[$k])) {
+                $awalan = array_merge($awalan, array_values(self::PEMICU[$k]));
+            }
+        }
+
+        if ($awalan === []) {
+            return;
+        }
+
+        $b->groupStart();
+
+        foreach ($awalan as $i => $awal) {
+            if ($i === 0) {
+                $b->like('t.kunci_unik', $awal, 'after');
+            } else {
+                $b->orLike('t.kunci_unik', $awal, 'after');
+            }
+        }
+
+        $b->groupEnd();
+    }
+
+    /**
+     * Jejak lepas tangan: satu baris per momen orang melepas tugas yang sudah ada
+     * di tangannya, atau Admin membatalkannya. Yang dibaca adalah riwayat append-only
+     * (`crm_tugas_event`), bukan kondisi tugas hari ini — satu nota bisa berpindah
+     * tangan beberapa kali dan setiap alasannya harus tetap terbaca, sementara baris
+     * `crm_tugas` hanya pernah menyimpan penggarap terakhir.
+     *
+     * @param array<string, mixed> $s
+     * @return list<array<string, mixed>>
+     */
+    public function jejakLepas(array $s, int $limit = 25, int $offset = 0): array
+    {
+        // daftar kolom ditulis mentah (select false): kolomnya berkualifikasi alias
+        // dan CI4 akan menempelkan DBPrefix ke alias itu kalau ikut di-escape
+        return $this->bangunJejak($s)
+            ->select('e.id_event, e.tugas_id, e.jenis, e.status_lama, e.status_baru, e.alasan,'
+                . ' e.catatan AS catatan_lepas, e.created_at AS dilepas_at,'
+                . ' t.judul, t.status, t.prioritas, t.tenggat, t.juragan_id, t.pelanggan_id, t.invoice_id,'
+                . ' t.dibuat_oleh, t.dikerjakan_oleh, t.selesai_oleh, t.alasan_batal, t.kunci_unik,'
+                . ' inv.seri AS invoice_seri, p.nama_pelanggan, j.nama_juragan,'
+                . ' du.name AS nama_dibuat, su.name AS nama_selesai, ' . self::penglepas('t.dikerjakan_oleh', 'COALESCE(e.user_id, e.dari_user_id, t.dikerjakan_oleh)') . ' AS id_lepas, '
+                . self::penglepas('ku.name', 'COALESCE(au.name, ad.name, ku.name)') . ' AS nama_lepas, '
+                . self::penglepas('ku.level', 'COALESCE(au.level, ad.level, ku.level)') . ' AS level_lepas', false)
+            ->orderBy('e.id_event', 'DESC')
+            ->get($limit, $offset)
+            ->getResultArray();
+    }
+
+    /** @param array<string, mixed> $s */
+    public function jejakLepasJumlah(array $s): int
+    {
+        return (int) $this->bangunJejak($s)->countAllResults();
+    }
+
+    /**
+     * Rekap per orang pada saringan yang sama, supaya Admin melihat polanya dulu
+     * sebelum membaca satu-satu. Nama dibungkus MAX() karena hanya kolom yang
+     * dikelompokkan yang boleh muncul telanjang di SELECT.
+     *
+     * @param array<string, mixed> $s
+     * @return list<array<string, mixed>>
+     */
+    public function jejakLepasPerOrang(array $s): array
+    {
+        $siapa   = self::penglepas('t.dikerjakan_oleh', 'COALESCE(e.user_id, e.dari_user_id, t.dikerjakan_oleh)');
+        $namanya = self::penglepas('ku.name', 'COALESCE(au.name, ad.name, ku.name)');
+
+        return $this->bangunJejak($s)
+            ->select($siapa . ' AS pemegang, MAX(' . $namanya . ') AS nama, COUNT(*) AS n', false)
+            ->groupBy($siapa, false)
+            ->orderBy('n', 'DESC')
+            ->get(12)
+            ->getResultArray();
+    }
+
+    /**
+     * Ekspresi SQL "orang yang memegang tugas ini tapi tidak menyelesaikannya".
+     * Penggarap pada baris tugas tidak bisa dipercaya: kolomnya dikosongkan saat
+     * tugas dioper dan sudah berganti orang kalau tugasnya diambil lagi. Pelepasan
+     * manual menulis user_id, operan otomatis hanya dari_user_id, dan pembatalan
+     * meninggalkan penggarap lamanya di baris tugas — dibaca per jenis kejadian.
+     *
+     * Kedua cabang harus sejenis: cabang pembatalan menunjuk penggarap lama di
+     * baris tugas, cabang operan menunjuk penulis kejadiannya. Kalau satu ekspresi
+     * dipakai untuk kolom id, nama dan level sekaligus, kolom namanya ikut
+     * mengembalikan angka id.
+     *
+     * @param string $saatBatal ekspresi penggarap lama, dipakai saat tugas dibatalkan
+     * @param string $saatOper  ekspresi pelaku kejadian, dipakai saat tugas dioper
+     */
+    public static function penglepas(string $saatBatal, string $saatOper): string
+    {
+        return "CASE WHEN e.jenis = 'dibatalkan' AND t.dikerjakan_oleh IS NOT NULL"
+            . " THEN {$saatBatal} ELSE {$saatOper} END";
+    }
+
+    /**
+     * Dasar ketiga metode jejak di atas: riwayat pelepasan/pembatalan yang sudah
+     * dibatasi ke pemicu layar ini dan ke orang yang benar-benar pernah memegangnya.
+     *
+     * `status_lama` ikut disaring karena ketiga kejadian itu bisa saja lahir dari
+     * tugas yang masih di antrean (Admin membatalkan reminder yang belum diambil
+     * siapa pun) — dan itu bukan cerita tab ini.
+     *
+     * @param array<string, mixed> $s
+     */
+    private function bangunJejak(array $s)
+    {
+        $b = $this->db->table('crm_tugas_event e')
+            ->join('crm_tugas t', 't.id_tugas = e.tugas_id')
+            ->join('pelanggan p', 'p.id_pelanggan = t.pelanggan_id', 'left')
+            ->join('invoice inv', 'inv.id_invoice = t.invoice_id', 'left')
+            ->join('juragan j', 'j.id_juragan = t.juragan_id', 'left')
+            ->join('user du', 'du.id = t.dibuat_oleh', 'left')
+            ->join('user ku', 'ku.id = t.dikerjakan_oleh', 'left')
+            ->join('user su', 'su.id = t.selesai_oleh', 'left')
+            // dua tabel user untuk pelaku: pelepasan manual menulis user_id,
+            // operan otomatis hanya menulis dari_user_id (tidak ada yang klik apa-apa)
+            ->join('user au', 'au.id = e.user_id', 'left')
+            ->join('user ad', 'ad.id = e.dari_user_id', 'left')
+            ->whereIn('e.jenis', self::JEJAK_LEPAS)
+            ->whereIn('e.status_lama', ['assigned', 'in_progress', 'waiting']);
+
+        $this->saringPemicu($b, (array) ($s['pemicu'] ?? []));
+
+        if (! empty($s['juragan_id'])) {
+            $b->where('t.juragan_id', (int) $s['juragan_id']);
+        }
+
+        $this->saringToko($b, 't.juragan_id', (array) ($s['juragan_ids'] ?? []));
+
+        // "hanya punyaku" di tab ini berarti akulah yang menulis alasannya
+        if (! empty($s['milik_saya'])) {
+            $b->groupStart()->where('e.user_id', (int) $s['milik_saya'])
+                ->orWhere('e.dari_user_id', (int) $s['milik_saya'])->groupEnd();
+        }
+
+        if (! empty($s['cari'])) {
+            $cari = (string) $s['cari'];
+            $b->groupStart()->like('t.judul', $cari)->orLike('e.alasan', $cari)
+                ->orLike('e.catatan', $cari)->orLike('inv.seri', $cari)
+                ->orLike('p.nama_pelanggan', $cari)->groupEnd();
+        }
+
+        if (! empty($s['dari'])) {
+            $b->where('e.created_at >=', (int) strtotime((string) $s['dari'] . ' 00:00:00'));
+        }
+
+        if (! empty($s['sampai'])) {
+            $b->where('e.created_at <=', (int) strtotime((string) $s['sampai'] . ' 23:59:59'));
+        }
+
+        return $b;
+    }
+
     private function pangkal()
     {
         $kontak = $this->db->prefixTable('pelanggan_kontak');
 
         return $this->db->table('crm_tugas t')
             ->select('t.*, p.nama_pelanggan, kontak.nomor AS nomor_wa, inv.seri AS invoice_seri, j.nama_juragan,'
+                . ' em.email AS email_alamat, em.label AS email_label,'
                 . ' du.name AS nama_dibuat, ku.name AS nama_dikerjakan, su.name AS nama_selesai')
             ->join('pelanggan p', 'p.id_pelanggan = t.pelanggan_id', 'left')
             // satu nomor per pelanggan saja yang ikut tampil; pencarian tetap
@@ -491,6 +713,9 @@ class TugasModel extends Model
                 'kontak.pelanggan_id = t.pelanggan_id', 'left')
             ->join('invoice inv', 'inv.id_invoice = t.invoice_id', 'left')
             ->join('juragan j', 'j.id_juragan = t.juragan_id', 'left')
+            // catatan cek email boleh menunjuk satu alamat dari daftar email; catatan
+            // lama yang belum punya tautan tetap tampil (kolomnya NULL)
+            ->join('crm_email em', 'em.id_email = t.email_id', 'left')
             ->join('user du', 'du.id = t.dibuat_oleh', 'left')
             ->join('user ku', 'ku.id = t.dikerjakan_oleh', 'left')
             ->join('user su', 'su.id = t.selesai_oleh', 'left');
@@ -521,6 +746,7 @@ class TugasModel extends Model
             'pelanggan_id' => $this->idAtauNull($data['pelanggan_id'] ?? null),
             'invoice_id'   => $this->idAtauNull($data['invoice_id'] ?? null),
             'juragan_id'   => $this->idAtauNull($data['juragan_id'] ?? null),
+            'email_id'     => $this->idAtauNull($data['email_id'] ?? null),
             'dibuat_oleh'  => $user,
             'tenggat'      => $this->tanggalAtauNull($data['tenggat'] ?? null),
             'catatan'      => $this->isiAtauNull($data['catatan'] ?? null),
@@ -543,7 +769,7 @@ class TugasModel extends Model
     }
 
     /**
-     * Buat tugas hasil pemicu sistem (reminder DP/pelunasan/ulasan) tanpa duplikat.
+     * Buat tugas hasil pemicu sistem (permintaan ulasan) tanpa duplikat.
      *
      * Yang menjaga adalah kolom kunci_unik ber-index unik, bukan PHP yang
      * mengingat-ingat: pemicu nota yang sama dijalankan dua kali tetap satu tugas.
@@ -906,16 +1132,13 @@ class TugasModel extends Model
     }
 
     /**
-     * Aturan reminder transaksi: kunci di crm_setting, label di layar, dan nilai
-     * bawaan yang dipakai kalau kunci itu belum pernah diisi.
+     * Aturan reminder ulasan: kunci di crm_setting, label di layar, dan nilai
+     * bawaan yang dipakai kalau kunci itu belum pernah diisi. Kunci lama
+     * reminder_dp_* dan reminder_pelunasan_* tidak lagi dibaca di sini.
      */
     public const ATURAN_REMINDER = [
-        'reminder_dp_aktif'        => ['label' => 'Nyalakan reminder konfirmasi DP', 'bawaan' => 1, 'satuan' => 'nyala'],
-        'reminder_dp_jam'          => ['label' => 'Jam sejak DP diterima untuk menghubungi pelanggan', 'bawaan' => 6, 'satuan' => 'jam'],
-        'reminder_pelunasan_aktif' => ['label' => 'Nyalakan reminder pelunasan', 'bawaan' => 1, 'satuan' => 'nyala'],
-        'reminder_pelunasan_hari'  => ['label' => 'Hari sebelum tenggat ambil untuk menagih pelunasan', 'bawaan' => 2, 'satuan' => 'hari'],
         'reminder_ulasan_aktif'    => ['label' => 'Nyalakan permintaan ulasan', 'bawaan' => 1, 'satuan' => 'nyala'],
-        'reminder_ulasan_hari'     => ['label' => 'Hari sejak nota selesai & lunas sebelum meminta ulasan', 'bawaan' => 1, 'satuan' => 'hari'],
+        'reminder_ulasan_hari'     => ['label' => 'Hari sejak dananya masuk (DP/cicilan/lunas) sebelum meminta ulasan', 'bawaan' => 0, 'satuan' => 'hari'],
     ];
 
     /** Jendela mundur generator: nota yang tidak disentuh selama ini dilewati. */
@@ -936,7 +1159,7 @@ class TugasModel extends Model
         }
 
         // angka negatif tidak pernah berarti apa pun di aturan ini
-        foreach (['reminder_dp_jam', 'reminder_pelunasan_hari', 'reminder_ulasan_hari'] as $k) {
+        foreach (['reminder_ulasan_hari'] as $k) {
             $aturan[$k] = max(0, min(90, $aturan[$k]));
         }
 
@@ -981,102 +1204,142 @@ class TugasModel extends Model
             return ['dibuat' => 0, 'ditutup' => 0];
         }
 
-        $bayar   = (string) $nota['status_pembayaran'];
-        $lunas   = in_array($bayar, ['5', '6'], true);
-        $batal   = (string) $nota['status_pesanan'] === '3' || $nota['deleted_at'] !== null;
-        $selesai = (string) $nota['status_pengiriman'] === '3';
-        $seri    = (string) $nota['seri'];
-        $dibuat  = 0;
-        $ditutup = 0;
+        // pemicunya mati: nota dibatalkan atau dihapus, jadi permintaan ulasan yang
+        // masih terbuka ditutup supaya tidak tinggal di antrean selamanya
+        if ((string) $nota['status_pesanan'] === '3' || $nota['deleted_at'] !== null) {
+            return ['dibuat' => 0, 'ditutup' => $this->tutupUlasan($invoice_id)];
+        }
 
-        // 1) tutup lebih dulu reminder yang kondisinya sudah berubah
-        foreach (['dp', 'pelunasan'] as $jenis) {
-            $lama = $this->db->table('crm_tugas')->where('kunci_unik', $jenis . '-' . $invoice_id)->get(1)->getRowArray();
+        // permintaan ulasan: cukup dananya sudah masuk — DP (3), sedang dicicil (4),
+        // atau lunas (5/6). Tidak menunggu notasnya selesai dikirim: begitu ada
+        // pembayaran sah, CS boleh mulai menanyakan pengalamannya. Hook
+        // perbaruiStatusPembayaran() memanggil sinkron ini, jadi remindernya
+        // lahir pada detik yang sama saat uangnya dicatat. Menagih sisa bayar bukan
+        // pekerjaan layar ini — itu CRM Follow-Up.
+        return [
+            'dibuat'  => $this->ulasanReminder($nota, $sekarang, $sekarang - self::JENDELA_REMINDER * 86400, $aturan),
+            'ditutup' => 0,
+        ];
+    }
 
-            if ($lama === null || ! in_array((string) $lama['status'], self::BELUM_SELESAI, true)) {
-                continue;
+    /**
+     * Tutup permintaan ulasan yang masih terbuka saat notanya dibatalkan/dihapus.
+     *
+     * @return int 1 kalau ada tugas yang ditutup
+     */
+    private function tutupUlasan(int $invoice_id): int
+    {
+        $lama = $this->db->table('crm_tugas')->where('kunci_unik', 'ulasan-' . $invoice_id)->get(1)->getRowArray();
+
+        if ($lama === null || ! in_array((string) $lama['status'], self::BELUM_SELESAI, true)) {
+            return 0;
+        }
+
+        $this->tutupOtomatis((int) $lama['id_tugas'], 'nota dibatalkan atau dihapus');
+
+        return 1;
+    }
+
+    /**
+     * Tugas "Minta ulasan" untuk satu nota. Aturan yang sama dipakai sapuan rutin
+     * (sinkronReminder, $umur_maks = sekarang - JENDELA_REMINDER hari) dan backfill
+     * nota lama (backfillUlasan, $umur_maks = 0: batas umur dilepas).
+     *
+     * @param array<string, mixed> $nota      baris invoice: id_invoice, seri,
+     *                                        pemesan_id, juragan_id,
+     *                                        status_pembayaran, update_at
+     * @param int                  $umur_maks update_at paling tua yang boleh
+     *                                        diproses; 0 = tanpa batas
+     * @param array<string, int>   $aturan    aturan reminder yang sudah dibaca
+     *
+     * @return int 1 kalau tugas baru lahir, selain itu 0
+     */
+    private function ulasanReminder(array $nota, int $sekarang, int $umur_maks, array $aturan): int
+    {
+        if ($aturan['reminder_ulasan_aktif'] !== 1) {
+            return 0;
+        }
+
+        if (! in_array((string) ($nota['status_pembayaran'] ?? ''), InvoiceModel::DANA_MASUK, true)) {
+            return 0;
+        }
+
+        $id     = (int) ($nota['id_invoice'] ?? 0);
+        $update = (int) ($nota['update_at'] ?? 0);
+
+        // jeda tunggu belum lewat: belum waktunya menanyakan pengalaman pelanggan
+        if ($id === 0 || $update > $sekarang - $aturan['reminder_ulasan_hari'] * 86400) {
+            return 0;
+        }
+
+        if ($umur_maks > 0 && $update < $umur_maks) {
+            return 0;
+        }
+
+        $hasil = $this->buatUnik([
+            'judul'        => 'Minta ulasan nota ' . (string) ($nota['seri'] ?? ''),
+            'deskripsi'    => 'Tanyakan pengalaman pelanggan secara netral. Jangan meminta bintang tertentu.',
+            'jenis'        => 'reminder_transaksi',
+            'prioritas'    => 'rendah',
+            'sumber'       => 'sistem',
+            'kunci_unik'   => 'ulasan-' . $id,
+            'invoice_id'   => $id,
+            'pelanggan_id' => (int) ($nota['pemesan_id'] ?? 0),
+            'juragan_id'   => (int) ($nota['juragan_id'] ?? 0),
+            'tenggat'      => date('Y-m-d', $sekarang + 86400),
+        ], null);
+
+        // baris ulasan ditulis walau tugasnya sudah ada: status 'diminta' yang
+        // terbaru tetap tercatat, dan 'diterima' tidak pernah ditimpa
+        (new UlasanModel())->minta($id, (int) $hasil['id'], null);
+
+        return (int) $hasil['baru'];
+    }
+
+    /**
+     * Backfill permintaan ulasan untuk nota LAMA. Aturannya identik dengan sapuan
+     * rutin — dananya sudah masuk dan jeda reminder_ulasan_hari lewat — yang
+     * dilepas hanya batas umurnya.
+     *
+     * Berdiri sendiri dan dipanggil dari CLI (php spark crm:ulasan-lama): kalau
+     * diboncengkan ke sapuan halaman, satu klik bisa melahirkan ratusan tugas dan
+     * membuat badge antrean melonjak tanpa diminta. Tugas tidak pernah dibuat dua
+     * kali karena kunci_unik 'ulasan-<id>' dijaga buatUnik().
+     *
+     * @param array<int>|null $juragan_ids batasi ke toko ini; null = semua toko
+     *
+     * @return array{dibuat: int, nota: int, dilewati: int}
+     */
+    public function backfillUlasan(?array $juragan_ids = null, int $maks = 500): array
+    {
+        $sekarang = time();
+        $aturan   = $this->aturanReminder();
+
+        $b = $this->db->table('invoice')
+            ->select('id_invoice, seri, pemesan_id, juragan_id, status_pembayaran, update_at')
+            ->where('deleted_at', null)
+            ->where("status_pesanan <> '3'")
+            ->whereIn('status_pembayaran', InvoiceModel::DANA_MASUK)
+            ->orderBy('update_at', 'DESC');
+
+        if ($juragan_ids !== null && $juragan_ids !== []) {
+            $b->whereIn('juragan_id', array_map('intval', $juragan_ids));
+        }
+
+        $hasil = ['dibuat' => 0, 'nota' => 0, 'dilewati' => 0];
+
+        foreach ($b->get(max(1, $maks))->getResultArray() as $nota) {
+            $hasil['nota']++;
+
+            // dilewati = tugasnya sudah ada, atau jeda tunggunya belum lewat
+            if ($this->ulasanReminder($nota, $sekarang, 0, $aturan) === 1) {
+                $hasil['dibuat']++;
+            } else {
+                $hasil['dilewati']++;
             }
-
-            $tutup = $batal
-                || ($jenis === 'pelunasan' && $lunas)
-                || ($jenis === 'dp' && ($lunas || $bayar !== '3'));
-
-            if (! $tutup) {
-                continue;
-            }
-
-            $alasan = $batal ? 'nota dibatalkan atau dihapus' : ($lunas ? 'nota sudah lunas' : 'DP sudah dikonfirmasi');
-
-            $this->tutupOtomatis((int) $lama['id_tugas'], $alasan);
-            $ditutup++;
         }
 
-        if ($batal) {
-            return ['dibuat' => $dibuat, 'ditutup' => $ditutup];
-        }
-
-        // 2) DP masuk tapi belum dikonfirmasi: CS harus menghubungi pelanggan
-        if ($aturan['reminder_dp_aktif'] === 1 && $bayar === '3') {
-            $dibuat += (int) $this->buatUnik([
-                'judul'        => 'Konfirmasi DP nota ' . $seri,
-                'deskripsi'    => 'Uang DP tercatat tapi belum dikonfirmasi. Hubungi pelanggan, cocokkan nominal dan jadwal ambil.',
-                'jenis'        => 'reminder_transaksi',
-                'prioritas'    => 'tinggi',
-                'sumber'       => 'sistem',
-                'kunci_unik'   => 'dp-' . $invoice_id,
-                'invoice_id'   => $invoice_id,
-                'pelanggan_id' => (int) $nota['pemesan_id'],
-                'juragan_id'   => (int) $nota['juragan_id'],
-                'tenggat'      => date('Y-m-d', $sekarang + $aturan['reminder_dp_jam'] * 3600),
-            ], null)['baru'];
-        }
-
-        // 3) pelunasan: sudah ada DP/cicilan, belum lunas, tenggat ambil sudah dekat
-        if ($aturan['reminder_pelunasan_aktif'] === 1 && ! $lunas && in_array($bayar, ['3', '4'], true)
-            && $nota['deadline'] !== null) {
-            $batas = strtotime((string) $nota['deadline'] . ' 23:59:59') - $aturan['reminder_pelunasan_hari'] * 86400;
-
-            if ($sekarang >= $batas) {
-                $dibuat += (int) $this->buatUnik([
-                    'judul'        => 'Ingatkan pelunasan nota ' . $seri,
-                    'deskripsi'    => 'Barang jatuh tempo diambil ' . $nota['deadline'] . '. Sampaikan sisa bayar sebelum barang keluar.',
-                    'jenis'        => 'reminder_transaksi',
-                    'prioritas'    => 'normal',
-                    'sumber'       => 'sistem',
-                    'kunci_unik'   => 'pelunasan-' . $invoice_id,
-                    'invoice_id'   => $invoice_id,
-                    'pelanggan_id' => (int) $nota['pemesan_id'],
-                    'juragan_id'   => (int) $nota['juragan_id'],
-                    'tenggat'      => (string) $nota['deadline'],
-                ], null)['baru'];
-            }
-        }
-
-        // 4) permintaan ulasan: nota selesai + lunas, boleh minta setelah N hari
-        if ($aturan['reminder_ulasan_aktif'] === 1 && $lunas && $selesai
-            && (int) $nota['update_at'] <= $sekarang - $aturan['reminder_ulasan_hari'] * 86400
-            && (int) $nota['update_at'] >= $sekarang - self::JENDELA_REMINDER * 86400) {
-            $hasil = $this->buatUnik([
-                'judul'        => 'Minta ulasan nota ' . $seri,
-                'deskripsi'    => 'Tanyakan pengalaman pelanggan secara netral. Jangan meminta bintang tertentu.',
-                'jenis'        => 'reminder_transaksi',
-                'prioritas'    => 'rendah',
-                'sumber'       => 'sistem',
-                'kunci_unik'   => 'ulasan-' . $invoice_id,
-                'invoice_id'   => $invoice_id,
-                'pelanggan_id' => (int) $nota['pemesan_id'],
-                'juragan_id'   => (int) $nota['juragan_id'],
-                'tenggat'      => date('Y-m-d', $sekarang + 86400),
-            ], null);
-
-            $dibuat += (int) $hasil['baru'];
-
-            // baris ulasan ditulis walau tugasnya sudah ada: status 'diminta' yang
-            // terbaru tetap tercatat, dan 'diterima' tidak pernah ditimpa
-            (new UlasanModel())->minta($invoice_id, (int) $hasil['id'], null);
-        }
-
-        return ['dibuat' => $dibuat, 'ditutup' => $ditutup];
+        return $hasil;
     }
 
     /**
@@ -1121,46 +1384,31 @@ class TugasModel extends Model
      * Berapa nota yang sedang masuk ke tiap aturan reminder. Dipakai layar aturan
      * supaya Admin melihat akibat angkanya sebelum menyimpan.
      *
-     * @return array{dp: int, pelunasan: int, ulasan: int}
+     * @return array{ulasan: int}
      */
     public function generateHitung(): array
     {
         $aturan = $this->aturanReminder();
         $potong = time() - self::JENDELA_REMINDER * 86400;
 
-        $dp = $this->db->table('invoice')->where('deleted_at', null)
-            ->where('status_pesanan <>', "'3'")
-            ->where('update_at >=', $potong)
-            ->where('status_pembayaran', '3');
-
-        $pelunasan = $this->db->table('invoice')->where('deleted_at', null)
-            ->where('status_pesanan <>', "'3'")
-            ->where('update_at >=', $potong)
-            ->whereIn('status_pembayaran', ['3', '4'])
-            ->where('deadline IS NOT NULL')
-            ->where('deadline <=', date('Y-m-d', strtotime('+' . $aturan['reminder_pelunasan_hari'] . ' day')));
-
         $ulasan = $this->db->table('invoice')->where('deleted_at', null)
             ->where('status_pesanan <>', "'3'")
-            ->whereIn('status_pembayaran', ['5', '6'])
-            ->where('status_pengiriman', '3')
+            ->whereIn('status_pembayaran', InvoiceModel::DANA_MASUK)
             ->where('update_at >=', $potong)
             ->where('update_at <=', time() - $aturan['reminder_ulasan_hari'] * 86400);
 
         return [
-            'dp'        => $aturan['reminder_dp_aktif'] ? (int) $dp->countAllResults() : 0,
-            'pelunasan' => $aturan['reminder_pelunasan_aktif'] ? (int) $pelunasan->countAllResults() : 0,
-            'ulasan'    => $aturan['reminder_ulasan_aktif'] ? (int) $ulasan->countAllResults() : 0,
+            'ulasan' => $aturan['reminder_ulasan_aktif'] ? (int) $ulasan->countAllResults() : 0,
         ];
     }
 
     /**
      * Jalankan sinkronisasi untuk semua nota yang mungkin sedang memicu reminder.
      *
-     * Kandidatnya dibatasi pada nota yang status pembayarannya 3/4 (DP atau dicicil)
-     * atau yang sudah lunas + selesai, DAN yang terakhir disentuh dalam
-     * JENDELA_REMINDER hari. Jendela itu penting: tanpanya satu kali sapuan
-     * melahirkan ratusan tugas "minta ulasan" dari nota bertahun-tahun lalu.
+     * Kandidatnya adalah nota yang dananya sudah masuk (DP, dicicil, atau lunas)
+     * DAN yang terakhir disentuh dalam JENDELA_REMINDER hari. Jendela itu penting:
+     * tanpanya satu kali sapuan melahirkan ratusan tugas "minta ulasan" dari nota
+     * bertahun-tahun lalu.
      *
      * @return array{dibuat: int, ditutup: int, nota: int}
      */
@@ -1173,13 +1421,7 @@ class TugasModel extends Model
             ->where('deleted_at', null)
             ->where("status_pesanan <> '3'")
             ->where('update_at >=', $sekarang - self::JENDELA_REMINDER * 86400)
-            ->groupStart()
-                ->whereIn('status_pembayaran', ['3', '4'])
-                ->orGroupStart()
-                    ->whereIn('status_pembayaran', ['5', '6'])
-                    ->where('status_pengiriman', '3')
-                ->groupEnd()
-            ->groupEnd();
+            ->whereIn('status_pembayaran', InvoiceModel::DANA_MASUK);
 
         if ($juragan_ids !== null && $juragan_ids !== []) {
             $b->whereIn('juragan_id', array_map('intval', $juragan_ids));

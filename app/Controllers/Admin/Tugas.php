@@ -563,47 +563,6 @@ class Tugas extends BaseController
                 . $hasil['ditutup'] . ' reminder ditutup.');
     }
 
-    /**
-     * Catat ulasan yang benar-benar diberikan pelanggan.
-     *
-     * Ini bukan tombol "selesai": tugas boleh masih berjalan dan ulasan tetap boleh
-     * dicatat, dan sebaliknya tugas selesai tidak membuat status ulasan berubah.
-     */
-    public function ulasan(int $id)
-    {
-        helper('fungsi');
-
-        $tugas = $this->tugasMilikSaya($id);
-
-        if ((int) $tugas['invoice_id'] <= 0) {
-            return redirect()->back()->with('galat', 'Tugas ini tidak menaut ke nota mana pun.');
-        }
-
-        $model  = new TugasModel();
-        $ulasan = new UlasanModel();
-        $bintang = UlasanModel::bintangSah($this->request->getPost('bintang'));
-
-        if ($bintang === null) {
-            return redirect()->back()->with('galat', 'Pilih bintang 1 sampai 5 kalau ulasannya sudah masuk.');
-        }
-
-        $ulasan->terima(
-            (int) $tugas['invoice_id'],
-            $bintang,
-            (string) $this->request->getPost('komentar'),
-            (int) pengguna_sesi(),
-            mb_substr((string) $this->request->getPost('platform'), 0, 40)
-        );
-
-        $model->catat([
-            'tugas_id' => $id,
-            'jenis'    => 'ulasan',
-            'user'     => (int) pengguna_sesi(),
-            'catatan'  => 'ulasan ' . $bintang . ' bintang diterima',
-        ]);
-
-        return redirect()->back()->with('sukses', 'Ulasan dicatat. Status tugas tidak ikut berubah.');
-    }
 
     /**
      * Layar Catatan Percakapan: CS menyimpan hasil obrolan WhatsApp yang tadi

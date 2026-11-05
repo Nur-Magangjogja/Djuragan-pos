@@ -344,12 +344,17 @@ class InvoiceModel extends Model
     }
 
     /**
-     * Klausul tab "Masih Disewa": semua nota sewa yang belum dicatat kembali dan
-     * belum selesai, berapa pun status pengiriman maupun pembayarannya. Sengaja
-     * seluas pengikat stok kolam sewa (StokModel::sedangDisewa) supaya chip
-     * "unit terikat nota sewa" di halaman Produk tidak pernah menunjuk tab yang
-     * kosong — nota sewa yang baru ditulis (belum diserahkan / belum lunas) pun
-     * tetap terlihat di daftar ini.
+     * Klausul tab "Masih Disewa": nota sewa yang pengembaliannya belum dicatat,
+     * belum dibatalkan, DAN sudah ada dananya masuk — DP (3), sedang dicicil (4),
+     * atau lunas (5/6). Nota sewa yang belum ada pembayaran sama sekali belum
+     * menjadi sewa yang berjalan: dia tetap mengurus dirinya di tab Pembayaran /
+     * Belum Proses, bukan di sini.
+     *
+     * Angka chip "unit terikat nota sewa" di halaman Produk sengaja TIDAK ikut
+     * menyempit: kolom itu menghitung unit yang hilang dari "Tersedia", dan unit
+     * sewa memang sudah diikat sejak notasnya ditulis (StokModel::sedangDisewa).
+     * Karena itu tab ini bisa memuat lebih sedikit nota daripada angka chip -
+     * bukan bug, tapi pilihan: yang di sini hanya sewa yang sudah ada uangnya.
      *
      * Yang boleh MENekan tombol "Sudah kembali" tetap lebih ketat dan TIDAK ikut
      * klausul ini: masihDisewa() mensyaratkan barang sudah diserahkan dan lunas,
@@ -364,7 +369,21 @@ class InvoiceModel extends Model
     private static function klausulMasihDisewa(string $tabel): string
     {
         return self::klausulSewaMenunggu($tabel)
-            . " AND {$tabel}.status_pesanan <> '3'";
+            . " AND {$tabel}.status_pesanan <> '3'"
+            . ' AND ' . self::klausulDanaMasuk($tabel);
+    }
+
+    /**
+     * Status pembayaran yang dihitung "dananya sudah masuk": DP yang menunggu
+     * konfirmasi (3), sedang dicicil (4), dan lunas (5/6). Satu daftar untuk SQL
+     * dan PHP supaya tab dan angka di layar tidak bisa berbeda tafsir.
+     */
+    public const DANA_MASUK = ['3', '4', '5', '6'];
+
+    /** Pasangannya DANA_MASUK dalam SQL mentah. */
+    public static function klausulDanaMasuk(string $tabel): string
+    {
+        return $tabel . ".status_pembayaran IN ('" . implode("', '", self::DANA_MASUK) . "')";
     }
 
     /** Status pembayaran yang dihitung lunas; satu daftar untuk SQL dan PHP. */
@@ -430,8 +449,8 @@ class InvoiceModel extends Model
     /**
      * Gerbang tombol "Sudah kembali": barang sudah diserahkan (status_pengiriman
      * '3'), pembayaran lunas, dan pengembalian belum dicatat. Lebih ketat dari
-     * isi tab Masih Disewa (klausulMasihDisewa) — nota yang baru diikat boleh
-     * muncul di tab, tapi tombol ini baru hidup setelah barangnya benar-benar
+     * isi tab Masih Disewa (klausulMasihDisewa) — nota yang sudah ada DP/cicilan
+     * boleh muncul di tab, tapi tombol ini baru hidup setelah barangnya benar-benar
      * keluar dan lunas. Stok tidak ikut syarat ini; unit sewa sudah diikat
      * notasnya sejak orderan ditulis, supaya tidak ada stok gaib.
      */

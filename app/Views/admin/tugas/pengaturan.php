@@ -59,17 +59,15 @@
     <?= form_open('admin/tugas/pengaturan', ['class' => 'aturan-kotak']) ?>
         <h2><i class="fal fa-sliders-h me-1"></i> Kapan tugas lahir sendiri</h2>
         <p class="aturan-hint">
-            Sistem memeriksa nota yang sedang dalam masa DP, dicicil, atau baru selesai. Aturan di bawah
-            menentukan batas waktunya. Satu nota hanya pernah menghasilkan satu tugas per jenis — dijaga
-            kunci unik di database, jadi diperiksa ulang tidak pernah menduplikasi.
+            Sistem memeriksa nota yang dananya sudah masuk — DP, dicicil, atau lunas. Aturan di bawah
+            menentukan batas waktunya. Satu nota hanya pernah menghasilkan satu tugas — dijaga kunci unik
+            di database, jadi diperiksa ulang tidak pernah menduplikasi.
         </p>
 
         <?php
         // satu baris aturan = satu angka ambang + satu sakelar; hitungannya ikut
         // dipetakan supaya "ada berapa nota sekarang" tidak perlu ditebak
         $daftar = [
-            ['angka' => 'reminder_dp_jam', 'aktif' => 'reminder_dp_aktif', 'hitung' => 'dp'],
-            ['angka' => 'reminder_pelunasan_hari', 'aktif' => 'reminder_pelunasan_aktif', 'hitung' => 'pelunasan'],
             ['angka' => 'reminder_ulasan_hari', 'aktif' => 'reminder_ulasan_aktif', 'hitung' => 'ulasan'],
         ];
         ?>
@@ -103,24 +101,10 @@
         <h2><i class="fal fa-list-check me-1"></i> Yang sedang menunggu sekarang</h2>
         <table>
             <tr>
-                <td>Konfirmasi DP</td>
-                <td class="text-end fw-bold"><?= (int) $hitung['dp'] ?></td>
-                <td class="text-end">
-                    <a class="btn btn-sm btn-link text-decoration-none" href="<?= esc(site_url('admin/tugas?tab=semua&cari=Konfirmasi DP')) ?>">buka tugasnya</a>
-                </td>
-            </tr>
-            <tr>
-                <td>Pelunasan dekat tenggat</td>
-                <td class="text-end fw-bold"><?= (int) $hitung['pelunasan'] ?></td>
-                <td class="text-end">
-                    <a class="btn btn-sm btn-link text-decoration-none" href="<?= esc(site_url('admin/tugas?tab=semua&cari=pelunasan')) ?>">buka tugasnya</a>
-                </td>
-            </tr>
-            <tr>
-                <td>Permintaan ulasan</td>
+                <td>Permintaan ulasan bintang 5</td>
                 <td class="text-end fw-bold"><?= (int) $hitung['ulasan'] ?></td>
                 <td class="text-end">
-                    <a class="btn btn-sm btn-link text-decoration-none" href="<?= esc(site_url('admin/tugas?tab=semua&cari=ulasan')) ?>">buka tugasnya</a>
+                    <a class="btn btn-sm btn-link text-decoration-none" href="<?= esc(site_url('admin/tugas/bintang')) ?>">buka layarnya</a>
                 </td>
             </tr>
         </table>
