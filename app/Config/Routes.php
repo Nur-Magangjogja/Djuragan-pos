@@ -219,6 +219,7 @@ $routes->group('admin', static function ($routes) {
                 $routes->get('nomor', 'Admin\Whatsapp::nomor');
                 $routes->post('nomor', 'Admin\Whatsapp::simpanNomor');
                 $routes->post('nomor-aktif', 'Admin\Whatsapp::aktifNomor');
+                $routes->post('nomor-hapus', 'Admin\Whatsapp::hapusNomor');
             });
         });
         // kategori 2: permintaan ulasan dari nota yang dananya sudah masuk (DP,
@@ -278,26 +279,9 @@ $routes->group('admin', static function ($routes) {
         });
     });
 
-    // toko online + pengenalan toko untuk CS. CS boleh melihat tokonya sendiri dan
-    // mengisi status pengenalannya; menambah/mengubah toko dan menautkan CS
-    // khusus Admin & Superadmin.
-    $routes->group('toko', ['filter' => 'auth:admin,superadmin,cs'], static function ($routes) {
-        $routes->get('/', 'Admin\Toko::index', ['as' => 'hal.toko']);
-        $routes->get('pengenalan', 'Admin\Toko::pengenalan');
-        $routes->post('status', 'Admin\Toko::statusSendiri');
-
-        $routes->group('', ['filter' => 'auth:admin,superadmin'], static function ($routes) {
-            $routes->post('simpan', 'Admin\Toko::simpan');
-            $routes->post('aktif', 'Admin\Toko::aktif');
-            $routes->get('cs/(:num)', 'Admin\Toko::cs/$1');
-            $routes->post('tambah-cs', 'Admin\Toko::tambahCs');
-            $routes->post('copot-cs', 'Admin\Toko::copotCs');
-            $routes->post('status-orang', 'Admin\Toko::statusOrang');
-        });
-    });
-
     // checklist toko harian + pemeriksaan email manual. CS membuka dan mengisi
-    // sesinya; templat butir dan penonaktifan butir khusus Admin & Superadmin.
+    // sesinya; templat butir dan penonaktifan butir khusus Admin & Superadmin;
+    // menautkan toko ke akun (pendelegasian) khusus Superadmin.
     $routes->group('checklist', ['filter' => 'auth:admin,superadmin,cs'], static function ($routes) {
         $routes->get('/', 'Admin\Checklist::index', ['as' => 'hal.checklist']);
         $routes->post('mulai', 'Admin\Checklist::mulai');
@@ -305,11 +289,24 @@ $routes->group('admin', static function ($routes) {
         $routes->get('(:num)', 'Admin\Checklist::run/$1');
         $routes->post('isi/(:num)', 'Admin\Checklist::isi/$1');
         $routes->post('selesai/(:num)', 'Admin\Checklist::selesai/$1');
+        $routes->post('butir-tambah/(:num)', 'Admin\Checklist::butirSendiri/$1');
+        $routes->post('butir-hapus/(:num)', 'Admin\Checklist::hapusSendiri/$1');
+        $routes->post('catatan', 'Admin\Checklist::catatan');
+        $routes->post('catatan-selesai/(:num)', 'Admin\Checklist::catatanSelesai/$1');
 
         $routes->group('', ['filter' => 'auth:admin,superadmin'], static function ($routes) {
             $routes->get('aturan', 'Admin\Checklist::aturan');
             $routes->post('butir', 'Admin\Checklist::simpanButir');
             $routes->post('butir-aktif', 'Admin\Checklist::matikanButir');
+            $routes->post('toko-simpan', 'Admin\Checklist::simpanToko');
+        });
+
+        // memindahkan sebuah toko ke tangan akun lain mengubah siapa yang boleh
+        // membuka lembar toko itu di semua halaman, jadi khusus Superadmin
+        $routes->group('', ['filter' => 'auth:superadmin'], static function ($routes) {
+            $routes->post('delegasi', 'Admin\Checklist::delegasi');
+            $routes->post('copot-delegasi', 'Admin\Checklist::copotDelegasi');
+            $routes->post('copot-tautan', 'Admin\Checklist::copotTautan');
         });
     });
 
@@ -322,6 +319,8 @@ $routes->group('admin', static function ($routes) {
         $routes->group('', ['filter' => 'auth:admin,superadmin'], static function ($routes) {
             $routes->post('simpan', 'Admin\Sop::simpan');
             $routes->post('aktif', 'Admin\Sop::matikan');
+            $routes->post('hapus', 'Admin\Sop::hapus');
+            $routes->post('urut', 'Admin\Sop::urut');
         });
     });
 
@@ -388,6 +387,8 @@ $routes->group('admin', static function ($routes) {
 
 // user
 $routes->group('user', ['filter' => 'auth:user'], static function ($routes) {
+    // halaman awal CS: kartu transaksi + SOP + tugas yang menunggu
+    $routes->get('dasbor', 'User\Dasbor::index', ['as' => 'hal.dasbor.user']);
     $routes->get('chart', 'User\Chart::index');
     // akun CS yang belum punya juragan memakai ini untuk meminta penautan;
     // hasilnya notifikasi prioritas ke inbox Superadmin
@@ -405,7 +406,8 @@ $routes->group('user', ['filter' => 'auth:user'], static function ($routes) {
         // pengembalian juga ada di sisi ini
         $routes->post('sewa_kembali', 'User\Invoices::sewa_kembali');
     });
-    $routes->addRedirect('/', 'hal.user');
+    // login CS mendarat di dasbor kerjanya; daftar transaksi tetap satu klik dari sidebar
+    $routes->addRedirect('/', 'hal.dasbor.user');
 });
 
 // Bacaan untuk pihak luar (website partner). Sengaja didefinisikan SEBELUM grup

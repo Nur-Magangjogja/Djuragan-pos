@@ -863,7 +863,10 @@
                                                 <span class="<?= $statusBayar[0] ?>"><?= $statusBayar[1] ?></span>
                                             </td>
                                             <td class="text-center">
-                                                <a href="<?= esc(tautan_invoice_notif($t['seri'], '')) ?>" target="_blank" class="btn btn-sm btn-outline-secondary py-1 px-2" title="Buka Detail Invoice POS">
+                                                <?php /* dibuka lewat daftar transaksi toko pemilik nota: kalau tokonya
+                                                    tidak dipegang akun ini, Admin\Invoices::lihat() menampilkan layar
+                                                    "tidak memiliki akses", bukan daftar kosong */ ?>
+                                                <a href="<?= esc(site_url('admin/invoices/lihat/' . rawurlencode((string) ($t['slug_juragan'] ?? 'semua')) . '/semua?cari[kolom]=faktur&cari[q]=' . rawurlencode((string) $t['seri']) . '&kembali=' . rawurlencode('admin/crm/pelanggan/' . $pelanggan['id_pelanggan']))) ?>" target="_blank" class="btn btn-sm btn-outline-secondary py-1 px-2" title="Buka nota <?= esc($t['seri']) ?>">
                                                     <i class="fal fa-external-link-alt"></i>
                                                 </a>
                                             </td>
@@ -983,7 +986,9 @@
 
                                 <?php $u = $pelanggan['detail_ukuran_array'] ?? []; ?>
 
-                                <div class="row g-3">
+                                <!-- ukuran-panel = aturan rumah di style.css: "cm" duduk di kotak
+                                     yang sama dengan angkanya, bukan kotak kedua di sebelahnya -->
+                                <div class="row g-3 ukuran-panel">
                                     <!-- Bagian Atasan / Jas / Kemeja -->
                                     <div class="col-12">
                                         <div class="bg-light p-2 rounded fw-semibold small text-dark mb-2">

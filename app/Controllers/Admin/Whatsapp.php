@@ -247,6 +247,33 @@ class Whatsapp extends BaseController
         return redirect()->to(site_url('admin/tugas/whatsapp/nomor'))->with('sukses', 'Status nomor diperbarui.');
     }
 
+    /**
+     * Buang nomor dari daftar penugasan. Nomor yang masih tercatat dipakai sebuah
+     * reminder tidak dihapus: riwayat reminder itu menunjuk ke barisnya, dan
+     * mematikan (aktif=0) sudah cukup untuk mengeluarkannya dari pilihan CS.
+     */
+    public function hapusNomor()
+    {
+        $model = new WaNomorModel();
+        $id    = (int) $this->request->getPost('id_nomor');
+        $baris = $model->satu($id);
+
+        if ($baris === null || ! $this->bolehToko((int) $baris['juragan_id'])) {
+            throw PageNotFoundException::forPageNotFound();
+        }
+
+        $pemakai = $model->dipakaiReminder($id);
+
+        if ($pemakai > 0) {
+            return redirect()->to(site_url('admin/tugas/whatsapp/nomor'))
+                ->with('peringatan', "Nomor ini masih tercatat dipakai {$pemakai} reminder. Matikan saja supaya riwayatnya tetap utuh.");
+        }
+
+        $model->hapus($id);
+
+        return redirect()->to(site_url('admin/tugas/whatsapp/nomor'))->with('sukses', 'Nomor dihapus dari daftar.');
+    }
+
     // ------------------------------------------------------------------ dalam
 
     /** Jumlah baris per tab, untuk angka di samping nama tab. */

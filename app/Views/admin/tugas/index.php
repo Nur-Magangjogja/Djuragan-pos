@@ -25,6 +25,32 @@
 $level    = (string) session()->get('level');
 $hari_ini = date('Y-m-d');
 
+/** Saringan yang nilainya sudah terisi — dihitung untuk kotak pemicu filter di HP. */
+$saring_aktif = count(array_filter([
+    (string) ($s['nomor'] ?? ''),
+    (string) ($s['jenis'] ?? ''),
+    (string) ($s['prioritas'] ?? ''),
+    (string) ($s['juragan_id'] ?? ''),
+    (string) ($s['dikerjakan_oleh'] ?? ''),
+    (string) $s['awal'],
+    (string) $s['akhir'],
+]));
+
+/**
+ * Menu di baris kepala. Satu daftar untuk dua bentuk: pil di desktop, dropdown di
+ * layar sempit — ditulis dua kali berarti isinya bisa berbeda tanpa ada yang tahu.
+ */
+$kelola = in_array($level, ['admin', 'superadmin'], true);
+
+$menu = [
+    ['url' => 'admin/tugas/dasbor', 'ikon' => 'fa-gauge', 'label' => 'Dasbor Kerja', 'boleh' => true],
+    ['url' => 'admin/tugas/catatan', 'ikon' => 'fa-comments', 'label' => 'Catatan percakapan', 'boleh' => true],
+    ['url' => 'admin/tugas/pengaturan', 'ikon' => 'fa-bell', 'label' => 'Aturan reminder', 'boleh' => $kelola],
+    ['url' => 'admin/tugas/shift', 'ikon' => 'fa-clock', 'label' => 'Jam shift', 'boleh' => $kelola],
+    ['url' => 'admin/tugas/template', 'ikon' => 'fa-layer-group', 'label' => 'Templat Tugas', 'boleh' => $kelola],
+    ['url' => 'admin/tugas/laporan', 'ikon' => 'fa-chart-line', 'label' => 'Laporan aktivitas', 'boleh' => $kelola],
+];
+
 /**
  * Tautan daftar yang mempertahankan saringan aktif. 'halaman' dibuang kecuali
  * memang diminta, supaya pindah tab tidak meninggalkan pembaca di halaman 7.
@@ -54,8 +80,16 @@ $label_status = static function (string $kode) use ($pilihan): string {
 <?= $this->section('css') ?>
 <style>
     .tugas-halaman { max-width: 1180px; }
-    .tugas-head { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-bottom: 1rem; }
+    /* tombol di kanan kepala halaman digeser kiri 72px: lonceng notifikasi desktop
+       melayang di pojok kanan atas dan menutupinya begitu jendela tidak terlalu lebar */
+    .tugas-head { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-bottom: 1rem; padding-right: 4.5rem; }
+    /* blok judul menempati barisnya sendiri: dengan tujuh tombol kepala, memaksa
+       semuanya sebaris membuat keterangan halaman menyusut sampai setinggi kartu */
+    .tugas-head > .me-auto { flex: 1 1 100%; }
     .tugas-head p { margin: .3rem 0 0; font-size: .9rem; color: #64748b; }
+    /* enam pil kepala makan dua baris di HP dan tidak ada yang bisa ditekan dengan
+       nyaman; di layar sempit kelompok ini ditukar satu dropdown (d-lg-none) */
+    .tugas-menu { align-items: center; gap: .6rem; }
 
     /* tab gaya pil, sama seperti pemilih kolam di halaman Produk */
     .tugas-tab { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1rem; }
@@ -71,6 +105,27 @@ $label_status = static function (string $kode) use ($pilihan): string {
     .tugas-saring .lapangan { display: flex; flex-direction: column; gap: .2rem; }
     .tugas-saring label { font-size: .7rem; font-weight: 700; color: #667085; text-transform: uppercase; letter-spacing: .04em; }
     .tugas-saring .form-control, .tugas-saring .form-select { max-width: 190px; }
+
+    /* pemicu filter hanya dipakai di layar sempit; di desktop kelima saringan itu
+       memang sudah terlihat, jadi kotaknya tidak ada gunanya — selector harus
+       sedalam .tugas-saring .lapangan kalau tidak mau kalah darinya */
+    .tugas-saring > .tugas-saring-pemicu { display: none; }
+    .tugas-saring > .tugas-saring-lapis { display: contents; }
+    #saringWadah .tugas-saring-lapis {
+        display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem;
+    }
+    .tugas-saring-kotak {
+        display: inline-flex; align-items: center; justify-content: center; gap: .45rem;
+        padding: .3rem .7rem; font: inherit; font-size: .84rem; font-weight: 600; color: #fff;
+        background: #101828; border: 1px solid #101828; border-radius: 8px; white-space: nowrap;
+    }
+    .tugas-saring-kotak:hover { background: #1e293b; border-color: #1e293b; color: #fff; }
+    .tugas-saring-jumlah {
+        min-width: 1.15rem; padding: 0 .3rem; border-radius: 999px; font-size: .72rem;
+        line-height: 1.2; text-align: center; background: #fff; color: #101828;
+    }
+    /* sama seperti di baris filter: ikon saja lebih pendek dari tombol bertuliskan */
+    #modalSaringTugas .modal-footer { align-items: stretch; }
 
     .tugas-kartu {
         background: #fff; border: 1px solid #e2e8f0; border-radius: 1.15rem;
@@ -108,7 +163,35 @@ $label_status = static function (string $kode) use ($pilihan): string {
     .lewat { color: #b81c16; font-weight: 700; }
 
     .tugas-aksi { display: inline-flex; gap: .35rem; align-items: center; }
+    /* di baris filter, ikon saja lebih pendek dari tombol bertuliskan di sebelahnya
+       (FontAwesome memakai line-height:1), jadi keduanya direntangkan */
+    .tugas-saring .tugas-aksi { align-items: stretch; }
     .tugas-pager { padding: .8rem 1rem; background: #fff; border-top: 1px solid #eaecf0; }
+
+    /* di layar sempit: lonceng tidak tampil jadi jarak kanan dilepas, ikon di depan
+       judul dibuang, dan tombol kepala ditata supaya tiap baris menutup lebar kartu.
+       Baris filter pindah ke grid dua kolom sama lebar — dengan flex biasa lebar
+       alaminya beda-beda (Prioritas 99px, Baris 56px) sehingga tepi kanannya rusak */
+    @media (max-width: 991.98px) {
+        .tugas-head { padding-right: 0; }
+        .tugas-head h1 > i { display: none; }
+        .tugas-head > a.btn, .tugas-head > button.btn { flex: 1 1 auto; }
+        /* dropdown menu menutup lebar kartu, tombol "Buat Tugas" menyusul di
+           barisnya sendiri — dua kontrol sebaris di 360px bikin keduanya gepeng */
+        .tugas-head > .tugas-menu-kecil { flex: 1 1 100%; }
+        /* pil tab ikut menutup lebar kartu — tanpa ini baris terakhir ("Selesai",
+           "Semua") berhenti di tengah dan menyisakan lubang 221px di kanannya */
+        .tugas-tab a { flex: 1 1 auto; justify-content: center; }
+
+        /* di HP yang tersisa cuma kotak cari dan kotak filter: kolom keduanya
+           sebesar isinya supaya cari dapat lebar maksimal */
+        .tugas-saring { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+        .tugas-saring .form-control, .tugas-saring .form-select { max-width: none; width: 100%; }
+        /* yang tersisa di baris filter cuma kotak cari + kotak filter; tombol Cari dan
+           Ulangi pindah ke kaki popus filter supaya tidak ada dua tombol cari sebaris */
+        .tugas-saring > .tugas-saring-pemicu { display: flex; }
+        .tugas-saring > .tugas-saring-aksi { display: none; }
+    }
 </style>
 <?= $this->endSection() ?>
 
@@ -122,26 +205,20 @@ $label_status = static function (string $kode) use ($pilihan): string {
             <h1 class="h3 mt-5"><i class="fal fa-tasks me-1 text-brand-500"></i> <?= esc($title) ?></h1>
             <p>Sisa pekerjaan yang tidak punya menu sendiri: follow-up pelanggan dan tugas buatan tangan. WhatsApp, Bintang 5, Cek Toko, dan Cek Email ada di submenu masing-masing.</p>
         </div>
-        <a class="btn btn-sm btn-outline-secondary rounded-pill" href="<?= esc(site_url('admin/tugas/dasbor')) ?>">
-            <i class="fal fa-gauge me-1"></i> Dasbor Kerja
-        </a>
-        <a class="btn btn-sm btn-outline-secondary rounded-pill" href="<?= esc(site_url('admin/tugas/catatan')) ?>">
-            <i class="fal fa-comments me-1"></i> Catatan percakapan
-        </a>
-        <?php if (in_array($level, ['admin', 'superadmin'], true)) : ?>
-            <a class="btn btn-sm btn-outline-secondary rounded-pill" href="<?= esc(site_url('admin/tugas/pengaturan')) ?>">
-                <i class="fal fa-bell me-1"></i> Aturan reminder
-            </a>
-            <a class="btn btn-sm btn-outline-secondary rounded-pill" href="<?= esc(site_url('admin/tugas/shift')) ?>">
-                <i class="fal fa-clock me-1"></i> Jam shift
-            </a>
-            <a class="btn btn-sm btn-outline-secondary rounded-pill" href="<?= esc(site_url('admin/tugas/template')) ?>">
-                <i class="fal fa-layer-group me-1"></i> Templat Tugas
-            </a>
-            <a class="btn btn-sm btn-outline-secondary rounded-pill" href="<?= esc(site_url('admin/tugas/laporan')) ?>">
-                <i class="fal fa-chart-line me-1"></i> Laporan aktivitas
-            </a>
-        <?php endif; ?>
+        <div class="tugas-menu d-none d-lg-flex">
+            <?php foreach ($menu as $m) : if (! $m['boleh']) { continue; } ?>
+                <a class="btn btn-sm btn-outline-secondary rounded-pill" href="<?= esc(site_url($m['url'])) ?>">
+                    <i class="fal <?= $m['ikon'] ?> me-1"></i> <?= esc($m['label']) ?>
+                </a>
+            <?php endforeach; ?>
+        </div>
+        <select class="tugas-menu-kecil form-select form-select-sm d-lg-none" aria-label="Menu tugas"
+            onchange="if (this.value) { window.location.href = this.value; }">
+            <option value="" selected>Menu tugas</option>
+            <?php foreach ($menu as $m) : if (! $m['boleh']) { continue; } ?>
+                <option value="<?= esc(site_url($m['url'])) ?>"><?= esc($m['label']) ?></option>
+            <?php endforeach; ?>
+        </select>
         <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalBuatTugas">
             <i class="fal fa-plus"></i> Buat Tugas
         </button>
@@ -179,6 +256,16 @@ $label_status = static function (string $kode) use ($pilihan): string {
             <input type="search" class="form-control form-control-sm" id="cari" name="cari"
                 value="<?= esc($s['cari']) ?>" placeholder="judul, catatan, atau nama pelanggan">
         </div>
+        <!-- di layar sempit lima saringan lain disembunyikan di balik kotak ini -->
+        <div class="lapangan tugas-saring-pemicu">
+            <label>&nbsp;</label>
+            <button type="button" class="tugas-saring-kotak" id="saring"
+                data-bs-toggle="modal" data-bs-target="#modalSaringTugas" aria-label="Buka filter">
+                <i class="fal fa-filter"></i> Filter
+                <?php if ($saring_aktif > 0) : ?><span class="tugas-saring-jumlah"><?= (int) $saring_aktif ?></span><?php endif; ?>
+            </button>
+        </div>
+        <div class="tugas-saring-lapis" id="saringLapis">
         <div class="lapangan">
             <label for="nomor">Nomor WA</label>
             <input type="search" class="form-control form-control-sm" id="nomor" name="nomor"
@@ -236,23 +323,67 @@ $label_status = static function (string $kode) use ($pilihan): string {
             <label for="akhir">s/d</label>
             <input type="date" class="form-control form-control-sm" id="akhir" name="akhir" value="<?= esc($s['akhir']) ?>">
         </div>
-        <div class="lapangan">
-            <label for="batas">Baris</label>
-            <select class="form-select form-select-sm" id="batas" name="batas">
-                <?php foreach ([10, 25, 50] as $n) : ?>
-                    <option value="<?= $n ?>" <?= $batas === $n ? 'selected' : '' ?>><?= $n ?></option>
-                <?php endforeach; ?>
-            </select>
         </div>
-        <div class="lapangan">
+        <div class="lapangan tugas-saring-aksi">
             <label>&nbsp;</label>
             <div class="tugas-aksi">
                 <button type="submit" class="btn btn-sm btn-dark"><i class="fal fa-search"></i> Cari</button>
-                <a class="btn btn-sm btn-link text-decoration-none" href="<?= esc(site_url('admin/tugas')) ?>">Ulangi</a>
+                <a class="btn btn-sm btn-dark text-decoration-none" href="<?= esc(site_url('admin/tugas')) ?>"
+                    title="Ulangi" aria-label="Ulangi"><i class="fal fa-sync"></i></a>
+            </div>
+        </div>
+
+        <!-- popus filter layar sempit: dialognya DITULIS DI DALAM form yang sama, jadi
+             kelompok field yang dipindah JS ke dalamnya tetap ikut terkirim saat disubmit -->
+        <div class="modal fade" id="modalSaringTugas" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Filter</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div id="saringWadah"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <a class="btn btn-sm btn-dark text-decoration-none" href="<?= esc(site_url('admin/tugas')) ?>"
+                            title="Ulangi" aria-label="Ulangi"><i class="fal fa-sync"></i></a>
+                        <button type="submit" class="btn btn-sm btn-dark"><i class="fal fa-search me-1"></i> Cari</button>
+                    </div>
+                </div>
             </div>
         </div>
     </form>
 
+    <script>
+    (function () {
+        'use strict';
+
+        var lapis = document.getElementById('saringLapis');
+        var wadah = document.getElementById('saringWadah');
+
+        if (! lapis || ! wadah) {
+            return;
+        }
+
+        var asal = lapis.parentNode;
+        var sesudah = lapis.nextElementSibling;
+        var sempit = window.matchMedia('(max-width: 991.98px)');
+
+        // satu set field yang sama, dipindah antara baris filter dan popus — kalau
+        // dibuat dua salinan, nama inputnya dobel dan nilai yang terkirim membingungkan
+        function tata() {
+            if (sempit.matches) {
+                wadah.appendChild(lapis);
+            } else {
+                asal.insertBefore(lapis, sesudah);
+            }
+        }
+
+        tata();
+        sempit.addEventListener('change', tata);
+    }());
+    </script>
     <div class="tugas-kartu">
         <?php if ($baris === []) : ?>
             <div class="tugas-kosong">

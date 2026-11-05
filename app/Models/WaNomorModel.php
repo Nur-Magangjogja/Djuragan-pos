@@ -132,4 +132,21 @@ class WaNomorModel extends Model
 
         return strlen($digit) >= 8 && strlen($digit) <= 16;
     }
+
+    /**
+     * Berapa reminder yang pernah memakai nomor ini. Riwayat percakapan menyimpan
+     * salinan angkanya, tapi jejak itu tetap menunjuk ke baris ini — selama angkanya
+     * masih dipakai, barisnya tidak boleh hilang.
+     */
+    public function dipakaiReminder(int $id_nomor): int
+    {
+        return (int) $this->db->table('crm_tugas_whatsapp')
+            ->where('nomor_id', $id_nomor)
+            ->countAllResults();
+    }
+
+    public function hapus(int $id_nomor): bool
+    {
+        return $this->db->table('crm_wa_nomor')->where('id_nomor', $id_nomor)->delete();
+    }
 }

@@ -18,7 +18,7 @@ $dibaca   = static function ($detik): string {
 $tutup    = (string) $run['status'] === 'selesai';
 $sasaran  = $run['jenis'] === 'email'
     ? 'Email ' . ($run['akun_email'] ?: '(akun tidak tercatat)')
-    : ($run['nama_juragan'] ?: 'Toko #' . (int) $run['toko_id']);
+    : ($run['nama_toko'] ?: 'Toko #' . (int) $run['toko_id']);
 
 $butir_beres = 0;
 
@@ -58,6 +58,19 @@ foreach ($hasil as $h) {
     .ckl-jawab .form-select { min-width: 132px; }
     .ckl-jawab .form-control { min-width: 150px; }
     .ckl-cetak { display: inline-flex; align-items: center; gap: .3rem; font-size: .78rem; color: #475569; }
+
+    /* catatan tulisan sendiri: satu baris paling bawah kartu + tempat buang di kanan barisnya */
+    .ckl-hapus { display: inline-flex; align-items: flex-start; padding-top: .1rem; }
+    .ckl-tambah { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; padding: .9rem 1rem; border-top: 1px solid #f1f5f9; }
+    .ckl-tambah .form-control { flex: 1 1 240px; min-width: 0; }
+
+    @media (max-width: 991.98px) {
+        .ckl-head h1 > i { display: none; }
+        .ckl-tile { flex: 1 1 calc(50% - .25rem); min-width: 0; }
+        .ckl-jawab .form-select, .ckl-jawab .form-control { min-width: 0; width: 100%; max-width: none; }
+        .ckl-jawab > .lapangan { flex: 1 1 calc(50% - .25rem); min-width: 0; }
+        .ckl-jawab > .lapangan:last-child { flex: 0 0 auto; }
+    }
 
     .pil-ckl { display: inline-block; padding: .18rem .6rem; border-radius: 999px; font-size: .72rem; font-weight: 700; white-space: nowrap; }
     .c-berjalan { background: #fef3e2; color: #b45309; }
@@ -153,33 +166,46 @@ foreach ($hasil as $h) {
                                 <div class="ckl-hint"><i class="fal fa-note-sticky"></i> <?= esc($h['catatan']) ?></div>
                             <?php endif; ?>
                         </div>
+
+                        <?php if (! $tutup && $h['item_id'] === null) : ?>
+                            <!-- butir tulisan sendiri boleh dibuang lagi; butir templat
+                               tidak, supaya orang berikutnya tetap melihat apa yang
+                               memang ditanyakan di toko ini -->
+                            <?= form_open('admin/checklist/butir-hapus/' . (int) $run['id_run'], ['class' => 'ckl-hapus']) ?>
+                                <input type="hidden" name="id_hasil" value="<?= (int) $h['id_hasil'] ?>">
+                                <button type="submit" class="btn btn-sm btn-link text-decoration-none p-0"
+                                    title="Hapus butir ini" aria-label="Hapus butir ini">
+                                    <i class="fal fa-trash text-danger"></i>
+                                </button>
+                            <?= form_close() ?>
+                        <?php endif; ?>
                     </div>
 
                     <?php if (! $tutup) : ?>
                         <?= form_open('admin/checklist/isi/' . (int) $run['id_run'], ['class' => 'ckl-jawab']) ?>
-                            <input type="hidden" name="item_id" value="<?= (int) $h['item_id'] ?>">
+                            <input type="hidden" name="id_hasil" value="<?= (int) $h['id_hasil'] ?>">
                             <div class="lapangan">
-                                <label for="st-<?= (int) $h['item_id'] ?>">Status</label>
-                                <select class="form-select form-select-sm" id="st-<?= (int) $h['item_id'] ?>" name="status">
+                                <label for="st-<?= (int) $h['id_hasil'] ?>">Status</label>
+                                <select class="form-select form-select-sm" id="st-<?= (int) $h['id_hasil'] ?>" name="status">
                                     <?php foreach ($status as $kode => $nama) : ?>
                                         <option value="<?= esc($kode) ?>" <?= $status_butir === $kode ? 'selected' : '' ?>><?= esc($nama) ?></option>
                                     <?php endforeach; ?>
                                 </select>
                             </div>
                             <div class="lapangan">
-                                <label for="al-<?= (int) $h['item_id'] ?>">Alasan (wajib bila tidak relevan)</label>
-                                <input type="text" class="form-control form-control-sm" id="al-<?= (int) $h['item_id'] ?>"
+                                <label for="al-<?= (int) $h['id_hasil'] ?>">Alasan (wajib bila tidak relevan)</label>
+                                <input type="text" class="form-control form-control-sm" id="al-<?= (int) $h['id_hasil'] ?>"
                                     name="alasan" maxlength="255" value="<?= esc($h['alasan'] ?? '') ?>"
                                     placeholder="mis. toko tidak punya akun ini">
                             </div>
                             <div class="lapangan">
-                                <label for="ct-<?= (int) $h['item_id'] ?>">Catatan</label>
-                                <input type="text" class="form-control form-control-sm" id="ct-<?= (int) $h['item_id'] ?>"
+                                <label for="ct-<?= (int) $h['id_hasil'] ?>">Catatan</label>
+                                <input type="text" class="form-control form-control-sm" id="ct-<?= (int) $h['id_hasil'] ?>"
                                     name="catatan" maxlength="500" value="<?= esc($h['catatan'] ?? '') ?>"
                                     placeholder="opsional">
                             </div>
-                            <label class="ckl-cetak" for="pt-<?= (int) $h['item_id'] ?>">
-                                <input class="form-check-input mt-0" type="checkbox" id="pt-<?= (int) $h['item_id'] ?>"
+                            <label class="ckl-cetak" for="pt-<?= (int) $h['id_hasil'] ?>">
+                                <input class="form-check-input mt-0" type="checkbox" id="pt-<?= (int) $h['id_hasil'] ?>"
                                     name="perlu_tindakan" value="1" <?= (int) $h['perlu_tindakan'] === 1 ? 'checked' : '' ?>>
                                 Perlu tindakan lanjut
                             </label>
@@ -192,9 +218,21 @@ foreach ($hasil as $h) {
                 </div>
             <?php endforeach; ?>
         <?php endif; ?>
+
+        <?php if (! $tutup) : ?>
+            <!-- lembar kerja toko tidak selalu sama tiap hari: apa yang sudah
+               dikerjakan hari itu ditulis di sini, hanya hidup di sesi ini -->
+            <?= form_open('admin/checklist/butir-tambah/' . (int) $run['id_run'], ['class' => 'ckl-tambah']) ?>
+                <input type="text" class="form-control form-control-sm" name="judul"
+                    maxlength="200" placeholder="mis. sudah balas 12 chat pembeli jam 10.00" required>
+                <button type="submit" class="btn btn-sm btn-dark">
+                    <i class="fal fa-plus me-1"></i> Tambah catatan
+                </button>
+            <?= form_close() ?>
+        <?php endif; ?>
     </div>
 
-    <?php if (! $tutup && $hasil !== []) : ?>
+    <?php if (! $tutup) : ?>
         <div class="ckl-kartu">
             <div class="ckl-baris">
                 <div class="ckl-tanya">Akhiri sesi</div>

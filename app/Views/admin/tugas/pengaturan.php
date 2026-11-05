@@ -35,6 +35,12 @@
     .aturan-angka { width: 5.5rem; }
     .aturan-kotak table { width: 100%; font-size: .84rem; }
     .aturan-kotak td { padding: .35rem .3rem; border-bottom: 1px solid #f1f5f9; }
+
+    /* pola rumah: di layar sempit ikon di depan judul dibuang, tombol back tetap
+       karena ia <a>, bukan <i> */
+    @media (max-width: 991.98px) {
+        .aturan-halaman h1 > i { display: none; }
+    }
 </style>
 <?= $this->endSection() ?>
 
@@ -43,12 +49,8 @@
 
 <div class="container-xxl aturan-halaman">
 
-    <a class="mt-4 d-inline-flex align-items-center gap-2 text-decoration-none small" style="color:#64748b"
-        href="<?= esc(site_url('admin/tugas')) ?>">
-        <i class="fal fa-arrow-alt-left"></i> Kembali ke antrean tugas
-    </a>
-
-    <h1 class="h3 mt-2"><i class="fal fa-bell me-1 text-brand-500"></i> <?= esc($title) ?></h1>
+    <h1 class="h3 mt-5"><a class="judul-balik" href="<?= esc(site_url('admin/tugas')) ?>"
+            title="Kembali ke antrean tugas" aria-label="Kembali ke antrean tugas"><i class="fal fa-arrow-left"></i></a><i class="fal fa-bell me-1 text-brand-500"></i> <?= esc($title) ?></h1>
 
     <?php if ($kabar !== '') : ?>
         <div class="alert alert-success py-2" data-flash><?= esc($kabar) ?></div>

@@ -96,9 +96,29 @@ class Invoices extends BaseController
             $title      = $juragans[0]->nama_juragan;
             $id_juragan = $juragans[0]->id_juragan;
 
-            // slug toko orang lain tidak boleh membuka daftar transaksinya
+            // slug toko orang lain tidak boleh membuka daftar transaksinya. Dulu 404
+            // datar; sekarang halaman penolakan berbunyi jelas, karena tautan "detail"
+            // di profil customer 360 menunjuk ke sini dan daftar riwayat customer itu
+            // memang lintas toko. Tombol kembali membawa orang ke halaman asal
+            // klik — kalau tidak, ia harus mencari ulang customer itu
             if (! $this->bolehToko($id_juragan)) {
-                throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
+                $asal = (string) $this->request->getGet('kembali');
+
+                // whitelist path: hanya halaman profil customer yang boleh dijadikan
+                // tujuan, supaya parameter ini tidak berubah jadi redirect terbuka
+                if (preg_match('~^admin/crm/pelanggan/\d{1,12}$~', $asal) === 1) {
+                    return view('admin/invoice/tolak_akses', [
+                        'title'          => 'Tidak Memiliki Akses',
+                        'tautan_kembali' => site_url($asal),
+                        'label_kembali'  => 'Kembali ke Halaman Customer',
+                    ]);
+                }
+
+                return view('admin/invoice/tolak_akses', [
+                    'title'          => 'Tidak Memiliki Akses',
+                    'tautan_kembali' => site_url('admin/invoices/lihat/semua/semua'),
+                    'label_kembali'  => 'Kembali ke Semua Juragan',
+                ]);
             }
         }
 

@@ -53,9 +53,13 @@ class ChecklistModel extends Model
      * Idempoten: dipanggil dua kali untuk toko + tanggal yang sama mengembalikan
      * sesi yang lama, lengkap dengan jawaban yang sudah ditulis.
      *
+     * `$toko_id` adalah id toko cek (crm_toko_online), sementara tugas yang lahir
+     * di antrean tetap memakai `$juragan_id` — antrean tugas seluruh aplikasi
+     * disaring lewat juragan, dan toko tanpa juragan memang tidak punya sana.
+     *
      * @return array{run: array<string, mixed>, dibuat: bool}
      */
-    public function mulai(string $jenis, ?int $toko_id, ?string $akun, string $tanggal, ?int $oleh): array
+    public function mulai(string $jenis, ?int $toko_id, ?string $akun, string $tanggal, ?int $oleh, ?int $juragan_id = null): array
     {
         $kunci = $this->kunci($jenis, $toko_id, $akun, $tanggal);
         $lama  = $this->db->table('crm_checklist_run')->where('kunci', $kunci)->get(1)->getRowArray();
@@ -82,12 +86,13 @@ class ChecklistModel extends Model
 
         foreach ($this->butir($jenis, $toko_id) as $i) {
             $this->db->table('crm_checklist_hasil')->insert([
-                'run_id'     => $id_run,
-                'item_id'    => (int) $i['id_item'],
-                'judul'      => $i['judul'],
-                'status'     => 'belum',
-                'created_at' => $waktu,
-                'updated_at' => $waktu,
+                'run_id'      => $id_run,
+                'item_id'     => (int) $i['id_item'],
+                'dibuat_oleh' => $oleh,
+                'judul'       => $i['judul'],
+                'status'      => 'belum',
+                'created_at'  => $waktu,
+                'updated_at'  => $waktu,
             ]);
         }
 
@@ -98,7 +103,7 @@ class ChecklistModel extends Model
             'prioritas'  => 'normal',
             'sumber'     => 'sistem',
             'kunci_unik' => 'checklist-' . $id_run,
-            'juragan_id' => $toko_id,
+            'juragan_id' => $juragan_id,
             'tenggat'    => $tanggal,
         ], $oleh);
 
@@ -153,10 +158,13 @@ class ChecklistModel extends Model
     }
 
     /**
-     * Jawab satu butir. 'tidak relevan' wajib beralasan, dan satu butir yang
-     * butuh tindakan membuat sesinya ikut ditandai — itu signal bagi CS berikutnya.
+     * Jawab satu butir, dikenali dari baris hasilnya. Butir templat dan butir
+     * tulisan CS di satu lembar memakai jalur yang sama.
+     *
+     * 'tidak relevan' wajib beralasan, dan satu butir yang butuh tindakan membuat
+     * sesinya ikut ditandai — itu signal bagi CS berikutnya.
      */
-    public function isi(int $id_run, int $item_id, string $status, string $alasan = '', string $catatan = '', bool $tindakan = false, ?int $oleh = null): bool
+    public function isi(int $id_run, int $id_hasil, string $status, string $alasan = '', string $catatan = '', bool $tindakan = false, ?int $oleh = null): bool
     {
         if (! array_key_exists($status, self::STATUS)) {
             return false;
@@ -167,13 +175,13 @@ class ChecklistModel extends Model
         }
 
         $ada = $this->db->table('crm_checklist_hasil')
-            ->where('run_id', $id_run)->where('item_id', $item_id)->get(1)->getRowArray();
+            ->where('id_hasil', $id_hasil)->where('run_id', $id_run)->get(1)->getRowArray();
 
         if ($ada === null) {
             return false;
         }
 
-        $this->db->table('crm_checklist_hasil')->where('id_hasil', (int) $ada['id_hasil'])->update([
+        $this->db->table('crm_checklist_hasil')->where('id_hasil', $id_hasil)->update([
             'status'          => $status,
             'alasan'          => trim($alasan) === '' ? null : mb_substr($alasan, 0, 255),
             'catatan'         => trim($catatan) === '' ? null : mb_substr($catatan, 0, 500),
@@ -195,6 +203,86 @@ class ChecklistModel extends Model
         }
 
         return true;
+    }
+
+    /**
+     * Butir yang ditulis orang sendiri di satu lembar — catatan apa yang sudah
+     * dikerjakan di toko itu. Baris seperti ini tidak punya templat, jadi item_id
+     * dibiarkan kosong; kunci unik (run_id, item_id) tidak masalah karena MySQL
+     * tidak pernah menganggap dua NULL sama.
+     *
+     * @return array{ok: bool, pesan: string}
+     */
+    public function tambahButir(int $id_run, string $judul, ?int $oleh): array
+    {
+        $judul = trim($judul);
+
+        if ($judul === '') {
+            return ['ok' => false, 'pesan' => 'Tulis dulu butirnya.'];
+        }
+
+        $run = $this->run($id_run);
+
+        if ($run === null) {
+            return ['ok' => false, 'pesan' => 'Sesi tidak ditemukan.'];
+        }
+
+        if ((string) $run['status'] === 'selesai') {
+            return ['ok' => false, 'pesan' => 'Sesi ini sudah ditutup, butir baru tidak bisa masuk lagi.'];
+        }
+
+        $waktu = time();
+
+        $this->db->table('crm_checklist_hasil')->insert([
+            'run_id'     => $id_run,
+            'item_id'    => null,
+            'judul'      => mb_substr($judul, 0, 200),
+            'status'     => 'belum',
+            'diisi_oleh' => $oleh,
+            'created_at' => $waktu,
+            'updated_at' => $waktu,
+        ]);
+
+        return ['ok' => true, 'pesan' => 'Butir ditambahkan.'];
+    }
+
+    /**
+     * Hapus butir tulisan sendiri. Butir templat tidak pernah bisa dihapus dari
+     * lembar: kalau memang bukan bagiannya, tandai tidak relevan dengan alasan —
+     * jejaknya tetap terbaca orang berikutnya.
+     *
+     * @return array{ok: bool, pesan: string}
+     */
+    public function hapusButir(int $id_run, int $id_hasil): array
+    {
+        $baris = $this->db->table('crm_checklist_hasil')
+            ->where('id_hasil', $id_hasil)->where('run_id', $id_run)->get(1)->getRowArray();
+
+        if ($baris === null) {
+            return ['ok' => false, 'pesan' => 'Butir itu tidak ada di sesi ini.'];
+        }
+
+        if ($baris['item_id'] !== null) {
+            return ['ok' => false, 'pesan' => 'Butir templat tidak bisa dihapus. Tandai tidak relevan kalau memang bukan bagiannya.'];
+        }
+
+        $run = $this->run($id_run);
+
+        if ($run === null || (string) $run['status'] === 'selesai') {
+            return ['ok' => false, 'pesan' => 'Sesi yang sudah ditutup tidak bisa diubah lagi.'];
+        }
+
+        $this->db->table('crm_checklist_hasil')->where('id_hasil', $id_hasil)->delete();
+
+        $sisa = (int) $this->db->table('crm_checklist_hasil')
+            ->where('run_id', $id_run)->where('perlu_tindakan', 1)->countAllResults();
+
+        $this->db->table('crm_checklist_run')->where('id_run', $id_run)->update([
+            'ada_tindakan' => $sisa > 0 ? 1 : 0,
+            'updated_at'   => time(),
+        ]);
+
+        return ['ok' => true, 'pesan' => 'Butir dihapus.'];
     }
 
     /**
@@ -255,6 +343,158 @@ class ChecklistModel extends Model
         return ['ok' => true, 'pesan' => 'Sesi checklist selesai.'];
     }
 
+    // ------------------------------------------------------------------ catatan
+
+    /**
+     * Tulis satu catatan di toko pada hari ini.
+     *
+     * $beres membedakan dua maksud yang selama ini tertukar: catatan dari CS adalah
+     * laporan kerja mandiri — dia sudah mengerjakannya sendiri tanpa menunggu tugas
+     * didelegasikan — jadi butuhnya lahir langsung selesai dan sesinya ikut ditutup
+     * kalau memang tidak ada lagi yang terbuka. Catatan dari Admin/Superadmin justru
+     * permintaan kerja: butuhnya 'belum' dan tugasnya tinggal di antrean.
+     *
+     * @param array<string, mixed> $toko satu baris hasil petaCek/petaSemua
+     *
+     * @return array{ok: bool, pesan: string}
+     */
+    public function buatCatatan(array $toko, string $catatan, int $oleh, bool $beres, ?int $kepada = null): array
+    {
+        $catatan = trim($catatan);
+
+        if ($catatan === '') {
+            return ['ok' => false, 'pesan' => 'Catatannya ditulis dulu.'];
+        }
+
+        $judul = mb_substr($catatan, 0, 200);
+
+        // dua klik pada tombol yang sama pernah melahirkan dua catatan yang identik
+        // dalam hitungan detik, jadi teks yang sama pada toko dan hari yang sama
+        // ditolak sebelum sesinya dibuat
+        $lama = $this->runKunci('toko', (int) $toko['id_toko'], null, date('Y-m-d'));
+
+        if ($lama !== null && (int) $this->db->table('crm_checklist_hasil')
+            ->where('run_id', (int) $lama['id_run'])->where('judul', $judul)->countAllResults() > 0) {
+            return ['ok' => false, 'pesan' => 'Catatan begitu sudah tertulis di toko ini hari ini — tidak perlu dua kali.'];
+        }
+
+        $sesi   = $this->mulai('toko', (int) $toko['id_toko'], null, date('Y-m-d'), $oleh, $toko['juragan_id']);
+        $id_run = (int) $sesi['run']['id_run'];
+        $waktu  = time();
+
+        $this->db->table('crm_checklist_hasil')->insert([
+            'run_id'      => $id_run,
+            'item_id'     => null,
+            'dibuat_oleh' => $oleh,
+            'ditujuk_ke'  => $kepada,
+            'judul'       => $judul,
+            'status'      => $beres ? 'selesai' : 'belum',
+            'diisi_oleh'  => $beres ? $oleh : null,
+            'created_at'  => $waktu,
+            'updated_at'  => $waktu,
+        ]);
+
+        if ($beres) {
+            // best effort: kalau masih ada butir templat yang belum ditandai,
+            // sesinya tetap berjalan tapi catatan ini tetap terhitung selesai
+            $this->selesai($id_run, $oleh, '');
+        }
+
+        return ['ok' => true, 'pesan' => $beres
+            ? 'Catatan tersimpan dan langsung terhitung sudah dikerjakan.'
+            : 'Catatan dibuat — tugasnya masuk antrean toko itu.'];
+    }
+
+    /**
+     * Selesaikan satu catatan: apa yang dikerjakan ditulis di kolom catatan, dan
+     * kalau tidak ada lagi yang terbuka di sesi itu, sesinya ikut ditutup supaya
+     * tugasnya tidak tinggal menggantung di antrean.
+     *
+     * @return array{ok: bool, pesan: string}
+     */
+    public function selesaikanCatatan(int $id_run, int $id_hasil, string $catatan, int $oleh): array
+    {
+        $catatan = trim($catatan);
+
+        if ($catatan === '') {
+            return ['ok' => false, 'pesan' => 'Tulis dulu apa yang sudah dikerjakan.'];
+        }
+
+        if (! $this->isi($id_run, $id_hasil, 'selesai', '', mb_substr($catatan, 0, 500), false, $oleh)) {
+            return ['ok' => false, 'pesan' => 'Catatan tidak diterima: butirnya bukan milik sesi ini.'];
+        }
+
+        $belum = (int) $this->db->table('crm_checklist_hasil')
+            ->where('run_id', $id_run)->where('status', 'belum')->countAllResults();
+
+        if ($belum === 0) {
+            $this->selesai($id_run, $oleh, '');
+        }
+
+        return ['ok' => true, 'pesan' => 'Catatan ditandai sudah dikerjakan.'];
+    }
+
+    /** @param array<string, mixed> $s */
+    public function catatan(array $s, int $limit = 25, int $offset = 0): array
+    {
+        return $this->pangkalCatatan($s)
+            ->orderBy('h.id_hasil', 'DESC')
+            ->get($limit, $offset)
+            ->getResultArray();
+    }
+
+    /** @param array<string, mixed> $s */
+    public function jumlahCatatan(array $s): int
+    {
+        return (int) $this->pangkalCatatan($s)->countAllResults();
+    }
+
+    /**
+     * Satu baris = satu catatan. Sesi tidak ikut ditampilkan lagi, jadi catatan dari
+     * toko berbeda boleh nyampur di satu halaman.
+     *
+     * @param array<string, mixed> $s
+     */
+    private function pangkalCatatan(array $s)
+    {
+        $b = $this->db->table('crm_checklist_hasil h')
+            ->select('h.id_hasil, h.run_id, h.item_id, h.judul, h.status, h.alasan, h.perlu_tindakan,'
+                . ' h.catatan AS catatan_butir, h.created_at AS dibuat_pada, h.updated_at,'
+                . ' h.dibuat_oleh, h.ditujuk_ke, r.tanggal, r.status AS status_sesi, r.tugas_id,'
+                . ' o.id_toko, o.nama AS nama_toko,'
+                . ' buat.name AS nama_dibuat, kerja.name AS nama_dikerjakan, ujuk.name AS nama_tujuan')
+            ->join('crm_checklist_run r', 'r.id_run = h.run_id')
+            ->join('crm_toko_online o', 'o.id_toko = r.toko_id', 'left')
+            ->join('user buat', 'buat.id = h.dibuat_oleh', 'left')
+            ->join('user kerja', 'kerja.id = h.diisi_oleh', 'left')
+            ->join('user ujuk', 'ujuk.id = h.ditujuk_ke', 'left')
+            ->where('r.jenis', 'toko');
+
+        if (! empty($s['tanggal'])) {
+            $b->where('r.tanggal', $s['tanggal']);
+        }
+
+        if (! empty($s['toko_id'])) {
+            $b->where('r.toko_id', (int) $s['toko_id']);
+        }
+
+        if (! empty($s['toko_ids'])) {
+            $b->whereIn('r.toko_id', array_map('intval', $s['toko_ids']));
+        }
+
+        // 'sudah' ikut menghitung butir yang ditandai tidak relevan: keduanya
+        // sudah tidak menunggu pekerjaan lagi
+        $kerja = (string) ($s['kerja'] ?? '');
+
+        if ($kerja === 'sudah') {
+            $b->groupStart()->whereIn('h.status', ['selesai', 'tidak_relevan'])->groupEnd();
+        } elseif ($kerja === 'belum') {
+            $b->where('h.status', 'belum');
+        }
+
+        return $b;
+    }
+
     // ------------------------------------------------------------------ templat
 
     /** @param array<string, mixed> $data */
@@ -295,8 +535,8 @@ class ChecklistModel extends Model
     public function semuaButir(string $jenis): array
     {
         return $this->db->table('crm_checklist_item i')
-            ->select('i.*, j.nama_juragan')
-            ->join('juragan j', 'j.id_juragan = i.toko_id', 'left')
+            ->select('i.*, o.nama AS nama_toko')
+            ->join('crm_toko_online o', 'o.id_toko = i.toko_id', 'left')
             ->where('i.jenis', $jenis)
             ->orderBy('i.aktif', 'DESC')
             ->orderBy('i.urut', 'ASC')
@@ -314,14 +554,14 @@ class ChecklistModel extends Model
     }
 
     /** Sesi yang belum ditutup untuk toko-toko ini pada satu tanggal. */
-    public function hitungTerbuka(array $juragan_ids, string $tanggal): int
+    public function hitungTerbuka(array $toko_ids, string $tanggal): int
     {
         $b = $this->db->table('crm_checklist_run')
             ->where('status', 'berjalan')
             ->where('tanggal', $tanggal);
 
-        if ($juragan_ids !== []) {
-            $b->whereIn('toko_id', array_map('intval', $juragan_ids));
+        if ($toko_ids !== []) {
+            $b->whereIn('toko_id', array_map('intval', $toko_ids));
         }
 
         return (int) $b->countAllResults();
@@ -356,8 +596,8 @@ class ChecklistModel extends Model
             $b->where('r.tanggal <=', $s['sampai']);
         }
 
-        if (! empty($s['juragan_ids'])) {
-            $b->groupStart()->whereIn('r.toko_id', array_map('intval', $s['juragan_ids']))
+        if (! empty($s['toko_ids'])) {
+            $b->groupStart()->whereIn('r.toko_id', array_map('intval', $s['toko_ids']))
                 ->orWhere('r.jenis', 'email')->groupEnd();
         }
 
@@ -369,11 +609,12 @@ class ChecklistModel extends Model
         $hasil = $this->p('crm_checklist_hasil');
 
         return $this->db->table('crm_checklist_run r')
-            ->select('r.*, j.nama_juragan, u.name AS nama_dikerjakan, t.status AS status_tugas, t.judul AS judul_tugas,'
+            ->select('r.*, o.nama AS nama_toko, j.nama_juragan, u.name AS nama_dikerjakan, t.status AS status_tugas, t.judul AS judul_tugas,'
                 . ' (SELECT COUNT(*) FROM `' . $hasil . '` x WHERE x.run_id = r.id_run) AS jumlah_butir,'
                 . ' (SELECT COUNT(*) FROM `' . $hasil . '` x WHERE x.run_id = r.id_run AND x.status = \'belum\') AS jumlah_belum,'
                 . ' (SELECT COUNT(*) FROM `' . $hasil . '` x WHERE x.run_id = r.id_run AND x.perlu_tindakan = 1) AS jumlah_tindakan')
-            ->join('juragan j', 'j.id_juragan = r.toko_id', 'left')
+            ->join('crm_toko_online o', 'o.id_toko = r.toko_id', 'left')
+            ->join('juragan j', 'j.id_juragan = o.juragan_id', 'left')
             ->join('user u', 'u.id = r.dikerjakan_oleh', 'left')
             ->join('crm_tugas t', 't.id_tugas = r.tugas_id', 'left');
     }
@@ -392,10 +633,10 @@ class ChecklistModel extends Model
             return 'Periksa email ' . ($akun ?: 'umum') . ' (' . $tanggal . ')';
         }
 
-        $nama = $this->db->table('juragan')->select('nama_juragan')->where('id_juragan', (int) $toko_id)
-            ->get(1)->getRowArray()['nama_juragan'] ?? null;
+        $baris = $this->db->table('crm_toko_online')->select('nama')->where('id_toko', (int) $toko_id)
+            ->get(1)->getRowArray();
 
-        return 'Checklist toko ' . ($nama ?: '#' . (int) $toko_id) . ' (' . $tanggal . ')';
+        return 'Checklist toko ' . (($baris['nama'] ?? null) ?: '#' . (int) $toko_id) . ' (' . $tanggal . ')';
     }
 
     /**

@@ -3,18 +3,17 @@
 /**
  * Satu dokumen SOP: isinya untuk dibaca, bentuknya untuk Admin.
  *
- * Semua variabel di bawah disuntik Admin\Sop::lihat() lewat view() (extract), jadi
- * analyzer tidak menelusurinya dari file ini. Blok @var hanya memberi tahunya ke
- * Intelephense, bukan kode yang dijalankan.
- *
- * @var string                     $title  judul halaman
- * @var array<string, mixed>       $sop    isi dokumen
- * @var array<string, string>      $untuk  kode => label peran
- * @var bool                       $kelola akun ini boleh menulis SOP?
- * @var string                     $kabar  pesan sukses flash (string kosong kalau tidak ada)
- * @var string                     $galat  pesan gagal flash (string kosong kalau tidak ada)
+ * @var string                     $title         judul halaman
+ * @var array<string, mixed>       $sop           isi dokumen
+ * @var array<string, string>      $untuk         label peran, dipakai di baris meta
+ * @var bool                       $kelola        akun ini boleh menulis SOP?
+ * @var array<int, string>         $kategori_sop  dua pilihan kategori di form
+ * @var string                     $sop_kategori  kategori dokumen ini, sudah dinormalkan
+ * @var string                     $sop_teks      isi untuk textarea form
+ * @var list<string>               $sop_poin      isi untuk dibaca
+ * @var string                     $kabar         pesan sukses flash
+ * @var string                     $galat         pesan gagal flash
  */
-
 $level  = (string) session()->get('level');
 $dibaca = static function ($detik): string {
     return $detik !== null && (int) $detik > 0 ? date('d M Y H:i', (int) $detik) : '-';
@@ -31,7 +30,6 @@ $dibaca = static function ($detik): string {
         box-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 8px 24px -12px rgba(15, 23, 42, .12);
         overflow: hidden; margin-bottom: 1rem;
     }
-    .sop-isi { padding: 1.1rem 1.25rem; font-size: .92rem; color: #1f2937; line-height: 1.7; white-space: normal; }
     .sop-meta { display: flex; flex-wrap: wrap; gap: .3rem .9rem; padding: .7rem 1.25rem; border-bottom: 1px solid #eaecf0; font-size: .78rem; color: #667085; }
     .pil-sop { display: inline-block; padding: .16rem .55rem; border-radius: 999px; font-size: .7rem; font-weight: 700; background: #eef1f6; color: #475569; }
     .pil-mati { background: #fdf1f0; color: #b81c16; }
@@ -66,9 +64,8 @@ $dibaca = static function ($detik): string {
 
     <div class="sop-kartu">
         <div class="sop-meta">
-            <span class="pil-sop"><?= esc($sop['kategori']) ?></span>
+            <span class="pil-sop"><?= esc($sop_kategori) ?></span>
             <span class="pil-sop"><?= esc($untuk[$sop['untuk']] ?? $sop['untuk']) ?></span>
-            <span>urutan <?= (int) $sop['urut'] ?></span>
             <span>diubah <?= $dibaca($sop['updated_at']) ?><?= $sop['nama_diubah'] ? ' oleh ' . esc($sop['nama_diubah']) : '' ?></span>
         </div>
         <?php if ($kelola) : ?>
@@ -76,40 +73,43 @@ $dibaca = static function ($detik): string {
                 <input type="hidden" name="id_sop" value="<?= (int) $sop['id_sop'] ?>">
                 <input type="hidden" name="aktif" value="<?= (int) $sop['aktif'] ?>">
                 <div class="row g-3">
-                    <div class="col-12">
+                    <div class="col-12 col-sm-8">
                         <label class="form-label" for="sop-judul">Judul <span class="text-danger">*</span></label>
                         <input type="text" class="form-control form-control-sm" id="sop-judul" name="judul"
                             maxlength="200" value="<?= esc($sop['judul']) ?>" required>
                     </div>
-                    <div class="col-4">
-                        <label class="form-label" for="sop-kategori">Kelompok</label>
-                        <input type="text" class="form-control form-control-sm" id="sop-kategori" name="kategori"
-                            maxlength="40" value="<?= esc($sop['kategori']) ?>">
-                    </div>
-                    <div class="col-4">
-                        <label class="form-label" for="sop-untuk">Untuk</label>
-                        <select class="form-select form-select-sm" id="sop-untuk" name="untuk">
-                            <?php foreach ($untuk as $kode => $nama) : ?>
-                                <option value="<?= esc($kode) ?>" <?= (string) $sop['untuk'] === $kode ? 'selected' : '' ?>><?= esc($nama) ?></option>
+                    <div class="col-12 col-sm-4">
+                        <label class="form-label" for="sop-kategori">Kategori</label>
+                        <select class="form-select form-select-sm" id="sop-kategori" name="kategori">
+                            <?php foreach ($kategori_sop as $kode) : ?>
+                                <option value="<?= esc($kode) ?>" <?= $sop_kategori === $kode ? 'selected' : '' ?>><?= esc($kode) ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    <div class="col-4">
-                        <label class="form-label" for="sop-urut">Urut</label>
-                        <input type="number" class="form-control form-control-sm" id="sop-urut" name="urut"
-                            min="0" max="9999" value="<?= (int) $sop['urut'] ?>">
-                    </div>
-                    <div class="col-12">
-                        <label class="form-label" for="sop-isi">Isi</label>
-                        <textarea class="form-control form-control-sm" id="sop-isi" name="isi" rows="14"><?= esc($sop['isi'] ?? '') ?></textarea>
-                    </div>
                 </div>
+
+                <div class="mt-3">
+                    <label class="form-label" for="sop-isi">Isi</label>
+                    <textarea class="form-control form-control-sm" id="sop-isi" name="isi" rows="14"
+                        placeholder="Tulis satu aturan per baris. Setiap baris jadi satu poin."><?= esc($sop_teks) ?></textarea>
+                </div>
+
                 <div class="d-flex gap-2 mt-3">
                     <button type="submit" class="btn btn-sm btn-primary"><i class="fal fa-save me-1"></i> Simpan</button>
                 </div>
             <?= form_close() ?>
         <?php else : ?>
-            <div class="sop-isi"><?= nl2br(esc((string) ($sop['isi'] ?? ''))) ?></div>
+            <div class="sop-baca">
+                <?php if ($sop_poin === []) : ?>
+                    <p class="sop-kosong-isi">Belum ada isi.</p>
+                <?php else : ?>
+                    <ul class="sop-poin">
+                        <?php foreach ($sop_poin as $p) : ?>
+                            <li><?= esc($p) ?></li>
+                        <?php endforeach; ?>
+                    </ul>
+                <?php endif; ?>
+            </div>
         <?php endif; ?>
     </div>
 
