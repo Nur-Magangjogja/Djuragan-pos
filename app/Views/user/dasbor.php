@@ -172,7 +172,7 @@ $kartu = [
     <p class="text-muted small mb-4">
         <?= esc($tanggal_hari_ini) ?>
         <?php if ($nama_toko !== []) : ?>
-            &middot; <?= esc(count($nama_toko)) ?> toko: <?= esc(implode(', ', array_slice($nama_toko, 0, 3))) ?><?php if (count($nama_toko) > 3) : ?> +<?= (int) (count($nama_toko) - 3) ?><?php endif; ?>
+            &middot; <?= esc((string) count($nama_toko)) ?> toko: <?= esc(implode(', ', array_slice($nama_toko, 0, 3))) ?><?php if (count($nama_toko) > 3) : ?> +<?= (int) (count($nama_toko) - 3) ?><?php endif; ?>
         <?php else : ?>
             &middot; akun ini belum ditautkan ke toko mana pun
         <?php endif; ?>
@@ -218,9 +218,8 @@ $kartu = [
         <div class="col-lg-6">
             <div class="card h-100">
                 <div class="card-body">
-                    <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+                    <div class="mb-2">
                         <h2 class="h6 mb-0"><i class="fal fa-list-check me-1 text-primary"></i> Tugas yang Menunggu</h2>
-                        <a class="small" href="<?= site_url('admin/tugas') ?>">semua tugas &rarr;</a>
                     </div>
 
                     <?php if ($pegangan === [] && $antrean === []) : ?>

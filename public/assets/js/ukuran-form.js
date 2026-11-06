@@ -326,6 +326,13 @@
   // dipakai JS bawaan halaman untuk memindahkan angka ke hidden input baris baru
   window.UKURAN = {
     tempel: tempel,
+    isi: isi,
+    pilihJenis: function (panel, jenis) {
+      var $panel = $(panel);
+      $panel.attr("data-jenis", jenis || "");
+      $panel.find(".uk-jenis").val(jenis || "");
+      isi($panel, jenis || "");
+    },
     nilai: function (panel) {
       var hasil = [];
 

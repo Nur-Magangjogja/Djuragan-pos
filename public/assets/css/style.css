@@ -3728,6 +3728,14 @@ tr.varian-sorot td {
   color: #b42318;
 }
 
+/* penawaran nama bebas di ujung daftar: warnanya dibedakan dari varian katalog
+   supaya jelas bahwa barisnya nanti tidak menautkan stok, hanya namanya yang
+   diambil dari ketikan */
+.stok-tiru {
+  color: #2f6fed;
+  font-size: 0.8rem;
+}
+
 .stok-kosong {
   color: #667085;
   font-size: 0.82rem;
@@ -4102,4 +4110,91 @@ tr.varian-sorot td {
   background: #101828;
   border-color: #101828;
   color: #fff;
+}
+
+/* 23. Popup kabar (galat / sukses / info) dari public/assets/js/kabaran.js.
+   Duduk di pojok kanan atas, di bawah lonceng notifikasi yang melayang; di
+   layar kecil melebar penuh dengan sisa margin supaya tidak menutupi tombol
+   apa pun. Wadahnya pointer-events: none supaya kosongnya tidak menahan klik,
+   kartunya yang kembali menerima klik agar tombol tutupnya bekerja. */
+.kabar-wadah {
+  position: fixed;
+  top: 0.9rem;
+  right: 0.9rem;
+  z-index: 1080;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.45rem;
+  width: min(24rem, calc(100vw - 1.8rem));
+  pointer-events: none;
+}
+
+.kabar {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  padding: 0.6rem 0.7rem;
+  border-radius: 0.7rem;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  box-shadow: 0 10px 24px rgba(16, 24, 40, 0.14);
+  font-size: 0.84rem;
+  line-height: 1.4;
+  color: #1f2933;
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+
+.kabar-ikon {
+  font-size: 1rem;
+  margin-top: 0.05rem;
+}
+
+.kabar-teks {
+  flex: 1;
+}
+
+.kabar-tutup {
+  flex: 0 0 auto;
+  border: 0;
+  background: none;
+  color: #98a2b3;
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.15rem;
+}
+
+.kabar-tutup:hover {
+  color: #101828;
+}
+
+.kabar-galat {
+  border-color: #fbd9d6;
+  background: #fff5f5;
+  color: #b42318;
+}
+
+.kabar-sukses {
+  border-color: #c7f0d2;
+  background: #f2fff7;
+  color: #1b5e37;
+}
+
+.kabar-info {
+  border-color: #dbe3ee;
+  background: #f8fafc;
+  color: #344054;
+}
+
+.kabar-pudar {
+  opacity: 0;
+  transform: translateY(-0.35rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kabar {
+    transition: none;
+  }
 }

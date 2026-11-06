@@ -182,13 +182,11 @@ class Email extends BaseController
     /** Angka badge menu. */
     public function jumlah()
     {
+        helper('fungsi');
+
         return $this->response->setJSON([
             'status' => 'success',
-            'count'  => (new TugasModel())->jumlah([
-                'jenis'        => 'pemeriksaan_email',
-                'terbuka'      => true,
-                'juragan_ids'  => $this->tokoBoleh(),
-            ]),
+            'count'  => cek_email_terbuka_sesi(),
         ]);
     }
 

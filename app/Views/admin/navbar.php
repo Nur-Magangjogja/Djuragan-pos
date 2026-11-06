@@ -43,8 +43,8 @@ $lainTerbuka   = $tugasModel->jumlah(['jenis_not' => \App\Models\TugasModel::PUN
 $waTerbuka    = (new \App\Models\TugasWhatsappModel())->hitungTerbuka(juragan_dipakai_sesi());
 $b5Model     = new \App\Models\TugasModel();
 $b5Terbuka    = $b5Model->hitungPemicu('ulasan', juragan_dipakai_sesi());
-$emailTerbuka = (new \App\Models\TugasModel())->jumlah(["jenis" => "pemeriksaan_email", "terbuka" => true, "juragan_ids" => juragan_dipakai_sesi()]);
-$cklTerbuka    = (new \App\Models\ChecklistModel())->hitungTerbuka(juragan_dipakai_sesi(), date('Y-m-d'));
+$emailTerbuka = cek_email_terbuka_sesi();
+$cklTerbuka    = cek_toko_terbuka_sesi();
 $tugasTerbuka = $lainTerbuka + $cklTerbuka + $emailTerbuka;
 
 // Submenu Transaksi

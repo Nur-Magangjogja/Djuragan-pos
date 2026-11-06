@@ -482,6 +482,17 @@ class ChecklistModel extends Model
             $b->whereIn('r.toko_id', array_map('intval', $s['toko_ids']));
         }
 
+        // catatan yang ditunjukkan ke satu orang hanyalah pekerjaannya: CS lain yang
+        // memegang toko yang sama tidak ikut melihatnya, kalau tidak daftar kerja
+        // mereka berisi tugas orang. Yang tidak punya tujuan memang bulk - satu
+        // perintah untuk semua pemegang toko - jadi tetap tampil ke semua.
+        // `untuk` 0 (Admin/Superadmin) tidak menyaring apa pun.
+        $untuk = (int) ($s['untuk'] ?? 0);
+
+        if ($untuk > 0) {
+            $b->groupStart()->where('h.ditujuk_ke', null)->orWhere('h.ditujuk_ke', $untuk)->groupEnd();
+        }
+
         // 'sudah' ikut menghitung butir yang ditandai tidak relevan: keduanya
         // sudah tidak menunggu pekerjaan lagi
         $kerja = (string) ($s['kerja'] ?? '');

@@ -1234,9 +1234,12 @@ class CrmModel extends Model
      * rentang tanggal pesan, keranjang status barang). Satu sumber dipakai bertiga —
      * daftar, total, dan kartu status — supaya angkanya tidak pernah berbeda.
      *
+     * $toko_ids membatasi nota ke sekerumun toko (mis. hanya toko yang dipegang CS
+     * di menu Tagihan); daftar kosong berarti tanpa batas seperti sebelumnya.
+     *
      * @return array{0: string, 1: array<int, string>}
      */
-    private function saringPiutang(string $cari, string $saring, string $awal, string $akhir, string $statusBarang): array
+    private function saringPiutang(string $cari, string $saring, string $awal, string $akhir, string $statusBarang, array $toko_ids = []): array
     {
         $where  = "AND inv.deleted_at IS NULL
           AND inv.status_pembayaran IN ('1','2','3','4')
@@ -1268,6 +1271,13 @@ class CrmModel extends Model
             $params[] = $akhir;
         }
 
+        // placeholder dibuat sebanyak id-nya; nilainya int murni, jadi aman
+        if ($toko_ids !== []) {
+            $id    = array_values(array_unique(array_map('intval', $toko_ids)));
+            $where .= ' AND inv.juragan_id IN (' . implode(',', array_fill(0, count($id), '?')) . ')';
+            $params = array_merge($params, $id);
+        }
+
         return [$where, $params];
     }
 
@@ -1279,7 +1289,7 @@ class CrmModel extends Model
      * sebelumnya, hanya saja yang sudah selesai diurutkan lebih dulu. Keduanya
      * menampilkan nota terbaru lebih dulu.
      */
-    public function getInvoiceBelumLunas(string $cari = '', int $limit = 50, int $offset = 0, string $saring = 'semua', string $awal = '', string $akhir = '', string $statusBarang = ''): array
+    public function getInvoiceBelumLunas(string $cari = '', int $limit = 50, int $offset = 0, string $saring = 'semua', string $awal = '', string $akhir = '', string $statusBarang = '', array $toko_ids = []): array
     {
         $pInv  = $this->db->prefixTable('invoice');
         $pPel  = $this->db->prefixTable('pelanggan');
@@ -1289,7 +1299,7 @@ class CrmModel extends Model
         $pBay  = $this->db->prefixTable('pembayaran');
         $pKon  = $this->db->prefixTable('pelanggan_kontak');
 
-        [$sisaWhere, $params] = $this->saringPiutang($cari, $saring, $awal, $akhir, $statusBarang);
+        [$sisaWhere, $params] = $this->saringPiutang($cari, $saring, $awal, $akhir, $statusBarang, $toko_ids);
 
         $siap = $this->siapDitagih();
 
@@ -1355,7 +1365,7 @@ class CrmModel extends Model
      * hitungStatusBelumLunas() (satu sumber: saringPiutang) supaya angka badge
      * dan kartu status tidak pernah berbeda dari daftar yang tampil.
      */
-    public function countInvoiceBelumLunas(string $cari = '', string $saring = 'semua', string $awal = '', string $akhir = '', string $statusBarang = ''): int
+    public function countInvoiceBelumLunas(string $cari = '', string $saring = 'semua', string $awal = '', string $akhir = '', string $statusBarang = '', array $toko_ids = []): int
     {
         $pInv  = $this->db->prefixTable('invoice');
         $pPel  = $this->db->prefixTable('pelanggan');
@@ -1364,7 +1374,7 @@ class CrmModel extends Model
         $pBay  = $this->db->prefixTable('pembayaran');
         $pKon  = $this->db->prefixTable('pelanggan_kontak');
 
-        [$sisaWhere, $params] = $this->saringPiutang($cari, $saring, $awal, $akhir, $statusBarang);
+        [$sisaWhere, $params] = $this->saringPiutang($cari, $saring, $awal, $akhir, $statusBarang, $toko_ids);
 
         $sql = "SELECT COUNT(DISTINCT inv.id_invoice) as total
         FROM `{$pInv}` inv
@@ -1404,7 +1414,7 @@ class CrmModel extends Model
      *
      * @return array<string, int> total|belum|proses|packing|terkirim
      */
-    public function hitungStatusBelumLunas(string $cari = '', string $awal = '', string $akhir = ''): array
+    public function hitungStatusBelumLunas(string $cari = '', string $awal = '', string $akhir = '', array $toko_ids = []): array
     {
         $pInv  = $this->db->prefixTable('invoice');
         $pPel  = $this->db->prefixTable('pelanggan');
@@ -1413,7 +1423,7 @@ class CrmModel extends Model
         $pBay  = $this->db->prefixTable('pembayaran');
         $pKon  = $this->db->prefixTable('pelanggan_kontak');
     
-        [$sisaWhere, $params] = $this->saringPiutang($cari, 'semua', $awal, $akhir, '');
+        [$sisaWhere, $params] = $this->saringPiutang($cari, 'semua', $awal, $akhir, '', $toko_ids);
     
         $pil = '';
         foreach ($this->keranjangStatusBarang() as $kode => $kondisi) {

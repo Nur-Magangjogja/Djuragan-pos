@@ -206,4 +206,60 @@ class Pengguna extends BaseController
         return redirect()->to('/admin/settings/pengguna')
             ->with('sukses', 'Perubahan pengguna tersimpan.');
     }
+
+    /**
+     * Hapus lunak akun. Barisnya tetap ada di tabel user — nota, catatan, dan
+     * jejak tugas yang ditulis akun itu terbaca terus; yang hilang hanya akses
+     * loginnya (UserModel menyaring deleted_at, jadi verifikasi masuk tidak
+     * akan pernah menemukan akun ini lagi).
+     */
+    public function hapus_pengguna()
+    {
+        $userModel = new UserModel();
+        $id        = (int) $this->request->getPost('id');
+        $sendiri   = (int) session()->get('id');
+
+        $akun = $userModel->find($id);
+
+        if ($akun === null) {
+            return redirect()->to('/admin/settings/pengguna')
+                ->with('gagal', 'Akun tidak ditemukan — mungkin sudah dihapus.');
+        }
+
+        // superadmin yang sedang login tidak boleh menghapus dirinya sendiri;
+        // yang lain boleh, jejak datanya tetap aman karena hapusnya lunak
+        if ($id === $sendiri) {
+            return redirect()->to('/admin/settings/pengguna')
+                ->with('gagal', 'Anda tidak bisa menghapus akun yang sedang dipakai login ini.');
+        }
+
+        // satu superadmin aktif harus selalu tersisa, kalau tidak halaman
+        // settings (khusus superadmin) tidak akan pernah bisa dibuka lagi
+        if ((string) $akun->level === 'superadmin' && (string) $akun->status === 'active') {
+            $superAktif = $userModel
+                ->where('level', 'superadmin')
+                ->where('status', 'active')
+                ->countAllResults();
+
+            if ($superAktif <= 1) {
+                return redirect()->to('/admin/settings/pengguna')
+                    ->with('gagal', 'Superadmin aktif terakhir tidak bisa dihapus. Tunjuk dulu penggantinya, atau nonaktifkan saja akun ini.');
+            }
+        }
+
+        $userModel->delete($id);
+
+        // relasi juragan ikut dilepas: daftar toko dibangun query mentah yang
+        // tidak menyaring deleted_at, jadi tanpa langkah ini tokonya tetap
+        // terbawa ke perhitungan lama
+        (new RelasiModel())->where(['table' => 1, 'val_id' => $id])->delete();
+
+        // daftar juragan tersimpan 30 menit di writable/cache — kunci lama dibuang
+        $cache = \Config\Services::cache();
+        $cache->delete('juragan_by_user_' . $id);
+        $cache->delete('juragan_by_user_' . $id . '_bank');
+
+        return redirect()->to('/admin/settings/pengguna')
+            ->with('sukses', 'Akun ' . $akun->username . ' berhasil dihapus.');
+    }
 }

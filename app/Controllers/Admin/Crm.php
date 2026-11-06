@@ -300,6 +300,17 @@ class Crm extends BaseController
         $cari   = trim($this->request->getGet('cari') ?? '');
         $status = $this->request->getGet('status') ?? 'menunggu';
 
+        // Menu Tagihan juga terbuka untuk CS lewat submenu Tugas CS: daftarnya
+        // lalu dipotong ke toko yang ia pegang, dan tab follow-up customer (yang
+        // tidak punya kolom toko untuk disaring) disembunyikan di layar.
+        $isCs      = (string) session()->get('level') === 'cs';
+        $tokoLihat = [];
+
+        if ($isCs) {
+            $tokoSaya  = $this->tokoBoleh();
+            $tokoLihat = $tokoSaya === [] ? [0] : $tokoSaya;
+        }
+
         // rentang tanggal pesan: hanya format Y-m-d yang dipercaya, nilai aneh dibuang
         // (bukan ditolak dengan pesan); kalau terbalik, keduanya ditukar saja
         $awal   = (string) ($this->request->getGet('awal') ?? '');
@@ -321,7 +332,7 @@ class Crm extends BaseController
         }
 
         // 1. Data Follow-up Customer
-        $followupList = $this->crmModel->getFollowupList([
+        $followupList = $isCs ? [] : $this->crmModel->getFollowupList([
             'tipe'   => 'customer',
             'status' => $status !== 'semua' ? $status : '',
             'cari'   => $cari,
@@ -334,13 +345,13 @@ class Crm extends BaseController
         $page                 = max(1, (int) ($this->request->getGet('page') ?? 1));
         $limit                = 25;
         $offset               = ($page - 1) * $limit;
-        $invoicesTagihan      = $this->crmModel->getInvoiceBelumLunas($cari, $limit, $offset, 'semua', $awal, $akhir, $statusBarang);
-        $totalInvoicesTagihan = $this->crmModel->countInvoiceBelumLunas($cari, 'semua', $awal, $akhir, $statusBarang);
+        $invoicesTagihan      = $this->crmModel->getInvoiceBelumLunas($cari, $limit, $offset, 'semua', $awal, $akhir, $statusBarang, $tokoLihat);
+        $totalInvoicesTagihan = $this->crmModel->countInvoiceBelumLunas($cari, 'semua', $awal, $akhir, $statusBarang, $tokoLihat);
         $totalPagesTagihan    = (int) ceil($totalInvoicesTagihan / $limit);
 
         // angka tiap kartu status; sengaja tidak ikut dipotong $statusBarang supaya
         // pengguna tetap melihat isi keranjang lain saat satu kartu sedang aktif
-        $perStatus = $this->crmModel->hitungStatusBelumLunas($cari, $awal, $akhir);
+        $perStatus = $this->crmModel->hitungStatusBelumLunas($cari, $awal, $akhir, $tokoLihat);
 
         // Template tagihan
         $db = Database::connect();
@@ -349,6 +360,8 @@ class Crm extends BaseController
         $data = [
             'title'                => 'Pusat Tagihan & Follow-up',
             'tab'                  => $tab,
+            // layar versi CS: tab customer disembunyikan, navbar ikut disesuaikan
+            'melihat_cs'           => $isCs,
             'cari'                 => $cari,
             'status'               => $status,
             'page'                 => $page,
@@ -363,9 +376,6 @@ class Crm extends BaseController
             'invoicesTagihan'      => $invoicesTagihan,
             'totalInvoicesTagihan' => $totalInvoicesTagihan,
             'templateTagihan'      => $templateTagihan['pesan'] ?? '',
-            // popup "Catat Penagihan" menulis catatan, jadi petanya harus sekopi
-            // dengan pagar yang dipakai Tugas::simpanCatatan
-            'toko'                 => $this->tokoCatatan(),
         ];
 
         return view('admin/crm/followup', $data);

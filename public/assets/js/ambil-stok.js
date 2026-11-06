@@ -132,37 +132,35 @@
           '<div class="stok-kosong" role="option" aria-disabled="true"></div>',
         ).text(kabar),
       );
-
-      return;
-    }
-
-    if (tampil.length === 0) {
+    } else if (tampil.length === 0) {
       $daftar.append(
         $(
           '<div class="stok-kosong" role="option" aria-disabled="true"></div>',
         ).text("Tidak ada produk yang cocok"),
       );
+    } else {
+      var grup = {};
 
-      return;
+      $.each(tampil, function (i, v) {
+        var nama = String(v.kode || "").toUpperCase();
+
+        if (!grup[nama]) {
+          grup[nama] = $('<div class="stok-grup"></div>')
+            .text(nama)
+            .appendTo($daftar);
+        }
+
+        $('<button type="button" class="stok-item" role="option"></button>')
+          .data("stok", v)
+          .toggleClass("habis", Number(v.stok) <= 0)
+          .append($('<span class="stok-meta"></span>').text(labelBaris(v)))
+          .appendTo(grup[nama]);
+      });
     }
 
-    var grup = {};
-
-    $.each(tampil, function (i, v) {
-      var nama = String(v.kode || "").toUpperCase();
-
-      if (!grup[nama]) {
-        grup[nama] = $('<div class="stok-grup"></div>')
-          .text(nama)
-          .appendTo($daftar);
-      }
-
-      $('<button type="button" class="stok-item" role="option"></button>')
-        .data("stok", v)
-        .toggleClass("habis", Number(v.stok) <= 0)
-        .append($('<span class="stok-meta"></span>').text(labelBaris(v)))
-        .appendTo(grup[nama]);
-    });
+    // tawaran barang tanpa katalog ditaruh di sini, bukan di atas: ia harus
+    // tetap muncul di toko yang kolamnya kosong maupun di saringan yang nol
+    tawarkanManual();
 
     // kabar pemotongan hanya jujur selama saringan tidak mempersempit daftar
     if (batas && tampil.length === daftar.length) {
@@ -176,6 +174,65 @@
         ),
       );
     }
+  }
+
+  /*
+   * Jahitan custom dan barang sementara tidak punya entri katalog, tapi
+   * barisnya tetap harus bisa masuk daftar. Jadi nama yang diketik ditawarkan
+   * apa adanya sebagai barang tanpa katalog: tidak ada tautan stok, tidak ada
+   * pengurangan stok, harga dan jumlahnya diisi manual. Penawarannya juga muncul
+   * di toko yang kolamnya masih kosong - di situlah ia justru dibutuhkan.
+   */
+  function tawarkanManual() {
+    var teks = $.trim($katalog.val());
+
+    if (teks === "" || (kabar !== "" && kabar !== "Tidak ada produk")) {
+      return;
+    }
+
+    var sudah =
+      $.grep(daftar, function (v) {
+        return String(v.kode || "").toUpperCase() === teks.toUpperCase();
+      }).length > 0;
+
+    if (sudah) {
+      return;
+    }
+
+    $(
+      '<button type="button" class="stok-item stok-tiru" role="option"></button>',
+    )
+      .data("manual", teks.toUpperCase())
+      .text('Pakai "' + teks.toUpperCase() + '" sebagai barang tanpa katalog')
+      .appendTo($daftar);
+  }
+
+  /*
+   * Memakai nama bebas: tautan stoknya sengaja dilepas, jadi barisnya murni
+   * ketikan orang. Harga tidak ditimpa - memang itu angka yang sedang
+   * dinegosiasi - hanya jumlahnya diberi nilai awal supaya subtotal tidak
+   * menggantung kosong.
+   */
+  function isiManual(teks) {
+    tutupDaftar();
+    kosongkan();
+
+    $("#kode_produk").val(teks);
+    $katalog.val(teks);
+
+    var qty = $("#QTY");
+
+    if (qty.val() === "" || Number(qty.val()) < 1) {
+      qty.val(1);
+    }
+
+    $catatan
+      .removeClass("d-none")
+      .text(
+        "Baris ini tidak ditautkan ke stok produk: " +
+          teks +
+          ". Harga dan jumlahnya diisi manual, stok tidak berkurang.",
+      );
   }
 
   function bukaDaftar() {
@@ -259,6 +316,10 @@
    * tanpa mengubah pilihan yang sudah diambil.
    */
   function bukaPanel() {
+    // panel selalu dibuka dengan daftar TERTEKUP: kalau ada sisa keadaan lama
+    // (mis. daftar yang masih terbuka dari baris sebelumnya) ditutup dulu, jadi
+    // combobox tampil biasa saja sampai kolom/panahnya diklik
+    tutupDaftar();
     $panel.removeClass("d-none");
     $pemicu.addClass("d-none");
     $buka.attr("aria-expanded", "true");
@@ -661,6 +722,15 @@
   // sempat kehilangan fokus
   $daftar.on("mousedown", ".stok-item", function (e) {
     e.preventDefault();
+
+    var manual = $(this).data("manual");
+
+    if (manual) {
+      isiManual(String(manual));
+
+      return;
+    }
+
     pilih($(this).data("stok"));
   });
 
@@ -674,10 +744,11 @@
 
   $buka.on("click", function () {
     bukaPanel();
-    $katalog.trigger("focus");
 
-    // pancingan itu memang maksudnya "tunjukkan daftarnya sekarang"
-    bukaDaftar();
+    // panel dibuka dengan combobox yang masih TERTEKUP: daftar varian baru
+    // muncul begitu kolom atau panahnya diklik, tidak sekaligus saat panelnya
+    // dibuka, supaya layar awal tetap tenang (bukan langsung menumpuk daftar)
+    $katalog.trigger("focus");
   });
 
   // "Tutup" melipat panel apa adanya: pilihan yang sudah diambil tetap terpakai

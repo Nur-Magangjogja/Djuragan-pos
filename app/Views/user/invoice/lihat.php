@@ -266,8 +266,9 @@ $kelolaTransaksi = wewenang_sunting_transaksi();
 
         <div class="aksi-toko ms-sm-auto flex items-center gap-1">
             <?php
-            // akun CS selalu melihat satu tokonya saja, tidak ada "semua", jadi
-            // pemilih ini hanya muncul kalau akun itu memegang lebih dari satu toko
+            // pemilih toko hanya muncul kalau akun memegang lebih dari satu toko;
+            // di dalamnya ada "Semua Juragan" plus tiap tokonya. CS satu toko tidak
+            // perlu memilih — 'semua' sudah diarahkan controller ke tokonya sendiri.
             $kueri_cari = ($cari === '' || $cari === []) ? '' : '?' . http_build_query(['cari' => (array) $cari]);
             ?>
             <?php if (count($daftar_toko) > 1) : ?>
@@ -276,6 +277,11 @@ $kelolaTransaksi = wewenang_sunting_transaksi();
                         <i class="fal fa-user-circle me-1"></i> <span class="label-toko"><?= esc($nama_toko) ?></span>
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end dropdown-toko">
+                        <?php /* daftar 'semua' kini tersedia untuk CS: satu tempat untuk
+                            melihat transaksi seluruh toko yang ia pegang sekaligus */ ?>
+                        <li>
+                            <a class="dropdown-item<?= $juragan === 'semua' ? ' active' : '' ?>" href="<?= esc(site_url('user/invoices/lihat/semua/' . $hal . '/' . $kategori) . $kueri_cari) ?>"><i class="fal fa-layer-group me-1"></i>Semua Juragan</a>
+                        </li>
                         <?php foreach ($daftar_toko as $slug => $nama) : ?>
                             <li>
                                 <a class="dropdown-item<?= $juragan === $slug ? ' active' : '' ?>" href="<?= esc(site_url('user/invoices/lihat/' . rawurlencode($slug) . '/' . $hal . '/' . $kategori) . $kueri_cari) ?>"><?= esc($nama) ?></a>

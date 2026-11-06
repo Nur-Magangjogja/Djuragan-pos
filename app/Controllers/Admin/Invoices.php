@@ -292,7 +292,9 @@ class Invoices extends BaseController
         $userModel  = new UserModel();
 
         if ($this->request->getPost()) {
-            $validation->setRuleGroup('addInvoice');
+            // kategori Rombongan diadili dengan aturannya sendiri: ia tidak punya
+            // baris produk, jadi tidak bisa ditolak karena `produk` kosong
+            $validation->setRuleGroup(grup_invoice($this->request->getPost()));
         }
 
         if ($this->request->isAJAX()) {
@@ -421,7 +423,7 @@ class Invoices extends BaseController
         $validation = \Config\Services::validation();
 
         if ($this->request->getPost()) {
-            $validation->setRuleGroup('updateInvoice');
+            $validation->setRuleGroup(grup_invoice($this->request->getPost(), true));
         }
 
         if ($this->request->isAJAX()) {

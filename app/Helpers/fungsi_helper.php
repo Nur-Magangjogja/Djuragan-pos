@@ -1398,42 +1398,90 @@ if (! function_exists('anggota_panel_form')) {
             . '<div class="col-12 mb-3">'
             . '<p class="small text-muted mb-0"><i class="fal fa-info-circle me-1 text-primary"></i>Isi nama dan ukuran per orang untuk pesanan rombongan. Order satuan boleh dibiarkan kosong.</p>'
             . '</div>'
-            . '<div class="col-12 anggota-daftar">' . $baris . '</div>'
+            . '<div class="col-12 mb-2">'
+            . '<input type="text" class="form-control form-control-sm anggota-cari" placeholder="🔍 Cari nama anggota..." autocomplete="off">'
+            . '</div>'
+            . '<div class="col-12 anggota-daftar-wrapper" style="max-height:420px;overflow-y:auto;padding-right:2px;">'
+            . '<div class="anggota-daftar">' . $baris . '</div>'
+            . '</div>'
             . '<div class="col-12 mt-2">'
-            . '<button type="button" class="tambah-anggota w-100 rounded-kartu bg-white border border-dashed border-ink-200 py-2.5 small fw-semibold text-primary hover:bg-ink-50 transition">'
+            . '<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 pt-2 border-top border-ink-100">'
+            . '<button type="button" class="tambah-anggota btn btn-sm btn-outline-primary rounded-pill px-3 py-1.5 text-xs fw-semibold">'
             . '<i class="fal fa-plus-circle me-1"></i> Tambah Anggota'
             . '</button>'
+            . '<div class="d-flex align-items-center gap-3">'
+            . '<button type="button" class="btn btn-link text-decoration-none text-ink-700 hover:text-success p-0 text-xs fw-medium d-inline-flex align-items-center" data-bs-toggle="modal" data-bs-target="#modalTempelWA">'
+            . '<i class="fab fa-whatsapp text-success me-1.5 fa-lg"></i> <span>Tempel dari WhatsApp</span>'
+            . '</button>'
+            . '<span class="text-ink-300">|</span>'
+            . '<button type="button" class="btn btn-link text-decoration-none text-ink-700 hover:text-success p-0 text-xs fw-medium d-inline-flex align-items-center" data-bs-toggle="modal" data-bs-target="#modalImporExcel">'
+            . '<i class="fal fa-file-excel text-success me-1.5 fa-lg"></i> <span>Impor dari Excel / CSV</span>'
+            . '</button>'
             . '</div>'
-            . '<div class="col-12 mt-3">'
-            . '<div class="rounded-[0.95rem] border border-dashed border-[#dbe3ee] bg-ink-50/80 p-3">'
-            . '<div class="d-flex align-items-center justify-content-between mb-1.5">'
-            . '<label class="form-label text-xs fw-bold text-ink-600 mb-0" for="anggota_tempel">'
-            . '<i class="fab fa-whatsapp text-success me-1"></i> Tempel Daftar Nama dari WhatsApp'
-            . '</label>'
-            . '<span class="text-[0.7rem] text-ink-400">1 baris = 1 nama</span>'
             . '</div>'
-            . '<textarea class="form-control form-control-sm bg-white" id="anggota_tempel" rows="2" placeholder="Contoh:&#10;1. A.N DEVI&#10;2. BUDI SANTOSO"></textarea>'
-            . '<div class="mt-2 text-end">'
-            . '<button type="button" class="btn btn-sm btn-outline-primary tambah-tempelan px-3 py-1 text-xs fw-semibold">'
+            . '</div>'
+            . '</div>'
+            . '<template class="anggota-cadang">' . anggota_baris_form([], '__K__') . '</template>'
+            . '</div>'
+            . '</div>'
+            . '<div class="modal fade" id="modalTempelWA" tabindex="-1" aria-labelledby="modalTempelWALabel" aria-hidden="true">'
+            . '<div class="modal-dialog modal-dialog-centered">'
+            . '<div class="modal-content rounded-kartu border-0 shadow-lg">'
+            . '<div class="modal-header border-ink-100 bg-ink-50/60 py-3 px-4">'
+            . '<h5 class="modal-title fs-6 fw-bold text-ink-800 d-flex align-items-center gap-2" id="modalTempelWALabel">'
+            . '<i class="fab fa-whatsapp text-success fs-5"></i> Tempel Daftar Nama dari WhatsApp'
+            . '</h5>'
+            . '<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>'
+            . '</div>'
+            . '<div class="modal-body p-4">'
+            . '<div class="d-flex justify-content-between align-items-center mb-2">'
+            . '<label class="form-label text-xs fw-bold text-ink-700 mb-0" for="anggota_tempel">Daftar Nama</label>'
+            . '<span class="badge bg-ink-100 text-ink-500 fw-normal text-[0.7rem]">1 baris = 1 nama</span>'
+            . '</div>'
+            . '<textarea class="form-control bg-white" id="anggota_tempel" rows="6" placeholder="Contoh:&#10;1. A.N DEVI&#10;2. BUDI SANTOSO&#10;3. SITI AMINAH"></textarea>'
+            . '<div class="form-text text-muted mt-2 text-xs">'
+            . '<i class="fal fa-info-circle me-1 text-primary"></i> Nomor urut atau tanda strip di awal baris akan otomatis dibersihkan.'
+            . '</div>'
+            . '</div>'
+            . '<div class="modal-footer border-ink-100 py-2.5 px-4 bg-ink-50/30">'
+            . '<button type="button" class="btn btn-sm btn-link text-decoration-none text-muted" data-bs-dismiss="modal">Batal</button>'
+            . '<button type="button" class="btn btn-sm btn-primary tambah-tempelan px-3 py-1.5 fw-semibold">'
             . '<i class="fal fa-list-ol me-1"></i> Jadikan Baris Anggota'
             . '</button>'
             . '</div>'
             . '</div>'
             . '</div>'
-            . '<div class="col-12 mt-3">'
-            . '<div class="rounded-[0.95rem] border border-dashed border-[#dbe3ee] bg-ink-50/80 p-3">'
-            . '<div class="d-flex align-items-center justify-content-between mb-1.5">'
-            . '<span class="form-label text-xs fw-bold text-ink-600 mb-0"><i class="fal fa-file-excel text-success me-1"></i> Impor dari Excel / CSV</span>'
-            . '<button type="button" class="btn btn-link btn-sm p-0 text-xs fw-semibold unduh-template-anggota"><i class="fal fa-download me-1"></i> Unduh template</button>'
             . '</div>'
-            . '<p class="text-[0.7rem] text-ink-400 mb-2">Kolom yang dibaca: <b>Nama</b>, <b>No./Tinggi</b>, <b>Catatan</b>. Baris pertama boleh judul kolom; tiap baris jadi satu anggota.</p>'
+            . '<div class="modal fade" id="modalImporExcel" tabindex="-1" aria-labelledby="modalImporExcelLabel" aria-hidden="true">'
+            . '<div class="modal-dialog modal-dialog-centered">'
+            . '<div class="modal-content rounded-kartu border-0 shadow-lg">'
+            . '<div class="modal-header border-ink-100 bg-ink-50/60 py-3 px-4">'
+            . '<h5 class="modal-title fs-6 fw-bold text-ink-800 d-flex align-items-center gap-2" id="modalImporExcelLabel">'
+            . '<i class="fal fa-file-excel text-success fs-5"></i> Impor Anggota dari Excel / CSV'
+            . '</h5>'
+            . '<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>'
+            . '</div>'
+            . '<div class="modal-body p-4">'
+            . '<div class="d-flex justify-content-between align-items-center mb-3">'
+            . '<span class="text-xs text-muted">Format file yang didukung: .xlsx, .xls, .csv</span>'
+            . '<button type="button" class="btn btn-link btn-sm p-0 text-xs fw-semibold text-success unduh-template-anggota text-decoration-none">'
+            . '<i class="fal fa-download me-1"></i> Unduh template'
+            . '</button>'
+            . '</div>'
+            . '<div class="p-3 bg-ink-50/80 rounded-lg border border-dashed border-ink-200 text-center mb-2">'
+            . '<i class="fal fa-cloud-upload text-brand-500 fa-2x mb-2 d-block"></i>'
+            . '<p class="text-xs text-ink-600 mb-2">Kolom yang dibaca: <b>Nama</b>, <b>No./Tinggi</b>, <b>Catatan</b>.<br>Baris pertama boleh judul kolom; tiap baris jadi satu anggota.</p>'
             . '<input type="file" id="anggota_file" class="anggota-file d-none" accept=".xlsx,.xls,.csv">'
-            . '<label for="anggota_file" class="btn btn-sm btn-outline-primary w-100 text-xs fw-semibold mb-0"><i class="fal fa-upload me-1"></i> Pilih file Excel / CSV</label>'
+            . '<label for="anggota_file" class="btn btn-sm btn-outline-primary px-3 py-1.5 fw-semibold cursor-pointer mb-0">'
+            . '<i class="fal fa-file-plus me-1"></i> Pilih file Excel / CSV'
+            . '</label>'
+            . '</div>'
             . '<div class="anggota-import-info small mt-2 d-none"></div>'
             . '</div>'
+            . '<div class="modal-footer border-ink-100 py-2.5 px-4 bg-ink-50/30">'
+            . '<button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Tutup</button>'
             . '</div>'
             . '</div>'
-            . '<template class="anggota-cadang">' . anggota_baris_form([], '__K__') . '</template>'
             . '</div>'
             . '</div>';
     }
@@ -1626,7 +1674,7 @@ if (! function_exists('stok_panel_form')) {
             . '<input type="hidden" name="stok_produk" class="stok-id" value="">'
             . '<div class="stok-galat small d-none" role="alert"></div>'
             . '<p class="small text-muted mb-0 mt-2">'
-            . 'Opsional. Ketik untuk mencari; daftarnya berisi barang yang stoknya dipantau di toko ini.</p>'
+            . 'Opsional. Ketik untuk mencari di katalog; nama yang tidak ada di daftarnya bisa dipakai sebagai barang tanpa katalog (jahitan custom).</p>'
             . '<div class="stok-catatan small mt-2 d-none"></div>'
             . '<div class="foto-acuan mt-2 d-none">'
             . '<div class="small text-muted mb-1"><i class="fal fa-images me-1 text-primary"></i>Contoh bentuk barang ini ikut tersalin ke orderan setelah disimpan.</div>'
@@ -1844,6 +1892,30 @@ if (! function_exists('label_deadline')) {
         }
 
         return ['teks' => $tertulis, 'kelas' => 'success'];
+    }
+}
+
+if (! function_exists('grup_invoice')) {
+    /**
+     * Grup aturan simpan orderan yang berlaku untuk satu kiriman form.
+     *
+     * Kategori pesanan Rombongan tidak punya baris produk - kartunya memang
+     * disembunyikan saat kategorinya dipilih - jadi kiriman itu tidak boleh
+     * diadili dengan aturan yang menuntut `produk`. Dulu itulah yang membuat
+     * nota rombongan ditolak server dengan 406 "produk wajib" yang tidak pernah
+     * sampai ke layar. Yang menahan rombongan sekarang adalah daftar anggotanya.
+     *
+     * @param array<string, mixed> $post isi POST utuh dari form tulis/sunting
+     */
+    function grup_invoice(array $post, bool $ubah = false): string
+    {
+        $rincian = (array) ($post['rincian'] ?? []);
+
+        if ((string) ($rincian['orderan'] ?? '') === 'rombongan') {
+            return $ubah ? 'updateInvoiceRombongan' : 'addInvoiceRombongan';
+        }
+
+        return $ubah ? 'updateInvoice' : 'addInvoice';
     }
 }
 
@@ -2283,6 +2355,91 @@ if (! function_exists('juragan_dipakai_sesi')) {
         $juragans = \App\Controllers\Juragan::by_user($uid)[$uid]['juragan'] ?? [];
 
         return array_map('intval', array_column($juragans, 'id'));
+    }
+}
+
+if (! function_exists('nomor_wa_link')) {
+    /**
+     * Nomor untuk tautan wa.me: angka murni, bentuk 0xx dipindah ke 62xx.
+     * Nomor yang tersimpan di pelanggan_kontak campur (0812... dan 62812...),
+     * jadi keduanya harus keluar sebagai satu tautan yang sama. Nomor kosong
+     * atau tanpa angka menghasilkan string kosong — pemicunya tombol yang
+     * tidak jadi dibuat, bukan tautan mati.
+     */
+    function nomor_wa_link(?string $nomor): string
+    {
+        $digit = preg_replace('/\D+/', '', (string) $nomor) ?? '';
+
+        if ($digit === '') {
+            return '';
+        }
+
+        if (str_starts_with($digit, '0')) {
+            $digit = '62' . ltrim($digit, '0');
+        }
+
+        return $digit;
+    }
+}
+
+if (! function_exists('cek_toko_terbuka_sesi')) {
+    /**
+     * Jumlah butir Catatan Cek Toko yang masih 'belum' untuk akun ini — dasar
+     * badge menu. Saringannya sengaja sama dengan halaman Checklist (butir
+     * belum, lintas tanggal, terbatas toko + penunjukan), BUKAN lagi menghitung
+     * SESI yang 'berjalan' hari ini: satu sesi bisa sudah ditutup padahal butirnya
+     * masih ada (atau sebaliknya), jadi angka sesi tidak pernah cocok dengan
+     * daftar yang tampil.
+     */
+    function cek_toko_terbuka_sesi(): int
+    {
+        $kelola = in_array((string) session()->get('level'), ['admin', 'superadmin'], true);
+        $user   = (int) session()->get('id');
+        $toko   = new \App\Models\TokoOnlineModel();
+
+        $toko_ids = array_keys($kelola ? $toko->petaSemua() : $toko->petaCek(juragan_dipakai_sesi(), $user));
+
+        // tanpa satu pun toko yang bisa dicek, jangan sampai saringan toko terlewat
+        // dan malahan menghitung butir milik semua orang
+        if (! $kelola && $toko_ids === []) {
+            return 0;
+        }
+
+        return (new \App\Models\ChecklistModel())->jumlahCatatan([
+            'toko_ids' => $toko_ids,
+            'kerja'    => 'belum',
+            'untuk'    => $kelola ? 0 : $user,
+        ]);
+    }
+}
+
+if (! function_exists('cek_email_terbuka_sesi')) {
+    /**
+     * Jumlah tugas Cek Email yang masih terbuka untuk akun ini. Admin/Superadmin
+     * melihat semua alamat di tokonya; CS hanya catatan pada alamat yang memang
+     * didelegasikan kepadanya (plus catatan lama tanpa alamat) — sama seperti
+     * saringan halaman Cek Email, supaya badge tidak ikut menghitung tugas rekan
+     * yang kebetulan memegang toko yang sama.
+     */
+    function cek_email_terbuka_sesi(): int
+    {
+        $kelola = in_array((string) session()->get('level'), ['admin', 'superadmin'], true);
+
+        $s = [
+            'jenis'       => 'pemeriksaan_email',
+            'terbuka'     => true,
+            'juragan_ids' => juragan_dipakai_sesi(),
+        ];
+
+        if (! $kelola) {
+            $s['email_ids'] = array_map(
+                static fn (array $e): int => (int) $e['id_email'],
+                (new \App\Models\EmailModel())->milikUser((int) session()->get('id'))
+            );
+            $s['email_ids_atau_null'] = true;
+        }
+
+        return (new \App\Models\TugasModel())->jumlah($s);
     }
 }
 
