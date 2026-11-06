@@ -74,7 +74,7 @@ $kartu = static function (array $s, ?int $poin_maks = null) use ($sop_kelola): s
         . '</li>';
 };
 ?>
-<div class="sop-panel-luar">
+<div class="sop-panel-luar" data-saring-wadah>
     <?php foreach ($sop_grup as $nama => $daftar) : ?>
         <?php $depan = $sop_modal ? array_slice($daftar, 0, $sop_tampil) : $daftar; ?>
         <section class="sop-panel<?= $sop_modal ? ' sop-panel-klik' : '' ?>"<?= $sop_modal

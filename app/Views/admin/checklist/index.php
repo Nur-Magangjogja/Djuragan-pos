@@ -319,7 +319,7 @@ $tanya = static function (array $ubah): string {
 
     <div class="ckl-head">
         <div class="me-auto">
-            <h1 class="h3 mt-5"><i class="fal fa-ballot-check me-1 text-brand-500"></i> <?= esc($title) ?></h1>
+            <h1 class="h3 mt-5"><i class="fal fa-ballot-check me-1 text-brand-500 judul-ikon"></i> <?= esc($title) ?></h1>
             <?php if ($tabKelola) : ?>
                 <p>Daftar toko beserta siapa saja yang boleh membukanya. Akun yang memegang juragan sebuah toko otomatis memegang tokonya; tautan dipakai untuk menambah toko lain ke satu akun tanpa mengubah juragan yang dia pegang.</p>
             <?php else : ?>
@@ -487,14 +487,15 @@ $tanya = static function (array $ubah): string {
                 <label>&nbsp;</label>
                 <div class="d-inline-flex gap-2 align-items-stretch ckl-saring-aksi">
                     <button type="submit" class="btn btn-sm btn-dark"><i class="fal fa-search"></i> Cari</button>
-                    <a class="btn btn-sm btn-dark text-decoration-none d-inline-flex"
-                        href="<?= esc(site_url('admin/checklist')) ?>" title="Ulangi" aria-label="Ulangi">
+                    <button type="button" class="btn btn-sm btn-dark d-inline-flex" data-saring-reset="kerja,batas"
+                        title="Kosongkan saringan" aria-label="Kosongkan saringan">
                         <i class="fal fa-sync"></i>
-                    </a>
+                    </button>
                 </div>
             </div>
         </form>
 
+        <div data-saring-wadah>
         <?php if ($baris === []) : ?>
             <div class="ckl-kosong">
                 <i class="fal fa-circle-check text-success"></i>
@@ -570,6 +571,7 @@ $tanya = static function (array $ubah): string {
                 </div>
             </div>
         <?php endif; ?>
+        </div>
         <?php endif; ?>
     </div>
 

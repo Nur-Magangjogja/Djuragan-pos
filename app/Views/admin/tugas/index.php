@@ -328,8 +328,8 @@ $label_status = static function (string $kode) use ($pilihan): string {
             <label>&nbsp;</label>
             <div class="tugas-aksi">
                 <button type="submit" class="btn btn-sm btn-dark"><i class="fal fa-search"></i> Cari</button>
-                <a class="btn btn-sm btn-dark text-decoration-none" href="<?= esc(site_url('admin/tugas')) ?>"
-                    title="Ulangi" aria-label="Ulangi"><i class="fal fa-sync"></i></a>
+                <button type="button" class="btn btn-sm btn-dark d-inline-flex" data-saring-reset="tab"
+                    title="Kosongkan saringan" aria-label="Kosongkan saringan"><i class="fal fa-sync"></i></button>
             </div>
         </div>
 
@@ -346,8 +346,8 @@ $label_status = static function (string $kode) use ($pilihan): string {
                         <div id="saringWadah"></div>
                     </div>
                     <div class="modal-footer">
-                        <a class="btn btn-sm btn-dark text-decoration-none" href="<?= esc(site_url('admin/tugas')) ?>"
-                            title="Ulangi" aria-label="Ulangi"><i class="fal fa-sync"></i></a>
+                        <button type="button" class="btn btn-sm btn-dark d-inline-flex" data-saring-reset="tab"
+                            title="Kosongkan saringan" aria-label="Kosongkan saringan"><i class="fal fa-sync"></i></button>
                         <button type="submit" class="btn btn-sm btn-dark"><i class="fal fa-search me-1"></i> Cari</button>
                     </div>
                 </div>
@@ -384,7 +384,7 @@ $label_status = static function (string $kode) use ($pilihan): string {
         sempit.addEventListener('change', tata);
     }());
     </script>
-    <div class="tugas-kartu">
+    <div class="tugas-kartu" data-saring-wadah>
         <?php if ($baris === []) : ?>
             <div class="tugas-kosong">
                 <i class="fal fa-circle-check text-success"></i>

@@ -29,13 +29,6 @@
 $level    = (string) session()->get('level');
 $hari_ini = date('Y-m-d');
 
-/** Saringan yang sudah terisi — untuk angka pada kotak pemicu filter di HP. */
-$saring_aktif = count(array_filter([
-    (string) ($s['nomor'] ?? ''),
-    (string) ($s['tindak_lanjut'] ?? ''),
-    (string) ($s['juragan_id'] ?? ''),
-]));
-
 // kolom "Role" pada tab "Tidak Jadi Dikerjakan": level akun yang memegang tugasnya
 $role = ['cs' => 'CS', 'admin' => 'Admin', 'superadmin' => 'Superadmin'];
 
@@ -280,7 +273,6 @@ $tanya = static function (array $ubah): string {
                 <button type="button" class="wa-saring-kotak" id="saring"
                     data-bs-toggle="modal" data-bs-target="#modalSaringWa" aria-label="Buka filter">
                     <i class="fal fa-filter"></i> Filter
-                    <?php if ($saring_aktif > 0) : ?><span class="wa-saring-jumlah"><?= (int) $saring_aktif ?></span><?php endif; ?>
                 </button>
             </div>
             <div class="wa-saring-lapis" id="saringLapis">
@@ -314,7 +306,8 @@ $tanya = static function (array $ubah): string {
                 <label>&nbsp;</label>
                 <div class="wa-aksi">
                     <button type="submit" class="btn btn-sm btn-dark"><i class="fal fa-search"></i> Cari</button>
-                    <a class="btn btn-sm btn-link text-decoration-none" href="<?= esc(site_url('admin/tugas/whatsapp')) ?>">Ulangi</a>
+                    <button type="button" class="btn btn-sm btn-dark d-inline-flex" data-saring-reset="tab,saya,batas"
+                        title="Kosongkan saringan" aria-label="Kosongkan saringan"><i class="fal fa-sync"></i></button>
                 </div>
             </div>
 
@@ -331,8 +324,8 @@ $tanya = static function (array $ubah): string {
                             <div id="saringWadah"></div>
                         </div>
                         <div class="modal-footer">
-                            <a class="btn btn-sm btn-dark text-decoration-none" href="<?= esc(site_url('admin/tugas/whatsapp')) ?>"
-                                title="Ulangi" aria-label="Ulangi"><i class="fal fa-sync"></i></a>
+                            <button type="button" class="btn btn-sm btn-dark d-inline-flex" data-saring-reset="tab,saya,batas"
+                                title="Kosongkan saringan" aria-label="Kosongkan saringan"><i class="fal fa-sync"></i></button>
                             <button type="submit" class="btn btn-sm btn-dark"><i class="fal fa-search me-1"></i> Cari</button>
                         </div>
                     </div>
@@ -371,7 +364,7 @@ $tanya = static function (array $ubah): string {
         </script>
     </div>
 
-    <div class="wa-kartu">
+    <div class="wa-kartu" data-saring-wadah>
         <?php if ($baris === []) : ?>
             <div class="wa-kosong">
                 <i class="fal fa-circle-check text-success"></i>
