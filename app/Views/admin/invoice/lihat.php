@@ -950,8 +950,9 @@ $cekBayar = ((string) $session->get('level')) === 'superadmin';
                                     <div class="flex items-center justify-between gap-2 text-[0.72rem] font-bold uppercase tracking-[0.08em] text-ink-500">
                                         <span class="truncate"><?= esc($kirim->kurir) ?></span>
                                         <?= form_button([
-                                            'class'        => 'ms-1 cursor-pointer border-0 bg-transparent p-0 text-xs text-sky-600 hover:underline suntingResi',
-                                            'content'      => '<i class="fal fa-money-check-edit fa-flip-horizontal"></i> <span class="sr-only">sunting</span>',
+                                            'class'        => 'ms-1 d-inline-flex align-items-center justify-content-center border-0 rounded cursor-pointer suntingResi',
+                                            'style'        => 'width:1.9rem;height:1.9rem;padding:0;background:#e0f2fe;color:#0284c7;font-size:0.8rem;line-height:1',
+                                            'content'      => '<i class="fal fa-pen"></i> <span class="sr-only">sunting</span>',
                                             'data-id'      => esc($kirim->id),
                                             'data-invoice' => esc($pesanan->id_invoice),
                                         ]) ?>

@@ -69,7 +69,7 @@ $tanya = static function (array $ubah): string {
         text-transform: uppercase; letter-spacing: .05em;
     }
 
-    .ckl-saring { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .55rem; padding: 1rem; border-bottom: 1px solid #eaecf0; }
+    .ckl-saring { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .55rem; padding: 1rem 1rem 1.6rem; border-bottom: 1px solid #eaecf0; }
     .ckl-saring .lapangan { display: flex; flex-direction: column; gap: .2rem; }
     .ckl-saring label { font-size: .7rem; font-weight: 700; color: #667085; text-transform: uppercase; letter-spacing: .04em; }
     .ckl-saring .form-control, .ckl-saring .form-select { max-width: 180px; }
