@@ -3603,7 +3603,14 @@ tr.varian-sorot td {
   border-radius: 0.5rem;
 }
 
-/* 16. Panel "Ambil dari stok produk" di modal tambah orderan */
+/* 16. Panel "Ambil dari stok produk" di modal tambah orderan.
+   Pemilih produknya satu combobox: kolom ketik yang sekaligus membuka daftar
+   varian. Dulu ada blok .saran-stok untuk daftar saran di bawah kolom ketik
+   dan dropdown "Produk" di luar panel; keduanya sudah dilepas.
+
+   Daftarnya sengaja mengalir ikut isi modal-body (bukan layer absolut):
+   modal-body punya scroll sendiri dan layer mengambang akan terpotong di
+   bawahnya. */
 .stok-foto-kecil {
   display: block;
   width: 3.4rem;
@@ -3613,18 +3620,131 @@ tr.varian-sorot td {
   border-radius: 0.6rem;
 }
 
-.saran-stok .list-group-item {
-  border: 0;
-  border-bottom: 1px solid #f2f4f7;
+.stok-pilih {
+  position: relative;
+}
+
+.stok-katalog {
   cursor: pointer;
+  padding-right: 2.1rem;
 }
 
-.saran-stok .list-group-item:last-child {
-  border-bottom: 0;
+/* Panahnya bukan hiasan: satu klik membuka daftar, klik berikutnya menutup,
+   jadi panah dan kolom adalah dua pegangan untuk satu tuas yang sama. */
+.stok-panah {
+  color: #98a2b3;
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 0.4rem 0.25rem;
+  position: absolute;
+  right: 0.55rem;
+  top: 1.15rem;
+  transform: translateY(-50%);
 }
 
-.saran-stok .list-group-item:hover {
-  background: #f9fafb;
+.stok-panah:hover {
+  color: #475467;
+}
+
+.stok-panah i {
+  display: block;
+  transition: transform 0.12s ease;
+}
+
+.stok-pilih.terbuka .stok-panah i {
+  transform: rotate(180deg);
+}
+
+/* Daftar dibuka-tutup lewat kelas .terbuka pada .stok-pilih (panahnya yang
+   berputar); tampilan isinya diatur di bawah ini.
+
+   Tingginya sengaja dibatasi, bukan memanjangkan modal: toko bisa punya
+   ratusan varian, dan kotak yang bisa digulir tetap terbaca di layar kecil.
+   overscroll-behavior menahan guliran di dalam daftar saja, jadi modal-body
+   di belakangnya tidak ikut tertarik saat mentok. */
+.stok-daftar {
+  -webkit-overflow-scrolling: touch;
+  background: #fff;
+  border: 1px solid #dbe3ee;
+  border-radius: 0.65rem;
+  box-shadow: 0 10px 22px rgba(16, 24, 40, 0.08);
+  margin-top: 0.3rem;
+  max-height: min(17rem, 45vh);
+  overscroll-behavior: contain;
+  overflow-y: auto;
+  padding: 0 0 0.2rem;
+  scrollbar-gutter: stable;
+}
+
+/* judul kelompok menempel di atas daftar yang sedang digulir, supaya nama
+   barang tidak hilang saat ukurannya sudah bergulir ke tengah daftar */
+.stok-grup {
+  background: #fff;
+  box-shadow: 0 1px 0 #eef2f7;
+  color: #667085;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 0.45rem 0.8rem 0.2rem;
+  position: sticky;
+  text-transform: uppercase;
+  top: 0;
+  z-index: 1;
+}
+
+.stok-item {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  color: #1f2933;
+  cursor: pointer;
+  display: block;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.8rem;
+  text-align: left;
+  width: 100%;
+}
+
+.stok-item:hover,
+.stok-item:focus,
+.stok-item.aktif {
+  background: #f2f6fa;
+  outline: 0;
+}
+
+/* sorotan keyboard ditandai garis kiri, bukan hanya warna latar, supaya
+   tetap terbaca di layar kecil dan saat warna tema berganti */
+.stok-item.aktif {
+  box-shadow: inset 2px 0 0 #2f6fed;
+}
+
+.stok-item .stok-meta {
+  color: #667085;
+  display: block;
+  font-size: 0.76rem;
+}
+
+.stok-item.habis .stok-meta {
+  color: #b42318;
+}
+
+/* penawaran nama bebas di ujung daftar: warnanya dibedakan dari varian katalog
+   supaya jelas bahwa barisnya nanti tidak menautkan stok, hanya namanya yang
+   diambil dari ketikan */
+.stok-tiru {
+  color: #2f6fed;
+  font-size: 0.8rem;
+}
+
+.stok-kosong {
+  color: #667085;
+  font-size: 0.82rem;
+  padding: 0.6rem 0.8rem;
+}
+
+.stok-galat {
+  color: #b42318;
+  margin-top: 0.35rem;
 }
 
 /* 17. Panel Notifikasi Melayang
@@ -3841,7 +3961,7 @@ tr.varian-sorot td {
      jadi pemecah ini memang membuat satu baris kosong setinggi 0 — konsekuensinya
      jarak antara baris pertama dan kedua 4px lebih longgar dari biasanya. */
   .kartu-invoice .aksi-transaksi::before {
-    content: '';
+    content: "";
     order: 2;
     flex: 1 1 100%;
     height: 0;
@@ -3941,11 +4061,28 @@ tr.varian-sorot td {
 /* 21. Isi dokumen SOP yang dibaca — satu dokumen = satu judul + poin, dan poin
    yang sama dicetak di dua tempat: halaman dokumen (admin/sop/{id}) dan kotak
    tiap dokumen di panel daftar / kartu dasbor. Karena itu pengaturannya di sini. */
-.sop-baca { padding: 1.15rem 1.25rem 1.3rem; }
-.sop-poin { margin: .35rem 0 0; padding-left: 1.15rem; list-style: disc; font-size: .9rem; line-height: 1.75; color: #1f2937; }
-.sop-poin li { margin: .1rem 0; }
-.sop-poin ::marker { color: #94a3b8; }
-.sop-kosong-isi { margin: 0; font-size: .9rem; color: #94a3b8; }
+.sop-baca {
+  padding: 1.15rem 1.25rem 1.3rem;
+}
+.sop-poin {
+  margin: 0.35rem 0 0;
+  padding-left: 1.15rem;
+  list-style: disc;
+  font-size: 0.9rem;
+  line-height: 1.75;
+  color: #1f2937;
+}
+.sop-poin li {
+  margin: 0.1rem 0;
+}
+.sop-poin ::marker {
+  color: #94a3b8;
+}
+.sop-kosong-isi {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #94a3b8;
+}
 
 /* 22. Tombol "kembali" di samping judul halaman.
    Dipakai submenu Tugas (dasbor, catatan, pengaturan, shift, template, laporan)
@@ -3953,9 +4090,111 @@ tr.varian-sorot td {
    label lengkapnya tetap ada di title/aria-label supaya yang membaca layar tetap
    tahu tujuannya walau ikonnya saja yang tampil. */
 .judul-balik {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 2rem; height: 2rem; margin-right: .55rem; vertical-align: middle;
-  font-size: .95rem; line-height: 1; text-decoration: none;
-  color: #475569; background: #f4f6f9; border: 1px solid #e2e8f0; border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  margin-right: 0.55rem;
+  vertical-align: middle;
+  font-size: 0.95rem;
+  line-height: 1;
+  text-decoration: none;
+  color: #475569;
+  background: #f4f6f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
 }
-.judul-balik:hover, .judul-balik:focus-visible { background: #101828; border-color: #101828; color: #fff; }
+.judul-balik:hover,
+.judul-balik:focus-visible {
+  background: #101828;
+  border-color: #101828;
+  color: #fff;
+}
+
+/* 23. Popup kabar (galat / sukses / info) dari public/assets/js/kabaran.js.
+   Duduk di pojok kanan atas, di bawah lonceng notifikasi yang melayang; di
+   layar kecil melebar penuh dengan sisa margin supaya tidak menutupi tombol
+   apa pun. Wadahnya pointer-events: none supaya kosongnya tidak menahan klik,
+   kartunya yang kembali menerima klik agar tombol tutupnya bekerja. */
+.kabar-wadah {
+  position: fixed;
+  top: 0.9rem;
+  right: 0.9rem;
+  z-index: 1080;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.45rem;
+  width: min(24rem, calc(100vw - 1.8rem));
+  pointer-events: none;
+}
+
+.kabar {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  padding: 0.6rem 0.7rem;
+  border-radius: 0.7rem;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  box-shadow: 0 10px 24px rgba(16, 24, 40, 0.14);
+  font-size: 0.84rem;
+  line-height: 1.4;
+  color: #1f2933;
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+
+.kabar-ikon {
+  font-size: 1rem;
+  margin-top: 0.05rem;
+}
+
+.kabar-teks {
+  flex: 1;
+}
+
+.kabar-tutup {
+  flex: 0 0 auto;
+  border: 0;
+  background: none;
+  color: #98a2b3;
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.15rem;
+}
+
+.kabar-tutup:hover {
+  color: #101828;
+}
+
+.kabar-galat {
+  border-color: #fbd9d6;
+  background: #fff5f5;
+  color: #b42318;
+}
+
+.kabar-sukses {
+  border-color: #c7f0d2;
+  background: #f2fff7;
+  color: #1b5e37;
+}
+
+.kabar-info {
+  border-color: #dbe3ee;
+  background: #f8fafc;
+  color: #344054;
+}
+
+.kabar-pudar {
+  opacity: 0;
+  transform: translateY(-0.35rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kabar {
+    transition: none;
+  }
+}

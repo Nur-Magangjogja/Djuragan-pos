@@ -33,9 +33,10 @@
 $level    = (string) session()->get('level');
 $hari_ini = date('Y-m-d');
 
-// Penugasan hanya dibuat Admin/Superadmin (kelola dari controller) dan butuh
-// dua hal: minimal satu toko yang boleh dipakai dan satu alamat email aktif.
-$bolehTugas = $kelola && $toko !== [] && $email !== [];
+// Catatan boleh dibuat dari dua sisi: Admin/Superadmin menugaskan ke alamat mana
+// pun, CS membuat tugas untuk dirinya sendiri — $email sudah dipersempit controller
+// ke alamat yang dipegang CS, jadi selama keduanya tidak kosong tombolnya hidup.
+$bolehTugas = $toko !== [] && $email !== [];
 
 // Gagal menyimpan: popup dibuka lagi supaya isian tidak hilang. old('email_id')
 // hanya dikirim form penugasan, jadi tidak tertukar dengan form tambah email
@@ -322,16 +323,18 @@ $tanya = static function (array $ubah): string {
                 ? 'Satu baris = satu alamat email dan orang yang memegangnya. Siapa yang memegang alamatnya, dia yang dapat tugas cek email di alamat itu.'
                 : 'Catatan ditugaskan ke salah satu alamat di tab Daftar Email — siapa yang memegang alamatnya, dia yang dapat tugasnya.' ?></p>
         </div>
-        <?php if ($kelola) : ?>
+        <?php if ($kelola || $email !== []) : ?>
             <div class="em-head-aksi">
                 <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalTugas"
-                    <?= $bolehTugas ? '' : 'disabled' ?> title="Tulis catatan lalu tugaskan ke satu alamat email">
-                    <i class="fal fa-plus"></i> Penugasan
+                    <?= $bolehTugas ? '' : 'disabled' ?> title="<?= $kelola ? 'Tulis catatan lalu tugaskan ke satu alamat email' : 'Tambah tugas cek email sendiri — masuk ke Belum Dikerjakan' ?>">
+                    <i class="fal fa-plus"></i> <?= $kelola ? 'Penugasan' : 'Tambah Tugas' ?>
                 </button>
-                <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalEmailBaru"
-                    data-id="" data-email="" data-label="" data-catatan="">
-                    <i class="fal fa-at"></i> Tambah Email
-                </button>
+                <?php if ($kelola) : ?>
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalEmailBaru"
+                        data-id="" data-email="" data-label="" data-catatan="">
+                        <i class="fal fa-at"></i> Tambah Email
+                    </button>
+                <?php endif; ?>
             </div>
         <?php endif; ?>
     </div>
@@ -693,18 +696,20 @@ $tanya = static function (array $ubah): string {
 </div>
 
 <!-- popup penugasan: form yang dulu menempel di atas daftar dipindah ke sini,
-     supaya halaman langsung dibuka dengan isinya, bukan dengan kolom isian -->
-<?php if ($kelola) : ?>
+     supaya halaman langsung dibuka dengan isinya, bukan dengan kolom isian.
+     CS yang memegang minimal satu alamat memakai popup yang sama untuk
+     menambah tugasnya sendiri; pilihan emailnya sudah dipersempit controller. -->
+<?php if ($kelola || $email !== []) : ?>
 <div class="modal fade" id="modalTugas" tabindex="-1" aria-hidden="true" data-buka="<?= $tugasBuka ? '1' : '0' ?>">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <?= form_open('admin/tugas/email/simpan', ['class' => 'em-modal']) ?>
                 <div class="modal-header">
-                    <h5 class="modal-title"><i class="fal fa-plus-circle me-1 text-brand-500"></i> Penugasan Cek Email</h5>
+                    <h5 class="modal-title"><i class="fal fa-plus-circle me-1 text-brand-500"></i> <?= $kelola ? 'Penugasan Cek Email' : 'Tambah Tugas Cek Email' ?></h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
                 </div>
                 <div class="modal-body">
-                    <label class="form-label" for="tugas-email">Tugaskan ke email <span class="text-danger">*</span></label>
+                    <label class="form-label" for="tugas-email"><?= $kelola ? 'Tugaskan ke email' : 'Email yang mau dicek' ?> <span class="text-danger">*</span></label>
                     <select class="form-select form-select-sm" id="tugas-email" name="email_id" required>
                         <option value="">Pilih email</option>
                         <?php foreach ($email as $id_email => $nama_e) : ?>
@@ -735,12 +740,14 @@ $tanya = static function (array $ubah): string {
                     </div>
 
                     <div class="form-text small mt-2">
-                        Catatan masuk ke antrean orang yang memegang alamat email itu, jadi pilih alamatnya lebih dulu.
+                        <?= $kelola
+                            ? 'Catatan masuk ke antrean orang yang memegang alamat email itu, jadi pilih alamatnya lebih dulu.'
+                            : 'Tugas baru masuk ke tab Belum Dikerjakan; hanya alamat email yang kamu pegang yang bisa dipilih.' ?>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-sm btn-link text-decoration-none" data-bs-dismiss="modal">Batal</button>
-                    <button type="submit" class="btn btn-sm btn-primary"><i class="fal fa-save me-1"></i> Simpan Penugasan</button>
+                    <button type="submit" class="btn btn-sm btn-primary"><i class="fal fa-save me-1"></i> <?= $kelola ? 'Simpan Penugasan' : 'Tambah Tugas' ?></button>
                 </div>
             <?= form_close() ?>
         </div>

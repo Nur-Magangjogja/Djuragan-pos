@@ -10,6 +10,22 @@ class Pelanggan extends BaseController
     public function baru()
     {
         if ($this->request->isAJAX()) {
+            /*
+             * Nama orang adalah satu-satunya identitas yang dibaca manusia di
+             * seluruh laporan, jadi angka yang nyasar ke kolom nama (jari yang
+             * sebenarnya hendak mengisi HP) harus berhenti di server juga, bukan
+             * cuma di peramban. Penerima dikirim dengan nama field pemesan, jadi
+             * satu aturan ini mengawal keduanya.
+             */
+            $validation = \Config\Services::validation();
+            $validation->setRuleGroup('tambahPelanggan');
+
+            if (! $validation->withRequest($this->request)->run()) {
+                $this->response->setStatusCode(406);
+
+                return $this->response->setJSON($validation->getErrors());
+            }
+
             $ongkir    = new Ongkir();
             $pelanggan = new PelangganModel();
 

@@ -5,7 +5,7 @@
  * menelusurinya — blok @var ini memberi tahu analyzer tanpa mengubah perilaku.
  *
  * @var string $title               judul halaman
- * @var string $tab                 tab aktif: tagihan|reminder|customer
+ * @var string $tab                 tab aktif: tagihan|customer
  * @var string $cari                kata kunci pencarian dari query string (bisa string kosong)
  * @var string $status              filter status tab customer: menunggu|selesai|semua
  * @var int    $page                nomor halaman aktif (1-based)
@@ -14,46 +14,39 @@
  * @var int    $totalInvoicesTagihan total invoice belum lunas
  * @var array  $followupList        baris follow-up customer
  * @var array  $invoicesTagihan     baris invoice belum lunas
- * @var array  $reminders           pengingat otomatis
+ * @var string $awal                batas bawah rentang tanggal pesan (Y-m-d, bisa kosong)
+ * @var string $akhir               batas atas rentang tanggal pesan (Y-m-d, bisa kosong)
+ * @var string $statusBarang        keranjang status aktif: belum|proses|packing|terkirim|''
+ * @var array  $perStatus           jumlah per keranjang: total|belum|proses|packing|terkirim
  * @var string $templateTagihan     template pesan WA tagihan
- * @var array  $toko                id_juragan => nama toko (pilihan toko di form catatan)
- * @var string $saring              saring daftar tagihan: siap|semua
- * @var int    $jumlahSiap          invoice belum lunas yang barangnya sudah selesai
- * @var int    $jumlahSemua         invoice belum lunas keseluruhan
  * @var array  $tahap               master tahap produksi (nomor => [ikon, nama, slug])
+ * @var bool   $melihat_cs          layar dibuka akun CS: navbar CS, tanpa tab customer
  */
+?>
+<?php
+// perakit query string untuk kartu status dan pager: saringan yang sedang aktif ikut
+// terbawa, dan mengganti saringan selalu mengembalikan daftar ke halaman pertama
+$tanya = static function (array $ubah): string {
+    $q = array_merge($_GET, ['tab' => 'tagihan'], $ubah);
+    if (array_intersect_key($ubah, array_flip(['cari', 'status_barang', 'awal', 'akhir']))) {
+        unset($q['page']);
+    }
+    unset($q['status']); // milik tab customer, tidak boleh nebeng di tautan tagihan
+    foreach (['tab', 'cari', 'status_barang', 'awal', 'akhir', 'page'] as $k) {
+        if (isset($q[$k]) && (string) $q[$k] === '') {
+            unset($q[$k]);
+        }
+    }
+    if (($q['page'] ?? 1) == 1) {
+        unset($q['page']);
+    }
+    return site_url('admin/crm/followup') . '?' . http_build_query($q);
+};
 ?>
 <?= $this->extend('template/main') ?>
 
 <?= $this->section('css') ?>
 <style>
-/* style.css hanya menyetel .nav-pills, sedangkan tab di sini .nav-tabs dan
-   .card-header-nya dipaksa padding + border sendiri. Tiap tab diberi garis tipis
-   di pinggirnya supaya jelas yang mana sedang dibuka. */
-.card-header.crm-subnav {
-    padding: 0.5rem 0.75rem !important;
-}
-.crm-subnav .nav-tabs {
-    border-bottom: 0;
-    gap: 0.35rem;
-    flex-wrap: wrap;
-}
-.crm-subnav .nav-link {
-    border: 1px solid #eaecf0 !important;
-    border-radius: 10px !important;
-    background: #ffffff !important;
-    color: #667085 !important;
-}
-.crm-subnav .nav-link:hover {
-    background: #f9fafb !important;
-    border-color: #d0d5dd !important;
-    color: #101828 !important;
-}
-.crm-subnav .nav-link.active {
-    background: #f9fafb !important;
-    border-color: #98a2b3 !important;
-    color: #101828 !important;
-}
 /* judul, teks penjelasan dan tab di halaman ini dikecilkan */
 .fup-judul {
     font-size: 1.15rem;
@@ -61,20 +54,83 @@
 .fup-teks {
     font-size: 0.82rem !important;
 }
-.crm-subnav .nav-link {
-    font-size: 0.92rem !important;
-    padding: 0.75rem 1.3rem !important;
+/* kartu saringan status barang: seluruh kotak bisa diklik, warna aksen per
+   keranjang dibawa lewat --fup-warna supaya border aktif dan angkanya satu rupa */
+.fup-kartu-status {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    background: #fff;
+    border: 1px solid #eaecf0;
+    border-radius: 0.75rem;
+    padding: 0.6rem 0.85rem;
+    text-decoration: none;
+    height: 100%;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
-.crm-subnav .badge {
-    font-size: 0.78rem !important;
+.fup-kartu-status:hover {
+    border-color: var(--fup-warna, #98a2b3);
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
 }
-/* kartu reminder: nama pelanggan panjang dipotong supaya tombol tidak terdorong
-   keluar, dan tab boleh turun baris di layar sempit */
-.reminder-nama {
+.fup-kartu-status.aktif {
+    border-color: var(--fup-warna, #101828);
+    box-shadow: inset 0 0 0 1px var(--fup-warna, #101828);
+    background: #f9fafb;
+}
+.fup-kartu-status .angka {
+    font-size: 1.2rem;
+    font-weight: 800;
+    line-height: 1.1;
+}
+.fup-kartu-status .label {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #667085;
     min-width: 0;
+}
+.fup-kartu-status .label > i {
+    flex: 0 0 auto;
+}
+.fup-kartu-status .label > span {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+.fup-tanggal {
+    width: 145px;
+}
+/* saringan duduk di kepala kartu tabel: formnya membentang seukuran kartu,
+   dan hanya kolom cari yang memanjang mengisi sisa ruang — tanggal, label,
+   dan tombol Ulangi cukup seperlunya (flex 0) supaya proporsional */
+.fup-saring {
+    width: 100%;
+}
+.fup-saring .fup-cari {
+    flex: 1 1 240px;
+    min-width: 0;
+}
+.fup-saring > div,
+.fup-saring > a {
+    flex: 0 0 auto;
+}
+.fup-saring > div.d-flex {
+    flex: 0 1 auto;
+}
+@media (max-width: 575.98px) {
+    .fup-tanggal {
+        width: 126px;
+    }
+    /* kartu saringan dua per baris di HP; kartu terakhir bisa menggantung setengah
+       baris (mis. Terkirim), jadi ia melebar memenuhi ruang tersisa */
+    .fup-kartu-row > div:last-child:nth-child(odd) {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
 }
 /* Khusus mobile (<=768px). Tampilan desktop tidak diubah sama sekali:
    di atas lebar ini tabel tetap 7 kolom seperti sebelumnya.
@@ -104,7 +160,7 @@
     .fup-tabel .text-nowrap {
         white-space: nowrap !important;
     }
-    .btn-kirim-tagihan {
+    .btn-hubungi-tagihan {
         white-space: nowrap !important;
         display: inline-flex;
         align-items: center;
@@ -187,42 +243,15 @@
     .fup-tabel td .btn {
         margin-right: 0.4rem;
     }
-    /* Kolom "Aksi Tagih" cuma berisi satu tombol, jadi ia ikut memanjang sebaris
+    /* Kolom "Aksi Tagih" cuma berisi tombol Hubungi, jadi ia ikut memanjang sebaris
        penuh di mode kartu: kalau tidak, tombolnya duduk di kolom kiri saja dan
-       labelnya belah dua ("Catat / Penagihan") seperti di layar 360px. */
+       labelnya belah dua seperti di layar 360px. */
     .fup-tabel td[data-label="Aksi Tagih"] {
         grid-column: 1 / -1;
     }
     .fup-tabel td[data-label="Aksi Tagih"] .btn {
         width: 100%;
         margin-right: 0;
-    }
-    .reminder-nama {
-        white-space: normal;
-        overflow: visible;
-        text-overflow: clip;
-    }
-    /* Bar tab di bawah judul: dirapatkan ke tepi kiri kartu dan boleh turun
-       baris. Di HP tiap tab melebar penuh seukuran kartu di bawahnya (dulu
-       hanya selebar teksnya sehingga sisi kanannya kosong banget). */
-    .card-header.crm-subnav {
-        padding: 0.4rem 0.4rem !important;
-    }
-    .crm-subnav .nav-item {
-        flex: 1 1 100%;
-    }
-    .crm-subnav .nav-link {
-        white-space: normal;
-        width: 100%;
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-    }
-    /* Angka jumlah (badge) didorong ke tepi kanan tab, rata dengan garis kanan
-       kartu. ms-1 di markup juga !important, jadi selector ini harus lebih
-       spesifik (0,3,0) supaya menang. */
-    .crm-subnav .nav-link .badge {
-        margin-left: auto !important;
     }
     /* Wadahnya tidak boleh jadi area geser lagi di HP (kedua sumbu), tapi juga
        tidak boleh meluber: "visible" membuat isi yang kepanjangan ikut melebar
@@ -273,10 +302,6 @@
     }
 }
 @media (max-width: 575.98px) {
-    .crm-subnav .nav-link {
-        font-size: 0.85rem !important;
-        padding: 0.5rem 0.85rem !important;
-    }
     .fup-judul {
         font-size: 1.05rem;
     }
@@ -304,15 +329,15 @@
 <?= $this->endSection() ?>
 
 <?= $this->section('content') ?>
-<?= $this->include('admin/navbar') ?>
+<?= $this->include($melihat_cs ? 'user/navbar' : 'admin/navbar') ?>
 
 <div class="container-xxl py-4 fup-halaman">
     <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3 fup-judul-baris">
         <div>
             <h4 class="mb-0 fw-bold fup-judul">
-                <i class="fal fa-tasks text-primary me-2 d-none d-lg-inline"></i> Pusat Follow-up & Reminder
+                <i class="fal fa-tasks text-primary me-2 d-none d-lg-inline"></i> Pusat Tagihan & Follow-up
             </h4>
-            <p class="text-muted small mb-0 fup-teks">Kelola tindakan follow-up customer, penagihan invoice, dan pengingat jadwal pakaian penting.</p>
+            <p class="text-muted small mb-0 fup-teks"><?= $melihat_cs ? 'Kelola penagihan invoice yang belum lunas di toko yang kamu pegang.' : 'Kelola penagihan invoice yang belum lunas dan tindakan follow-up customer.' ?></p>
         </div>
     </div>
 
@@ -330,28 +355,12 @@
         </div>
     <?php endif; ?>
 
-    <!-- Sub Nav Tabs Follow-up -->
+    <!-- chip tab lama sudah dilepas; tiap branch membawa kartunya sendiri supaya
+         kartu status bisa duduk terpisah dari tabel di branch tagihan -->
+    <!-- ================= FOLLOW-UP CUSTOMER ================= -->
+    <?php if ($tab === 'customer' && ! $melihat_cs): ?>
     <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-white border-bottom crm-subnav">
-            <ul class="nav nav-tabs m-0">
-                <li class="nav-item">
-                    <a class="nav-link fw-semibold <?= $tab === 'tagihan' ? 'active' : '' ?>" href="<?= site_url('admin/crm/followup?tab=tagihan') ?>">
-                        <i class="fal fa-money-bill-wave me-2 text-danger"></i> Follow-up Tagihan Invoice
-                        <span class="badge bg-danger text-white ms-1"><?= number_format($totalInvoicesTagihan ?? count($invoicesTagihan)) ?></span>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link fw-semibold <?= $tab === 'reminder' ? 'active' : '' ?>" href="<?= site_url('admin/crm/followup?tab=reminder') ?>">
-                        <i class="fal fa-bell me-2 text-warning"></i> Pengingat Otomatis
-                        <span class="badge bg-warning text-dark ms-1"><?= count($reminders) ?></span>
-                    </a>
-                </li>
-            </ul>
-        </div>
         <div class="card-body p-3 p-md-4">
-
-            <!-- ================= SUB TAB 1: FOLLOW-UP CUSTOMER ================= -->
-            <?php if ($tab === 'customer'): ?>
                 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
                     <div class="btn-group btn-group-sm fup-segmen">
                         <a href="<?= site_url('admin/crm/followup?tab=customer&status=menunggu') ?>" class="btn <?= $status === 'menunggu' ? 'btn-primary fw-semibold' : 'btn-outline-secondary' ?>">
@@ -465,39 +474,65 @@
                         </table>
                     </div>
                 <?php endif; ?>
+        </div>
+    </div>
+    <?php else: ?>
+    <!-- ================= TAGIHAN ================= -->
+                <?php
+                // kartu saringan status barang; kodenya sama dengan keranjangStatusBarang()
+                // di model, string kosong berarti tanpa saring (Semua Tagihan)
+                $kartuStatus = [
+                    ''         => ['Semua Tagihan',    'fa-receipt',    '#0f172a'],
+                    'belum'    => ['Belum Diproses',   'fa-inbox',      '#64748b'],
+                    'proses'   => ['Dalam Pengerjaan', 'fa-spinner',    '#b45309'],
+                    'packing'  => ['Sudah Packing',    'fa-box-check',  '#0369a1'],
+                    'terkirim' => ['Terkirim',         'fa-truck-fast', '#14663a'],
+                ];
+                ?>
+                <!-- kartu saringan duduk terpisah, di luar kartu tabel -->
+                <div class="row g-2 mb-3 fup-kartu-row">
+                    <?php foreach ($kartuStatus as $kode => [$nama, $ikon, $warna]) : ?>
+                        <div class="col-6 col-sm-4 col-lg">
+                            <a class="fup-kartu-status <?= $statusBarang === $kode ? 'aktif' : '' ?>"
+                                style="--fup-warna: <?= $warna ?>"
+                                href="<?= esc($tanya(['status_barang' => $kode])) ?>">
+                                <span class="angka" style="color: <?= $warna ?>"><?= number_format((int) ($perStatus[$kode === '' ? 'total' : $kode] ?? 0)) ?></span>
+                                <span class="label"><i class="fal <?= $ikon ?>"></i> <span><?= $nama ?></span></span>
+                            </a>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
 
-            <!-- ================= SUB TAB 2: FOLLOW-UP TAGIHAN ================= -->
-            <?php elseif ($tab === 'tagihan'): ?>
-                <?php $cariQuery = urlencode($cari); ?>
-                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-                    <div class="btn-group btn-group-sm fup-segmen">
-                        <a href="<?= site_url('admin/crm/followup?tab=tagihan&saring=siap&cari=' . $cariQuery) ?>" class="btn <?= $saring === 'siap' ? 'btn-primary fw-semibold' : 'btn-outline-secondary' ?>">
-                            <i class="fal fa-box-check me-1"></i> Siap Ditagih
-                            <span class="badge <?= $saring === 'siap' ? 'bg-white text-primary' : 'bg-ink-100 text-ink-600' ?> ms-1"><?= number_format($jumlahSiap) ?></span>
-                        </a>
-                        <a href="<?= site_url('admin/crm/followup?tab=tagihan&saring=semua&cari=' . $cariQuery) ?>" class="btn <?= $saring === 'semua' ? 'btn-primary fw-semibold' : 'btn-outline-secondary' ?>">
-                            <i class="fal fa-receipt me-1"></i> Semua Belum Lunas
-                            <span class="badge <?= $saring === 'semua' ? 'bg-white text-primary' : 'bg-ink-100 text-ink-600' ?> ms-1"><?= number_format($jumlahSemua) ?></span>
-                        </a>
-                    </div>
-                    <form action="<?= site_url('admin/crm/followup') ?>" method="get" class="d-flex gap-2">
+                <!-- saringan jadi satu dengan tabel: paling atas di dalam kartu -->
+                <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-body p-3 p-md-4">
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                    <form action="<?= site_url('admin/crm/followup') ?>" method="get" class="d-flex flex-wrap align-items-stretch gap-2 fup-saring">
                         <input type="hidden" name="tab" value="tagihan">
-                        <input type="hidden" name="saring" value="<?= esc($saring) ?>">
-                        <div class="cari-merged" style="width: 250px; max-width: 100%;">
+                        <?php if ($statusBarang !== '') : ?>
+                            <input type="hidden" name="status_barang" value="<?= esc($statusBarang) ?>">
+                        <?php endif; ?>
+                        <div class="d-flex align-items-center gap-1">
+                            <label class="small text-muted mb-0 text-nowrap d-none d-sm-inline" for="fup-awal">Tanggal</label>
+                            <input type="date" id="fup-awal" name="awal" class="form-control form-control-sm fup-tanggal"
+                                value="<?= esc($awal) ?>" max="<?= esc($akhir) ?>" title="Tanggal pesan dari">
+                            <span class="text-muted small">s.d.</span>
+                            <input type="date" id="fup-akhir" name="akhir" class="form-control form-control-sm fup-tanggal"
+                                value="<?= esc($akhir) ?>" min="<?= esc($awal) ?>" title="Sampai tanggal pesan">
+                        </div>
+                        <div class="cari-merged fup-cari">
                             <button type="submit" class="cari-kirim" title="Cari"><i class="fal fa-search"></i></button>
                             <input type="text" name="cari" class="form-control form-control-sm" placeholder="Cari invoice / pelanggan..." value="<?= esc($cari) ?>">
                         </div>
+                        <?php if ($cari !== '' || $statusBarang !== '' || $awal !== '' || $akhir !== '') : ?>
+                            <a class="btn btn-sm btn-outline-secondary text-nowrap" href="<?= esc(site_url('admin/crm/followup')) ?>" title="Kosongkan semua saringan">Ulangi</a>
+                        <?php endif; ?>
                     </form>
                 </div>
 
                 <p class="text-muted small mb-3 fup-teks">
-                    <?php if ($saring === 'siap'): ?>
-                        Barang <strong>sudah selesai dikerjakan</strong> (packing beres atau paket sudah terkirim)
-                        tetapi pembayarannya belum lunas - inilah yang bisa langsung ditagih. Urut dari yang terbaru.
-                    <?php else: ?>
-                        Seluruh invoice yang belum lunas (Kredit, Belum Bayar, atau Menunggu Konfirmasi),
-                        termasuk yang barangnya masih dalam pengerjaan. Yang sudah selesai ditaruh lebih dulu.
-                    <?php endif; ?>
+                    Seluruh invoice yang belum lunas (Kredit, Belum Bayar, atau Menunggu Konfirmasi),
+                    termasuk yang barangnya masih dalam pengerjaan. Yang sudah selesai ditaruh lebih dulu.
                     <?php if (!empty($totalInvoicesTagihan) && $totalInvoicesTagihan > count($invoicesTagihan)): ?>
                         Menampilkan <?= count($invoicesTagihan) ?> dari <strong><?= number_format($totalInvoicesTagihan) ?></strong> invoice.
                     <?php endif; ?>
@@ -510,18 +545,18 @@
                             <h5>Tidak ada hasil untuk "<?= esc($cari) ?>"</h5>
                             <p class="mb-0">Tidak ketemu invoice yang cocok dengan kata itu. Cek ejaan namanya atau nomornya.</p>
                         </div>
+                    <?php elseif ($statusBarang !== '' || $awal !== '' || $akhir !== ''): ?>
+                        <div class="text-center py-5 text-muted">
+                            <i class="fal fa-inbox fa-3x mb-3 text-secondary opacity-50"></i>
+                            <h5>Kosong pada saringan ini</h5>
+                            <p class="mb-0">Tidak ada invoice yang cocok dengan saringan tanggal atau status barang sekarang.
+                                <a href="<?= esc(site_url('admin/crm/followup')) ?>">Lihat semua tagihan</a>.</p>
+                        </div>
                     <?php else: ?>
                         <div class="text-center py-5 text-muted">
                             <i class="fal fa-check-circle fa-3x mb-3 text-success"></i>
-                            <h5><?= $saring === 'siap' ? 'Belum Ada yang Siap Ditagih' : 'Semua Tagihan Lunas!' ?></h5>
-                            <p class="mb-0">
-                                <?php if ($saring === 'siap' && $jumlahSemua > 0): ?>
-                                    Semua barang yang sudah selesai sudah lunas. Masih ada
-                                    <strong><?= number_format($jumlahSemua) ?></strong> piutang yang barangnya masih dalam pengerjaan.
-                                <?php else: ?>
-                                    Tidak ada piutang invoice pending saat ini.
-                                <?php endif; ?>
-                            </p>
+                            <h5>Semua Tagihan Lunas!</h5>
+                            <p class="mb-0">Tidak ada piutang invoice pending saat ini.</p>
                         </div>
                     <?php endif; ?>
                 <?php else: ?>
@@ -586,17 +621,21 @@
                                         </td>
                                         <td class="text-center text-nowrap" data-label="Aksi Tagih">
                                             <?php if (!empty($inv['nomor_hp'])): ?>
-                                                <button class="btn btn-sm btn-outline-success fw-semibold text-nowrap btn-kirim-tagihan"
-                                                        data-id="<?= $inv['id_invoice'] ?>"
-                                                        data-seri="<?= esc($inv['seri']) ?>"
-                                                        data-nama="<?= esc($inv['nama_pelanggan']) ?>"
-                                                        data-nomor="<?= esc($inv['nomor_hp']) ?>"
-                                                        data-pelanggan-id="<?= (int) $inv['id_pelanggan'] ?>" data-juragan="<?= (int) ($inv['juragan_id'] ?? 0) ?>"
-                                                        data-total="Rp <?= number_format($inv['total_tagihan'], 0, ',', '.') ?>"
-                                                        data-sisa="Rp <?= number_format($inv['sisa_tagihan'], 0, ',', '.') ?>"
-                                                        data-link="<?= site_url('download/invoice/' . $inv['seri']) ?>">
-                                                    <i class="fal fa-note-sticky me-1"></i> Catat Penagihan
-                                                </button>
+                                                <?php
+                                                // Hubungi = langsung geser ke WA pembeli; draf template tagihan
+                                                // ikut terisi di kolom chat, tanpa langkah perantara lagi.
+                                                $pesanWa = str_replace(
+                                                    ['{nama}', '{invoice}', '{total}', '{sisa}', '{link_invoice}'],
+                                                    [$inv['nama_pelanggan'], '#' . $inv['seri'], 'Rp ' . number_format($inv['total_tagihan'], 0, ',', '.'), 'Rp ' . number_format($inv['sisa_tagihan'], 0, ',', '.'), site_url('download/invoice/' . $inv['seri'])],
+                                                    (string) ($templateTagihan ?? '')
+                                                );
+                                                $tautanWa = 'https://wa.me/' . nomor_wa_link($inv['nomor_hp'])
+                                                    . ($pesanWa !== '' ? '?text=' . rawurlencode($pesanWa) : '');
+                                                ?>
+                                                <a class="btn btn-sm btn-outline-success fw-semibold text-nowrap btn-hubungi-tagihan"
+                                                        href="<?= esc($tautanWa) ?>" target="_blank" rel="noopener">
+                                                    <i class="fab fa-whatsapp"></i> Hubungi
+                                                </a>
                                             <?php endif; ?>
                                         </td>
                                     </tr>
@@ -613,7 +652,7 @@
                             <ul class="pagination pagination-sm mb-0">
                                 <?php if ($page > 1) : ?>
                                     <li class="page-item">
-                                        <a class="page-link" href="<?= site_url('admin/crm/followup?tab=tagihan&saring=' . $saring . '&page=' . ($page - 1) . '&cari=' . $cariQuery) ?>">« Sebelumnya</a>
+                                        <a class="page-link" href="<?= esc($tanya(['page' => $page - 1])) ?>">« Sebelumnya</a>
                                     </li>
                                 <?php endif; ?>
 
@@ -622,278 +661,24 @@
                                 $end   = min($totalPagesTagihan, $page + 2);
                                 for ($i = $start; $i <= $end; $i++) : ?>
                                     <li class="page-item <?= $i === $page ? 'active' : '' ?>">
-                                        <a class="page-link" href="<?= site_url('admin/crm/followup?tab=tagihan&saring=' . $saring . '&page=' . $i . '&cari=' . $cariQuery) ?>"><?= $i ?></a>
+                                        <a class="page-link" href="<?= esc($tanya(['page' => $i])) ?>"><?= $i ?></a>
                                     </li>
                                 <?php endfor; ?>
 
                                 <?php if ($page < $totalPagesTagihan) : ?>
                                     <li class="page-item">
-                                        <a class="page-link" href="<?= site_url('admin/crm/followup?tab=tagihan&saring=' . $saring . '&page=' . ($page + 1) . '&cari=' . $cariQuery) ?>">Berikutnya »</a>
+                                        <a class="page-link" href="<?= esc($tanya(['page' => $page + 1])) ?>">Berikutnya »</a>
                                     </li>
                                 <?php endif; ?>
                             </ul>
                         </div>
                     <?php endif; ?>
                 <?php endif; ?>
-
-            <!-- ================= SUB TAB 3: REMINDER OTOMATIS ================= -->
-            <?php elseif ($tab === 'reminder'): ?>
-                <div class="mb-3">
-                    <p class="text-muted small mb-0 fup-teks">
-                        Pengingat otomatis yang dideteksi oleh sistem berdasarkan jadwal sewa (ambil/kembali), deadline pembuatan pesanan custom, dan follow-up jatuh tempo.
-                    </p>
+                    </div>
                 </div>
-
-                <?php if (empty($reminders)): ?>
-                    <div class="text-center py-5 text-muted">
-                        <i class="fal fa-bell-slash fa-3x mb-3 text-secondary opacity-50"></i>
-                        <h5>Tidak ada jadwal mendesak saat ini</h5>
-                        <p class="mb-0">Tidak ada pengembalian sewa, deadline, atau follow-up yang jatuh tempo dalam 3 hari ke depan.</p>
-                    </div>
-                <?php else: ?>
-                    <div class="row g-3">
-                        <?php foreach ($reminders as $rem): ?>
-                            <div class="col-12 col-sm-6 col-lg-4">
-                                <div class="card border-0 shadow-sm h-100 border-start border-4 border-<?= esc($rem['warna']) ?> reminder-kartu">
-                                    <div class="card-body p-3">
-                                        <div class="d-flex justify-content-between align-items-start mb-1 gap-2">
-                                            <span class="badge bg-<?= esc($rem['warna']) ?>"><?= esc($rem['status_waktu']) ?></span>
-                                            <span class="text-muted small text-nowrap"><i class="fal fa-calendar-alt me-1"></i><?= date('d M Y', strtotime($rem['tanggal'])) ?></span>
-                                        </div>
-                                        <h6 class="fw-bold mt-2 mb-1 text-dark"><?= esc($rem['judul']) ?></h6>
-                                        <p class="text-muted small mb-2"><?= esc($rem['deskripsi']) ?></p>
-
-                                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 pt-2 border-top mt-2">
-                                            <a href="<?= site_url('admin/crm/pelanggan/' . $rem['pelanggan_id']) ?>" class="fw-semibold text-decoration-none small reminder-nama">
-                                                <i class="fal fa-user me-1"></i><?= esc($rem['nama_pelanggan']) ?>
-                                            </a>
-                                            <div class="d-flex gap-1 ms-auto">
-                                                <a href="<?= site_url('admin/crm/pelanggan/' . $rem['pelanggan_id']) ?>" class="btn btn-xs btn-outline-primary py-0 px-2" style="font-size: 11px;">
-                                                    Profil 360
-                                                </a>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
-                <?php endif; ?>
-
-            <?php endif; ?>
-
-        </div>
-    </div>
+    <?php endif; ?>
 </div>
 
 
 
-<!-- Modal Catat Penagihan -->
-<div class="modal fade" id="modalTagihanWa" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
-        <div class="modal-content">
-            <?= form_open('admin/tugas/catatan', ['id' => 'formCatatTagihan']) ?>
-            <div class="modal-header">
-                <h6 class="modal-title fw-bold">
-                    <i class="fal fa-note-sticky me-2"></i>Catat Penagihan
-                </h6>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="row g-3 mb-3">
-                    <div class="col-md-6">
-                        <label class="form-label small fw-semibold">Nomor Invoice</label>
-                        <input type="text" id="targetSeri" class="form-control form-control-sm" readonly>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label small fw-semibold">Nama Pelanggan</label>
-                        <input type="text" id="targetNama" class="form-control form-control-sm" readonly>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label small fw-semibold">Nomor WhatsApp</label>
-                        <input type="text" id="targetHp" class="form-control form-control-sm font-monospace" readonly>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label small fw-semibold">Sisa Tagihan</label>
-                        <input type="text" id="targetSisa" class="form-control form-control-sm text-danger fw-bold" readonly>
-                    </div>
-                </div>
-
-                <input type="hidden" name="pelanggan_id" id="targetPelangganId" value="">
-                <input type="hidden" name="seri" id="targetSeriVal" value="">
-
-                <div class="mb-3">
-                    <label class="form-label small fw-semibold">Draf pesan pengingat</label>
-                    <textarea id="targetPesan" class="form-control form-control-sm font-monospace" rows="5" readonly></textarea>
-                    <div class="d-flex align-items-center gap-2 flex-wrap mt-2">
-                        <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill text-nowrap" id="btnSalinPesan">
-                            <i class="fal fa-copy me-1"></i> <span id="btnSalinText">Salin draf</span>
-                        </button>
-                        <span class="small text-muted">Pesan tidak dikirim otomatis — salin drafnya lalu kirim dari aplikasi WA, lalu catat hasilnya di sini.</span>
-                    </div>
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label small fw-semibold">Ringkasan percakapan <span class="text-danger">*</span></label>
-                    <textarea name="ringkasan" id="targetRingkasan" class="form-control form-control-sm" rows="3" required placeholder="mis. sudah ditelepon, janji bayar lusa"></textarea>
-                </div>
-
-                <div class="row g-3 mb-3">
-                    <div class="col-md-6">
-                        <label class="form-label small fw-semibold">Tindakan lanjutan</label>
-                        <input type="text" name="tindakan" class="form-control form-control-sm" maxlength="200" placeholder="mis. Tagih sisa #AM1234">
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label small fw-semibold">Jadwal ulang</label>
-                        <input type="date" name="tenggat" class="form-control form-control-sm">
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label small fw-semibold">Prioritas</label>
-                        <select name="prioritas" class="form-select form-select-sm">
-                            <option value="rendah">Rendah</option>
-                            <option value="normal" selected>Normal</option>
-                            <option value="tinggi">Tinggi</option>
-                            <option value="mendesak">Mendesak</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <label class="form-label small fw-semibold">Toko</label>
-                        <?php if (($toko ?? []) !== []) : ?>
-                            <select class="form-select form-select-sm" name="juragan_id" id="targetToko" required>
-                                <?php foreach ($toko as $id_toko => $nama_t) : ?>
-                                    <option value="<?= (int) $id_toko ?>"><?= esc($nama_t) ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        <?php else : ?>
-                            <div class="small text-danger">
-                                <i class="fal fa-triangle-exclamation me-1"></i> Akun ini tidak memegang toko, catatan tidak bisa disimpan.
-                            </div>
-                        <?php endif; ?>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label small fw-semibold">Label pelanggan (opsional)</label>
-                        <input type="text" name="nama_tag_baru" class="form-control form-control-sm" maxlength="60" placeholder="mis. piutang macet">
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill" data-bs-dismiss="modal">Batal</button>
-                <button type="submit" class="btn btn-sm btn-primary"><i class="fal fa-save me-1"></i> Simpan catatan</button>
-            </div>
-            <?= form_close() ?>
-        </div>
-    </div>
-</div>
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    'use strict';
-
-    var rawTemplate = <?= json_encode($templateTagihan) ?>;
-    var modalEl     = document.getElementById('modalTagihanWa');
-    var modal       = new bootstrap.Modal(modalEl);
-
-    function isi(id, nilai) {
-        var el = document.getElementById(id);
-
-        if (el !== null) {
-            el.value = nilai;
-        }
-    }
-
-    // draf hanya untuk disalin manual; jalur kirim otomatis sudah dicabut
-    function draf(d) {
-        return String(rawTemplate || '')
-            .replace(/\{nama\}/g, d.nama)
-            .replace(/\{invoice\}/g, '#' + d.seri)
-            .replace(/\{total\}/g, d.total)
-            .replace(/\{sisa\}/g, d.sisa)
-            .replace(/\{link_invoice\}/g, d.link);
-    }
-
-    function tandaiTersalin() {
-        var label = document.getElementById('btnSalinText');
-        label.textContent = 'Tersalin';
-        window.setTimeout(function() { label.textContent = 'Salin draf'; }, 1500);
-    }
-
-    function salinLewatKolom(teks) {
-        var area = document.getElementById('targetPesan');
-        area.select();
-        area.setSelectionRange(0, teks.length);
-
-        try {
-            document.execCommand('copy');
-        } catch (err) {
-            // clipboard ditolak browser; drafnya tetap terseleksi dan bisa disalin tangan
-        }
-
-        if (window.getSelection) {
-            window.getSelection().removeAllRanges();
-        }
-    }
-
-    function salinDraf() {
-        var teks = document.getElementById('targetPesan').value;
-
-        if (teks === '') {
-            return;
-        }
-
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(teks).then(tandaiTersalin, function() {
-                salinLewatKolom(teks);
-                tandaiTersalin();
-            });
-
-            return;
-        }
-
-        salinLewatKolom(teks);
-        tandaiTersalin();
-    }
-
-    document.querySelectorAll('.btn-kirim-tagihan').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            var d = btn.dataset;
-
-            isi('targetPelangganId', d.pelangganId || ''); isi('targetToko', d.juragan || '');
-            isi('targetSeriVal', d.seri || '');
-            isi('targetSeri', '#' + (d.seri || ''));
-            isi('targetNama', d.nama || '');
-            isi('targetHp', d.nomor || '');
-            isi('targetSisa', d.sisa || '');
-            isi('targetPesan', draf({
-                nama: d.nama || '',
-                seri: d.seri || '',
-                total: d.total || '',
-                sisa: d.sisa || '',
-                link: d.link || ''
-            }));
-
-            // catatan nota sebelumnya tidak boleh ikut terbawa ke nota berikutnya
-            ['ringkasan', 'tindakan', 'tenggat', 'nama_tag_baru'].forEach(function(nama) {
-                var el = modalEl.querySelector('[name="' + nama + '"]');
-
-                if (el !== null) {
-                    el.value = '';
-                }
-            });
-
-            document.getElementById('btnSalinText').textContent = 'Salin draf';
-
-            modal.show();
-        });
-    });
-
-    var btnSalin = document.getElementById('btnSalinPesan');
-
-    if (btnSalin !== null) {
-        btnSalin.addEventListener('click', salinDraf);
-    }
-});
-</script>
 <?= $this->endSection() ?>

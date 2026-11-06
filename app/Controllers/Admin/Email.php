@@ -17,10 +17,10 @@ use CodeIgniter\Exceptions\PageNotFoundException;
  * alamat yang dipegangnya, sedangkan Admin/Superadmin memakai semuanya.
  *
  * Tidak ada langkah "ambil catatan" di layar ini, tidak seperti jenis tugas lain
- * yang direbut dari antrean: Admin/Superadmin yang menulis catatan dan langsung
- * menunjuk satu alamat, jadi pemegang alamatnya otomatis memegang tugasnya dan
- * cukup menandai selesai. Yang memilih penggarapnya kemudian cukup orang yang
- * benar-benar mengerjakannya.
+ * yang direbut dari antrean: catatan ditulis Admin/Superadmin — atau oleh CS yang
+ * memegang alamatnya sendiri, lewat tombol "Tambah Tugas" — dan langsung menunjuk
+ * satu alamat, jadi pemegang alamatnya otomatis memegang tugasnya dan cukup
+ * menandai selesai. Tugas baru selalu lahir di tab Belum Dikerjakan.
  *
  * Sengaja cuma catatan — tidak ada sandi, tidak ada kredensial, dan tidak ada
  * koneksi ke servis email mana pun. Tiap catatan masuk ke mesin tugas yang sama
@@ -102,7 +102,8 @@ class Email extends BaseController
         }
 
         // sebuah catatan selalu ditugaskan ke satu alamat email: yang memegang
-        // alamat itulah yang nanti melihat tugasnya
+        // alamat itulah yang nanti melihat tugasnya. CS boleh membuat tugas untuk
+        // dirinya sendiri, asal alamatnya memang dia pegang (dijaga di bawah)
         $email_model = new EmailModel();
         $akun_email  = $email_id > 0 ? $email_model->satu($email_id) : null;
 
@@ -150,8 +151,9 @@ class Email extends BaseController
 
     /**
      * Menandai catatan selesai — tanpa langkah mengambil dulu. Catatan lahir dari
-     * Admin/Superadmin dan langsung menunjuk satu alamat email, jadi pemegang
-     * alamatnya tidak perlu memperebutkannya dari antrean.
+     * Admin/Superadmin atau dari CS sendiri yang memegang alamatnya, dan selalu
+     * menunjuk satu alamat email, jadi pemegangnya tidak perlu memperebutkannya
+     * dari antrean.
      *
      * Mesin tugas tetap menuntut penggarap sebelum status 'completed', jadi
      * penugasan dicatat pada saat ini lewat tetapkan() — bukan ambil(), yang
@@ -180,13 +182,11 @@ class Email extends BaseController
     /** Angka badge menu. */
     public function jumlah()
     {
+        helper('fungsi');
+
         return $this->response->setJSON([
             'status' => 'success',
-            'count'  => (new TugasModel())->jumlah([
-                'jenis'        => 'pemeriksaan_email',
-                'terbuka'      => true,
-                'juragan_ids'  => $this->tokoBoleh(),
-            ]),
+            'count'  => cek_email_terbuka_sesi(),
         ]);
     }
 

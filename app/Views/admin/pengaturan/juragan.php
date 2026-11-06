@@ -44,13 +44,16 @@ $opsi_admin = $isi_opsi($admins);
 $opsi_cs    = $isi_opsi($cs_list);
 
 // rekening dipilih dengan kotak centang: satu klik langsung menambah atau
-// membatalkan satu rekening, tanpa daftar yang harus ditahan CTRL
+// membatalkan satu rekening, tanpa daftar yang harus ditahan CTRL. Kotaknya
+// sengaja tidak memakai atribut required per baris: itu memaksa orang mencentang
+// SEMUA rekening, padahal aturannya minimal satu. Yang menahan "minimal satu"
+// sekarang skrip form di bawah dan server (grup addJuragan/editJuragan).
 $kotak_rekening = static function (array $opsi, array $terpilih, string $awalan): void {
     foreach ($opsi as $id => $label) {
         $kunci = $awalan . '_' . preg_replace('/[^A-Za-z0-9_.-]/', '', (string) $id); ?>
         <div class="form-check">
             <input class="form-check-input" type="checkbox" name="bank[]" value="<?= esc((string) $id) ?>"
-                id="<?= esc($kunci) ?>" required <?= in_array((string) $id, $terpilih, true) ? 'checked' : '' ?>>
+                id="<?= esc($kunci) ?>" <?= in_array((string) $id, $terpilih, true) ? 'checked' : '' ?>>
             <label class="form-check-label" for="<?= esc($kunci) ?>"><?= esc($label) ?></label>
         </div>
 <?php }
@@ -198,7 +201,8 @@ $chip = static function (string $label, array $daftar): void { ?>
                     <div class="border rounded px-2 py-1" style="max-height: 180px; overflow-y: auto;">
                         <?php $kotak_rekening($opsi_bank, $pilihan_bank, 'tambah_rek'); ?>
                     </div>
-                    <div class="form-text">centang semua rekening yang dipakai toko ini</div>
+                    <div class="text-danger small d-none" data-rek-galat>Pilih minimal 1 bank.</div>
+                    <div class="form-text">centang rekening yang dipakai toko ini — minimal satu, tidak perlu semuanya</div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -231,7 +235,8 @@ $chip = static function (string $label, array $daftar): void { ?>
                     <div class="border rounded px-2 py-1" style="max-height: 180px; overflow-y: auto;">
                         <?php $kotak_rekening($opsi_bank, [], 'sunting_rek'); ?>
                     </div>
-                    <div class="form-text">centang semua rekening yang dipakai toko ini</div>
+                    <div class="text-danger small d-none" data-rek-galat>Pilih minimal 1 bank.</div>
+                    <div class="form-text">centang rekening yang dipakai toko ini — minimal satu, tidak perlu semuanya</div>
                 </div>
 
             </div>
@@ -380,6 +385,42 @@ $js = <<< JS
     	modalTambahJuragan.addEventListener('hide.bs.modal', function() {
     		document.getElementById('mt').reset();
     	});
+
+    	// minimal satu rekening: ditahan di sini supaya orang tidak perlu mengirim
+    	// form dulu untuk tahu daftar centangnya masih kosong. Nama variabel tanpa
+    	// awalan dollar: skrip ini hidup di dalam heredoc php.
+    	function kawalRekening(formId) {
+    		var form = document.getElementById(formId);
+    		if (! form) { return; }
+
+    		var pesan = form.querySelector('[data-rek-galat]');
+
+    		function ada() {
+    			return form.querySelector('input[name="bank[]"]:checked') !== null;
+    		}
+
+    		function tutup() {
+    			if (pesan) { pesan.classList.add('d-none'); }
+    		}
+
+    		form.addEventListener('submit', function(kejadian) {
+    			if (ada()) { tutup(); return; }
+
+    			kejadian.preventDefault();
+
+    			if (pesan) { pesan.classList.remove('d-none'); }
+
+    			var pertama = form.querySelector('input[name="bank[]"]');
+    			if (pertama) { pertama.focus(); }
+    		});
+
+    		form.addEventListener('change', function() {
+    			if (ada()) { tutup(); }
+    		});
+    	}
+
+    	kawalRekening('mt');
+    	kawalRekening('mf');
 
         // gagal menambah: modal dibuka lagi supaya nama yang tadi diketik tidak hilang
         if ({$showModalTambah}) {

@@ -37,6 +37,47 @@ class Download extends BaseController
     }
 
     /**
+     * Tautan invoice publik: dibuka tanpa login lewat tombol "Salin tautan
+     * invoice". Nota dicari hanya bermodal nomor, tapi aksesnya dikunci token
+     * HMAC (lihat token_invoice_publik) yang mengikat nomor + id nota, sehingga
+     * menebak nota orang lain tidak mungkin. Yang dirender persis satu nota ini,
+     * tidak ada daftar atau data lain yang ikut terbawa. `publik=true` menyalakan
+     * lapisan gaya layar di template: dokumen yang sama tetap dicetak Dompdf apa
+     * adanya, hanya versi web yang dirapikan untuk desktop dan HP.
+     */
+    public function nota($seri = '', $token = '')
+    {
+        helper('fungsi');
+
+        $seri = trim((string) $seri);
+
+        if ($seri === '' || $token === '') {
+            throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
+        }
+
+        $get   = (new InvoiceModel())->getAll('semua', 0, ['kolom' => 'faktur', 'q' => $seri]);
+        $nota  = null;
+
+        // q bersifat LIKE, jadi bisa menyinggung beberapa nota; ambil yang nomornya
+        // persis sama supaya token tidak tertukar dengan nota berawalan mirip
+        foreach ($get['data'] ?? [] as $baris) {
+            if ((string) $baris->seri === $seri) {
+                $nota = $baris;
+
+                break;
+            }
+        }
+
+        // verifikasi token HMAC yang mengikat id + nomor nota ini saja
+        if ($nota === null
+            || ! hash_equals(token_invoice_publik((int) $nota->id_invoice, (string) $nota->seri), (string) $token)) {
+            throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
+        }
+
+        return view('template/invoice', ['invoice' => $nota, 'publik' => true]);
+    }
+
+    /**
      * Satu baris invoice lewat nomor nota; null kalau nomornya tidak dikenal
      * atau tokonya tidak dipegang akun yang sedang mencetak.
      */

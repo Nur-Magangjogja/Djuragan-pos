@@ -255,6 +255,12 @@ $routes->group('admin', static function ($routes) {
         $routes->get('cari-pelanggan', 'Admin\Tugas::cariPelanggan');
         $routes->get('catatan', 'Admin\Tugas::catatan');
         $routes->post('catatan', 'Admin\Tugas::simpanCatatan');
+        // Menu Tagihan untuk CS: halaman daftar piutang yang sama seperti milik
+        // Admin (Admin\Crm::followup), hanya saja controller memotong daftarnya
+        // ke toko yang CS itu pegang. Dirute di sini supaya hak CS ikut filter
+        // grup tugas di atas tanpa membuka seluruh grup crm (duplikat, ringkasan)
+        // ke CS.
+        $routes->get('tagihan', 'Admin\Crm::followup');
         // (:num) saja, jadi 'jumlah' di atas tidak pernah dikira id tugas
         $routes->get('(:num)', 'Admin\Tugas::lihat/$1');
         $routes->post('simpan', 'Admin\Tugas::simpan');
@@ -280,8 +286,10 @@ $routes->group('admin', static function ($routes) {
     });
 
     // checklist toko harian + pemeriksaan email manual. CS membuka dan mengisi
-    // sesinya; templat butir dan penonaktifan butir khusus Admin & Superadmin;
-    // menautkan toko ke akun (pendelegasian) khusus Superadmin.
+    // sesinya; kelola toko checklist khusus Admin & Superadmin. Menambah pemegang
+    // toko lewat popus sunting toko, jadi yang tersisa di sini pencabutan tautan
+    // langsung (tanda silang pada akun biru) dan penghapusan toko (ikon sampah di
+    // samping sunting) — yang terakhir ikut menghapus riwayat checklist tokonya.
     $routes->group('checklist', ['filter' => 'auth:admin,superadmin,cs'], static function ($routes) {
         $routes->get('/', 'Admin\Checklist::index', ['as' => 'hal.checklist']);
         $routes->post('mulai', 'Admin\Checklist::mulai');
@@ -294,19 +302,19 @@ $routes->group('admin', static function ($routes) {
         $routes->post('catatan', 'Admin\Checklist::catatan');
         $routes->post('catatan-selesai/(:num)', 'Admin\Checklist::catatanSelesai/$1');
 
+        // kelola toko checklist (tab "Kelola Toko" di halaman Cek Toko): daftar
+        // toko, tautan akun, dan penyuntingan tokonya. Tautan langsung tidak
+        // mengubah juragan yang dipegang siapa pun, jadi Admin ikut boleh
         $routes->group('', ['filter' => 'auth:admin,superadmin'], static function ($routes) {
-            $routes->get('aturan', 'Admin\Checklist::aturan');
-            $routes->post('butir', 'Admin\Checklist::simpanButir');
-            $routes->post('butir-aktif', 'Admin\Checklist::matikanButir');
             $routes->post('toko-simpan', 'Admin\Checklist::simpanToko');
+            $routes->post('tautan-copot', 'Admin\Checklist::tautanCopot');
+            $routes->post('toko-hapus', 'Admin\Checklist::hapusToko');
         });
 
-        // memindahkan sebuah toko ke tangan akun lain mengubah siapa yang boleh
-        // membuka lembar toko itu di semua halaman, jadi khusus Superadmin
+        // daftar platform toko (asal_order) dipakai bersama semua toko, jadi
+        // menyembunyikan salah satunya hanya boleh Superadmin
         $routes->group('', ['filter' => 'auth:superadmin'], static function ($routes) {
-            $routes->post('delegasi', 'Admin\Checklist::delegasi');
-            $routes->post('copot-delegasi', 'Admin\Checklist::copotDelegasi');
-            $routes->post('copot-tautan', 'Admin\Checklist::copotTautan');
+            $routes->post('platform-ubah', 'Admin\Checklist::platformUbah');
         });
     });
 
@@ -367,6 +375,8 @@ $routes->group('admin', static function ($routes) {
         $routes->get('pengguna', 'Admin\Settings\Pengguna::pengguna');
         $routes->post('save_pengguna', 'Admin\Settings\Pengguna::save_pengguna');
         $routes->post('update_pengguna', 'Admin\Settings\Pengguna::update_pengguna');
+        // hapus lunak akun: baris tetap ada, hanya akses loginnya hilang
+        $routes->post('hapus_pengguna', 'Admin\Settings\Pengguna::hapus_pengguna');
 
         // kunci untuk pihak luar (website partner): hanya Superadmin yang bisa
         // menerbitkan dan mencabut, karena isinya cakupan toko + hak baca
@@ -396,9 +406,9 @@ $routes->group('user', ['filter' => 'auth:user'], static function ($routes) {
     $routes->group('invoices', static function ($routes) {
         $routes->get('/', 'User\Invoices::lihat', ['as' => 'hal.user']);
         $routes->get('tulis', 'User\Invoices::tulis');
-        $routes->get('lihat/([a-z0-9]{40})', 'User\Invoices::lihat/$1');
-        $routes->get('lihat/([a-z0-9]{40})/(:tab)', 'User\Invoices::lihat/$1/$2');
-        $routes->get('lihat/([a-z0-9]{40})/(:tab)/(:segment)', 'User\Invoices::lihat/$1/$2/$3');
+        $routes->get('lihat/(:juragan)', 'User\Invoices::lihat/$1');
+        $routes->get('lihat/(:juragan)/(:tab)', 'User\Invoices::lihat/$1/$2');
+        $routes->get('lihat/(:juragan)/(:tab)/(:segment)', 'User\Invoices::lihat/$1/$2/$3');
         $routes->get('info_pembayaran', 'User\Invoices::info_pembayaran');
         $routes->post('simpan_pembayaran', 'User\Invoices::simpan_pembayaran');
         $routes->post('save', 'User\Invoices::save');
@@ -494,6 +504,10 @@ $routes->get('download/invoice/(:any)', 'Download::invoice/$1', ['filter' => 'au
 // satu nota yang sama dicetak jadi dua dokumen: invoice untuk pelanggan (memuat uang),
 // lembar kerja untuk penjahit (hanya spesifikasi jahit, tanpa harga)
 $routes->get('download/penjahit/(:any)', 'Download::penjahit/$1', ['filter' => 'auth:admin,superadmin,user']);
+// tautan yang dikirim ke pelanggan lewat tombol "Salin tautan invoice": sengaja
+// TANPA filter auth supaya bisa dibuka tanpa login; akses tetap terkunci token
+// HMAC di dalam URL (Download::nota), jadi nota orang lain tidak tertebak
+$routes->get('nota/(:any)/(:any)', 'Download::nota/$1/$2');
 $routes->get('pelanggan/cari', 'Pelanggan::cari', ['filter' => 'auth:admin,superadmin,user']);
 $routes->get('pelanggan/data/(:num)', 'Pelanggan::data/$1', ['filter' => 'auth:admin,superadmin,user']);
 $routes->post('pelanggan/baru', 'Pelanggan::baru', ['filter' => 'auth:admin,superadmin,user']);

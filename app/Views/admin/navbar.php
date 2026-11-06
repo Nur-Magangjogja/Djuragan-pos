@@ -11,11 +11,14 @@ $isReminderAktif = url_is('admin/reminder*');
 // dua reminder itu pindah etalase: halamannya masih di bawah /admin/tugas, tapi
 // menunya duduk di CRM — jadi hanya satu dari dua induk yang boleh menyala
 $diReminderKerja = url_is('admin/tugas/whatsapp*') || url_is('admin/tugas/bintang*');
-$isTugasAktif    = url_is('admin/tugas*') && ! $diReminderKerja;
+// Cek Toko tinggal di submenu ini, jadi induknya ikut terbuka saat orang sedang
+// di halaman checklist — bukan hanya saat di /admin/tugas
+$isTugasAktif    = (url_is('admin/tugas*') && ! $diReminderKerja) || url_is('admin/checklist*');
 $isCklAktif      = url_is('admin/checklist*');
 $isSopAktif     = url_is('admin/sop*');
 $isTrxAktif      = url_is('admin/invoices*') || url_is('admin/cod*');
-$isProdukAktif   = url_is('admin/produk*') || url_is('admin/poin*');
+$isProdukAktif   = url_is('admin/produk*');
+$isPoinAktif     = url_is('admin/poin*');
 $isCrmAktif      = url_is('admin/crm*') || $diReminderKerja;
 $isKpiAktif      = url_is('admin/kpi*');
 $isLaporanAktif  = url_is('admin/laporan*');
@@ -40,8 +43,8 @@ $lainTerbuka   = $tugasModel->jumlah(['jenis_not' => \App\Models\TugasModel::PUN
 $waTerbuka    = (new \App\Models\TugasWhatsappModel())->hitungTerbuka(juragan_dipakai_sesi());
 $b5Model     = new \App\Models\TugasModel();
 $b5Terbuka    = $b5Model->hitungPemicu('ulasan', juragan_dipakai_sesi());
-$emailTerbuka = (new \App\Models\TugasModel())->jumlah(["jenis" => "pemeriksaan_email", "terbuka" => true, "juragan_ids" => juragan_dipakai_sesi()]);
-$cklTerbuka    = (new \App\Models\ChecklistModel())->hitungTerbuka(juragan_dipakai_sesi(), date('Y-m-d'));
+$emailTerbuka = cek_email_terbuka_sesi();
+$cklTerbuka    = cek_toko_terbuka_sesi();
 $tugasTerbuka = $lainTerbuka + $cklTerbuka + $emailTerbuka;
 
 // Submenu Transaksi
@@ -52,14 +55,17 @@ $transaksiSubmenu = [
     ['admin/cod', 'Pencatatan COD', 'fa-truck-fast', str_starts_with($di_halaman, 'admin/cod')],
 ];
 
-// Submenu Produk: daftar stok selalu ada; laporan poin gaji khusus Superadmin.
+// Menu Produk. Katalog dan Laporan Poin dulu berdiri sebagai dua menu utama;
+// keduanya sekarang menyatu di satu induk "Produk". Bentuk submenu hanya untuk
+// Superadmin, karena Laporan Poin (rute admin/poin) memang hak khusus Superadmin
+// — Admin biasa tetap memakai satu tautan langsung ke katalognya.
 $produkSubmenu = [
-    ['admin/produk', 'Produk & Stok', 'fa-box-alt', $di_halaman === 'admin/produk' || str_starts_with($di_halaman, 'admin/produk/')],
+    ['admin/produk', 'Katalog Produk', 'fa-box-alt', $isProdukAktif],
 ];
-
 if ($levelSesi === 'superadmin') {
-    $produkSubmenu[] = ['admin/poin', 'Laporan Poin', 'fa-coins', str_starts_with($di_halaman, 'admin/poin')];
+    $produkSubmenu[] = ['admin/poin', 'Laporan Poin', 'fa-coins', $isPoinAktif];
 }
+$isProdukGrupAktif = $isProdukAktif || $isPoinAktif;
 
 // Submenu KPI: Ringkasan dan Ranking untuk admin & superadmin. Menentukan target
 // tetap hak Superadmin, jadi menunya tidak dirender untuk yang lain.
@@ -73,15 +79,15 @@ if ($levelSesi === 'superadmin') {
 }
 
 // Submenu CRM. Live Chat WA, Broadcast, Riwayat Pesan, Template Pesan, dan
-// Pengaturan WA sudah dihapus dari aplikasi, jadi daftarnya tinggal tujuh.
+// Pengaturan WA sudah dihapus dari aplikasi; daftar Tagihan sendiri dilebur ke
+// halaman Follow-up yang sekarang berganti nama jadi Tagihan, jadi isinya tinggal enam.
 // Dua reminder kerja (WhatsApp & Bintang 5) ikut ke sini: halamannya masih
 // /admin/tugas/..., tapi pekerjaannya memang lanjutan dari percakapan pelanggan.
 // Elemen ke-5 opsional = badge hidup (url angka + satuan + jumlah awal).
 $crmSubmenu = [
     ['admin/crm', 'Ringkasan', 'fa-chart-pie', $di_halaman === 'admin/crm'],
     ['admin/crm/pelanggan', 'Data Pelanggan', 'fa-users', str_starts_with($di_halaman, 'admin/crm/pelanggan')],
-    ['admin/crm/followup', 'Follow-up', 'fa-tasks', str_starts_with($di_halaman, 'admin/crm/followup')],
-    ['admin/crm/tagihan', 'Tagihan', 'fa-file-invoice-dollar', str_starts_with($di_halaman, 'admin/crm/tagihan')],
+    ['admin/crm/followup', 'Tagihan', 'fa-tasks', str_starts_with($di_halaman, 'admin/crm/followup')],
     ['admin/crm/duplikat', 'Akun Duplikat', 'fa-clone', str_starts_with($di_halaman, 'admin/crm/duplikat')],
     [
         'admin/tugas/whatsapp', 'Reminder WhatsApp', 'fa-comment-dots',
@@ -230,25 +236,34 @@ if ($levelSesi === 'superadmin') {
                     </ul>
                 </div>
             </li>
-            <li class="nav-item">
-                <a class="sidebar-link <?= $isProdukAktif ? 'active' : '' ?>" data-bs-toggle="collapse" href="#submenuProduk" role="button" aria-expanded="<?= $isProdukAktif ? 'true' : 'false' ?>" aria-controls="submenuProduk">
-                    <i class="sidebar-link-icon fal fa-tshirt"></i>
-                    <span>Produk</span>
-                    <i class="fal fa-chevron-down sidebar-chevron"></i>
-                </a>
-                <div class="collapse <?= $isProdukAktif ? 'show' : '' ?>" id="submenuProduk">
-                    <ul class="sidebar-submenu">
-                        <?php foreach ($produkSubmenu as [$url, $label, $ikon, $aktif]) : ?>
-                            <li class="submenu-item">
-                                <a class="sidebar-submenu-link <?= $aktif ? 'active' : '' ?>" href="<?= site_url($url) ?>">
-                                    <i class="fal <?= $ikon ?>"></i>
-                                    <span><?= esc($label) ?></span>
-                                </a>
-                            </li>
-                        <?php endforeach; ?>
-                    </ul>
-                </div>
-            </li>
+            <?php if ($levelSesi === 'superadmin') : ?>
+                <li class="nav-item">
+                    <a class="sidebar-link <?= $isProdukGrupAktif ? 'active' : '' ?>" data-bs-toggle="collapse" href="#submenuProduk" role="button" aria-expanded="<?= $isProdukGrupAktif ? 'true' : 'false' ?>" aria-controls="submenuProduk">
+                        <i class="sidebar-link-icon fal fa-box-alt"></i>
+                        <span>Produk</span>
+                        <i class="fal fa-chevron-down sidebar-chevron"></i>
+                    </a>
+                    <div class="collapse <?= $isProdukGrupAktif ? 'show' : '' ?>" id="submenuProduk">
+                        <ul class="sidebar-submenu">
+                            <?php foreach ($produkSubmenu as [$url, $label, $ikon, $aktif]) : ?>
+                                <li class="submenu-item">
+                                    <a class="sidebar-submenu-link <?= $aktif ? 'active' : '' ?>" href="<?= site_url($url) ?>">
+                                        <i class="fal <?= $ikon ?>"></i>
+                                        <span><?= esc($label) ?></span>
+                                    </a>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </div>
+                </li>
+            <?php else : ?>
+                <li class="nav-item">
+                    <a class="sidebar-link <?= $isProdukAktif ? 'active' : '' ?>" href="<?= site_url('admin/produk') ?>">
+                        <i class="sidebar-link-icon fal fa-box-alt"></i>
+                        <span>Katalog Produk</span>
+                    </a>
+                </li>
+            <?php endif; ?>
             <li class="nav-item">
                 <a class="sidebar-link <?= $isReminderAktif ? 'active' : '' ?>" href="<?= site_url('admin/reminder') ?>"
                     data-badge-url="<?= site_url('admin/reminder/jumlah') ?>" data-badge-unit="orderan mendekati/lewat deadline">

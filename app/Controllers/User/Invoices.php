@@ -10,7 +10,6 @@ use App\Models\JuraganModel;
 use App\Models\NotifikasiModel;
 use App\Models\PembayaranModel;
 use App\Models\PoinPenjualanModel;
-use App\Models\StokModel;
 use App\Models\UkuranKomponenModel;
 use App\Models\UserModel;
 use CodeIgniter\I18n\Time;
@@ -35,7 +34,9 @@ class Invoices extends BaseController
         $validation = \Config\Services::validation();
 
         if ($this->request->getPost()) {
-            $validation->setRuleGroup('addInvoice');
+            // sama seperti jalur admin: nota rombongan tidak membawa baris produk,
+            // jadi tidak boleh ditolak karena `produk` kosong
+            $validation->setRuleGroup(grup_invoice($this->request->getPost()));
         }
 
         if ($this->request->isAJAX()) {
@@ -101,10 +102,10 @@ class Invoices extends BaseController
                 $taut = tautkan_stok($produk['baris'], (int) $juragan_id);
                 $peta = sinkron_dibeli($invoice_id, $taut);
 
-                // sama seperti admin: qty yang melebihi unit tersedia membatalkan
-                // seluruh tulisan orderan, dan kolam stoknya ikut tipe orderan
+                // sama seperti admin: Djuragan hanya kategori dan pengambilan dari
+                // stok produk opsional, jadi kecukupan stok tidak membatalkan
+                // penyimpanan orderan
                 $galat  = array_merge(
-                    (new StokModel())->lebih($taut, StokModel::kolamDariTipe($rincian['tipe'] ?? null), $invoice_id),
                     simpan_ukuran_produk($invoice_id, $peta, $produk['ukuran']),
                     simpan_anggota($invoice_id, $this->request->getPost('anggota_dikirim'), $this->request->getPost('anggota'))
                 );
@@ -158,7 +159,7 @@ class Invoices extends BaseController
     }
 
     // menampilkan semua invoice
-    public function lihat($juragan = '', $hal = 'semua', $kategori = '')
+    public function lihat($juragan = 'semua', $hal = 'semua', $kategori = '')
     {
         if (! in_array($hal, ['semua', 'pembayaran', 'cek-bayar', 'dalam-proses', 'belum-proses', 'selesai', 'saring', 'masih-disewa'], true)) {
             throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
@@ -185,71 +186,87 @@ class Invoices extends BaseController
         }
 
         // pencarian
-        $cari       = $this->request->getGet('cari') ?? '';
-        $user_id    = session('id');
-        $id_juragan = 0;
+        $cari    = $this->request->getGet('cari') ?? '';
+        $user_id = session('id');
 
-        if ($juragan === '') {
-            $juragan = $this->juraganBy($user_id);
-
-            // akun warisan ada yang belum punya relasi juragan, jadi tidak ada slug untuk
-            // dituju; tanpa pagar ini halaman hanya melempar property tak dikenal (HTTP 500).
-            // Pesannya dikirim lewat view 404 milik app, bukan PageNotFoundException, karena
-            // override 404 di Config/Routes.php membuang semua pesan supaya detail internal
-            // router tidak terbaca tamu.
-            if (empty($juragan->juragan)) {
-                // halaman khusus (tetap berstatus 404) yang menawarkan tombol
-                // "minta ditautkan"; tombol mengirim notifikasi prioritas ke inbox
-                // Superadmin supaya akun baru ini bisa segera dipakai.
-                return response()->setStatusCode(404)->setBody(
-                    view('user/belum_juragan', [
-                        'title' => 'Akun Belum Ditautkan',
-                    ]),
-                );
-            }
-
-            return redirect()->to('/user/invoices/lihat/' . $juragan->juragan);
+        // akun warisan ada yang belum punya relasi juragan, jadi tidak ada satu pun
+        // toko yang bisa dibuka; tanpa pagar ini halaman hanya melempar property tak
+        // dikenal (HTTP 500). Pesannya dikirim lewat view 404 milik app, bukan
+        // PageNotFoundException, karena override 404 di Config/Routes.php membuang
+        // semua pesan supaya detail internal router tidak terbaca tamu.
+        if ($this->juraganIds() === []) {
+            // halaman khusus (tetap berstatus 404) yang menawarkan tombol "minta
+            // ditautkan"; tombol mengirim notifikasi prioritas ke inbox Superadmin
+            return response()->setStatusCode(404)->setBody(
+                view('user/belum_juragan', [
+                    'title' => 'Akun Belum Ditautkan',
+                ]),
+            );
         }
 
-        // diijinkan atau tidak
-        if ($this->allowedJuragan($user_id, $juragan)) {
-            $invModel     = new InvoiceModel();
-            $juraganModel = new JuraganModel();
-            $juragans     = $juraganModel->where('juragan', $juragan)->findAll();
-            $title        = $juragans[0]->nama_juragan;
-            $id_juragan   = $juragans[0]->id_juragan;
+        // akun yang cuma memegang satu toko tidak perlu memilih: 'semua' diarahkan
+        // langsung ke tokonya sendiri, sama seperti layar Admin
+        $tunggal = $this->tokoTunggal();
 
-            $limit = config('Pager')->perPage;
-            $page  = (int) $this->request->getGet('page');
+        if ($juragan === 'semua' && $tunggal !== null) {
+            $terus = site_url('user/invoices/lihat/' . $tunggal['slug'] . '/' . $hal . '/' . $kategori);
 
-            if (! isset($page) || $page === 0 || $page === 1) {
-                $page   = 1;
-                $offset = 0;
-            } else {
-                $offset = ($page - 1) * $limit;
-                $page   = $page;
+            // kata yang sedang dicari ikut dipindah, kalau tidak lompatan ini
+            // membuang nota yang baru saja disimpan orang ke daftar penuh
+            if (! empty($cari)) {
+                $terus .= '?' . http_build_query(['cari' => (array) $cari]);
             }
 
-            $data = [
-                'title'               => 'Transaksi ' . $title,
-                'orderan'             => $invModel->getAll($hal, $id_juragan, $cari, $limit, $offset, $kategori),
-                'juragan'             => $juragan,
-                'juragan_id'          => $id_juragan,
-                'nama_toko'           => $title,
-                'daftar_toko'         => $this->tokoPilihan(),
-                'cari'                => $cari,
-                'hal'                 => $hal,
-                'kategori'            => $kategori,
-                'kategori_pembayaran' => $daftar_kategori,
-                'jumlah_kategori'     => in_array($hal, ['pembayaran', 'belum-proses'], true) ? $invModel->countPembayaran($id_juragan, $hal) : [],
-                'limit'               => $limit,
-                'page'                => $page,
-            ];
-
-            return view('user/invoice/lihat', $data);
+            return redirect()->to($terus);
         }
 
-        throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
+        $invModel     = new InvoiceModel();
+        $juraganModel = new JuraganModel();
+        $title        = 'Semua Juragan';
+        $id_juragan   = 0;
+
+        if ($juragan !== 'semua') {
+            // slug toko orang lain tidak boleh membuka daftar transaksinya
+            if (! $this->allowedJuragan($user_id, $juragan)) {
+                throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
+            }
+
+            $juragans   = $juraganModel->where('juragan', $juragan)->findAll();
+            $title      = $juragans[0]->nama_juragan;
+            $id_juragan = $juragans[0]->id_juragan;
+        }
+
+        // daftar 'semua' untuk CS tetap dibatasi ke toko yang ia pegang; tanpa ini
+        // id_juragan 0 akan menampilkan nota seluruh sistem
+        $hanya = $this->tokoBoleh();
+
+        $limit = config('Pager')->perPage;
+        $page  = (int) $this->request->getGet('page');
+
+        if (! isset($page) || $page === 0 || $page === 1) {
+            $page   = 1;
+            $offset = 0;
+        } else {
+            $offset = ($page - 1) * $limit;
+        }
+
+        $data = [
+            'title'               => 'Transaksi ' . $title,
+            'orderan'             => $invModel->getAll($hal, $id_juragan, $cari, $limit, $offset, $kategori, $hanya),
+            'juragan'             => $juragan,
+            'juragan_id'          => $id_juragan,
+            'nama_toko'           => $title,
+            'daftar_toko'         => $this->tokoPilihan(),
+            'cari'                => $cari,
+            'hal'                 => $hal,
+            'kategori'            => $kategori,
+            'kategori_pembayaran' => $daftar_kategori,
+            'jumlah_kategori'     => in_array($hal, ['pembayaran', 'belum-proses'], true) ? $invModel->countPembayaran($id_juragan, $hal, $hanya) : [],
+            'limit'               => $limit,
+            'page'                => $page,
+        ];
+
+        return view('user/invoice/lihat', $data);
     }
 
     // tambah pembayaran

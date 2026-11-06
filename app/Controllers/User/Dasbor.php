@@ -25,7 +25,12 @@ class Dasbor extends BaseController
      */
     private const SOP_TAMPIL = 2;
 
-    /** Tugas per kelompok yang terlihat di kartu; sisanya lewat "semua tugas". */
+    /**
+     * Tugas per kelompok yang terlihat di kartu. Keduanya sudah dibatasi ke akun
+     * ini: pegangan hanya tugas milik sendiri, antrean hanya tugas yang boleh
+     * diambilnya (toko yang ia pegang + tugas tanpa toko) — sama seperti gerbang
+     * TugasModel::ambil().
+     */
     private const TUGAS_TAMPIL = 10;
 
     /** @return string */
