@@ -38,18 +38,37 @@
     var $cadang = $daftar.closest(".card").find(".anggota-cadang").first();
 
     if ($cadang.length === 0) {
+      // dulu mengembalikan null tanpa kabar, jadi tombol "+ Tambah anggota"
+      // terlihat rusak tanpa penjelasan apa pun
+      if (window.KABAR) {
+        KABAR.galat(
+          "Baris anggota tidak bisa dibuat: cetakan barisnya tidak ada di halaman. Muat ulang lalu coba lagi.",
+        );
+      }
+
       return null;
     }
 
     var $row = $($cadang.html().split(GANTIAN).join(kunci()));
 
-    // Wariskan jenis busana dari anggota pertama jika sudah pernah dipilih
-    var jenisPertama = $daftar.find(".uk-jenis").first().val();
-    if (jenisPertama) {
-      $row.find(".ukuran-panel").attr("data-jenis", jenisPertama);
+    // Wariskan jenis busana dari orderan (rombongan) atau anggota pertama jika sudah pernah dipilih
+    var jenisRombongan =
+      window.JENIS_BUSANA_ROMBONGAN ||
+      $daftar.closest(".anggota-isi").attr("data-jenis-rombongan") ||
+      $("#ukuranModal .uk-jenis").val() ||
+      $(".list-orderan .ukuran-panel").first().attr("data-jenis");
+
+    var jenisDipakai =
+      jenisRombongan || $daftar.find(".uk-jenis").first().val();
+    if (jenisDipakai) {
+      $row.find(".ukuran-panel").attr("data-jenis", jenisDipakai);
     }
 
     $daftar.append($row);
+
+    // Bersihkan filter cari agar baris baru tidak tersembunyi oleh search aktif
+    $daftar.closest(".anggota-isi").find(".anggota-cari").val("");
+    $daftar.children(".anggota-baris").removeClass("d-none");
 
     if (window.UKURAN) {
       window.UKURAN.tempel($row.find(".ukuran-panel"));
@@ -206,9 +225,8 @@
       hitung($daftar);
     })
     .on("click", ".tambah-tempelan", function () {
-      var $isi = $(this).closest(".anggota-isi"),
-        $daftar = $isi.find(".anggota-daftar").first(),
-        $kotak = $isi.find("#anggota_tempel"),
+      var $daftar = $(".anggota-daftar").first(),
+        $kotak = $("#anggota_tempel"),
         nama = $kotak
           .val()
           .split(/\r?\n/)
@@ -220,6 +238,10 @@
       if (nama.length === 0) {
         $kotak.focus();
 
+        if (window.KABAR) {
+          KABAR.galat("Tempel dulu daftar namanya — satu nama per baris.");
+        }
+
         return;
       }
 
@@ -228,6 +250,22 @@
       });
 
       $kotak.val("");
+
+      var modalEl = document.getElementById("modalTempelWA");
+      if (modalEl && window.bootstrap && bootstrap.Modal) {
+        var bsModal = bootstrap.Modal.getInstance(modalEl);
+        if (bsModal) {
+          bsModal.hide();
+        } else {
+          $("#modalTempelWA").modal("hide");
+        }
+      } else {
+        $("#modalTempelWA").modal("hide");
+      }
+
+      if (window.KABAR) {
+        KABAR.sukses(nama.length + " anggota berhasil ditambahkan.");
+      }
     })
     .on("change", ".anggota-file", function () {
       var input = this;
@@ -237,11 +275,8 @@
         return;
       }
 
-      var $isi = $(input).closest(".anggota-isi");
-      var $daftar = $isi.find(".anggota-daftar").first();
-      var $info = $isi
-        .find(".anggota-import-info")
-        .first()
+      var $daftar = $(".anggota-daftar").first();
+      var $info = $("#modalImporExcel .anggota-import-info")
         .removeClass("d-none");
 
       if (typeof XLSX === "undefined") {
@@ -299,6 +334,25 @@
             .removeClass("text-muted text-danger")
             .addClass("text-success")
             .text(n + " anggota ditambahkan dari " + file.name + ".");
+
+          setTimeout(function () {
+            var modalEl = document.getElementById("modalImporExcel");
+            if (modalEl && window.bootstrap && bootstrap.Modal) {
+              var bsModal = bootstrap.Modal.getInstance(modalEl);
+              if (bsModal) {
+                bsModal.hide();
+              } else {
+                $("#modalImporExcel").modal("hide");
+              }
+            } else {
+              $("#modalImporExcel").modal("hide");
+            }
+            $info.addClass("d-none").text("");
+          }, 1200);
+
+          if (window.KABAR) {
+            KABAR.sukses(n + " anggota ditambahkan dari " + file.name + ".");
+          }
         }
 
         input.value = "";
@@ -316,6 +370,12 @@
     })
     .on("click", ".unduh-template-anggota", function () {
       if (typeof XLSX === "undefined") {
+        if (window.KABAR) {
+          KABAR.galat(
+            "Pustaka Excel belum termuat; muat ulang halaman lalu coba lagi.",
+          );
+        }
+
         return;
       }
 
@@ -332,8 +392,22 @@
 
   // baris warisan server di form Sunting: nomornya baru bisa diisi di sini
   $(function () {
+    // Pindahkan modal tempel WA & impor Excel ke body agar tidak terpotong kontainer
+    $("#modalTempelWA, #modalImporExcel").appendTo("body");
+
     $(".anggota-daftar").each(function () {
       hitung($(this));
     });
   });
+
+  // ---- Search anggota ----
+  $(document).on("input", ".anggota-cari", function () {
+    var kata = $(this).val().toLowerCase().trim();
+    var $daftar = $(this).closest(".anggota-isi").find(".anggota-daftar");
+    $daftar.children(".anggota-baris").each(function () {
+      var nama = $(this).find(".anggota-nama").val().toLowerCase();
+      $(this).toggleClass("d-none", kata !== "" && nama.indexOf(kata) === -1);
+    });
+  });
+
 })(jQuery);

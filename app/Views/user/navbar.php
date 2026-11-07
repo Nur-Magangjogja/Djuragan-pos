@@ -22,9 +22,16 @@ $lainTerbuka   = $tugasModel->jumlah(['jenis_not' => \App\Models\TugasModel::PUN
 $waTerbuka    = (new \App\Models\TugasWhatsappModel())->hitungTerbuka(juragan_dipakai_sesi());
 $b5Model     = new \App\Models\TugasModel();
 $b5Terbuka    = $b5Model->hitungPemicu('ulasan', juragan_dipakai_sesi());
-$emailTerbuka = (new \App\Models\TugasModel())->jumlah(["jenis" => "pemeriksaan_email", "terbuka" => true, "juragan_ids" => juragan_dipakai_sesi()]);
-$cklTerbuka    = (new \App\Models\ChecklistModel())->hitungTerbuka(juragan_dipakai_sesi(), date('Y-m-d'));
-$tugasTerbuka = $lainTerbuka + $b5Terbuka + $waTerbuka + $cklTerbuka + $emailTerbuka;
+$emailTerbuka = cek_email_terbuka_sesi();
+$cklTerbuka    = cek_toko_terbuka_sesi();
+// badge Menu Tagihan: invoice belum lunas dari toko yang akun ini pegang — angka
+// yang sama dengan daftar yang akan ia buka, termasuk nol (tidak ada badge).
+// 0 bukan id_juragan, jadi akun tanpa toko tidak pernah dihitung tanpa batas
+$tokoBadge   = juragan_dipakai_sesi();
+$tagihanTerbuka = (new \App\Models\CrmModel())->countInvoiceBelumLunas('', 'semua', '', '', '', $tokoBadge === [] ? [0] : $tokoBadge);
+// induk Tugas CS ikut menghitung Tagihan: submenu itu memang bagian dari
+// pekerjaan yang menunggu akun ini, jadi angkanya harus terlihat dari jauh
+$tugasTerbuka = $lainTerbuka + $b5Terbuka + $waTerbuka + $cklTerbuka + $emailTerbuka + $tagihanTerbuka;
 ?>
 
 <!-- Topbar khusus layar kecil; di desktop lonceng notifikasi melayang sendiri
@@ -180,6 +187,16 @@ $tugasTerbuka = $lainTerbuka + $b5Terbuka + $waTerbuka + $cklTerbuka + $emailTer
                                 <span>Cek Email</span>
                                 <?php if ($emailTerbuka > 0) : ?>
                                     <span class="badge rounded-pill bg-danger ms-auto badge-live" title="<?= (int) $emailTerbuka ?> catatan cek email yang belum selesai"><?= (int) $emailTerbuka ?></span>
+                                <?php endif; ?>
+                            </a>
+                        </li>
+                        <li class="submenu-item">
+                            <a class="sidebar-submenu-link <?= url_is('admin/tugas/tagihan*') ? 'active' : '' ?>"
+                                href="<?= site_url('admin/tugas/tagihan') ?>">
+                                <i class="fal fa-money-bill-wave"></i>
+                                <span>Tagihan</span>
+                                <?php if ($tagihanTerbuka > 0) : ?>
+                                    <span class="badge rounded-pill bg-danger ms-auto badge-live" title="<?= (int) $tagihanTerbuka ?> invoice belum lunas di tokomu"><?= (int) $tagihanTerbuka ?></span>
                                 <?php endif; ?>
                             </a>
                         </li>

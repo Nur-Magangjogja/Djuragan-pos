@@ -98,12 +98,14 @@ class Validation extends BaseConfig
         'nama_juragan' => 'required|min_length[3]|max_length[60]',
         'bank'         => 'required',
     ];
-    // rekening dipilih dengan kotak centang, jadi kabarnya ikut bahasa halaman
+    // rekening dipilih dengan kotak centang dan tidak wajib semuanya: 'required'
+    // pada array berarti "harus ada minimal satu", jadi form ditolak hanya kalau
+    // daftar centangnya kosong sama sekali (CI4: required([]) === false)
     public $addJuragan_errors = [
-        'bank' => ['required' => 'Centang minimal satu rekening.'],
+        'bank' => ['required' => 'Pilih minimal 1 bank.'],
     ];
     public $editJuragan_errors = [
-        'bank' => ['required' => 'Centang minimal satu rekening.'],
+        'bank' => ['required' => 'Pilih minimal 1 bank.'],
     ];
     public $addPengguna = [
         'username' => 'required|min_length[3]|max_length[100]|is_unique[user.username]|alpha_dash',
@@ -163,6 +165,26 @@ class Validation extends BaseConfig
         'rincian.kembali'  => 'permit_empty|valid_date',
         'rincian.jaminan'  => 'permit_empty|max_length[100]',
     ];
+    /**
+     * Kategori pesanan Rombongan: yang dijual tidak dituliskan per baris produk
+     * (kartunya memang disembunyikan di layar itu), pekerjaan tercatat lewat
+     * daftar anggota. Karena itu `produk` tidak bisa diminta di sini - dulu ia
+     * tetap wajib sehingga nota rombongan ditolak server tanpa satu pesan pun
+     * yang sampai ke pengguna. Yang menahan sekarang daftar anggotanya.
+     */
+    public $addInvoiceRombongan = [
+        'juragan'       => 'required',
+        'pengguna'      => 'required',
+        'asal_orderan'  => 'required',
+        'tanggal_order' => 'required',
+        'id_pemesan'    => 'required',
+        'id_kirimKe'    => 'required',
+        'anggota'       => 'required',
+        'rincian.deadline' => 'permit_empty|valid_date',
+        'rincian.ambil'    => 'permit_empty|valid_date',
+        'rincian.kembali'  => 'permit_empty|valid_date',
+        'rincian.jaminan'  => 'permit_empty|max_length[100]',
+    ];
     public $updateInvoice = [
         'id_invoice'    => 'required',
         'juragan'       => 'required',
@@ -181,11 +203,80 @@ class Validation extends BaseConfig
         'rincian.kembali'  => 'permit_empty|valid_date',
         'rincian.jaminan'  => 'permit_empty|max_length[100]',
     ];
+    /** Sama seperti addInvoiceRombongan: menyunting nota rombongan tidak boleh
+     *  menuntut baris produk yang memang tidak ada di kategori itu. */
+    public $updateInvoiceRombongan = [
+        'id_invoice'    => 'required',
+        'juragan'       => 'required',
+        'pengguna'      => 'required',
+        'asal_orderan'  => 'required',
+        'tanggal_order' => 'required',
+        'id_pemesan'    => 'required',
+        'id_kirimKe'    => 'required',
+        'anggota'       => 'required',
+        'rincian.deadline' => 'permit_empty|valid_date',
+        'rincian.ambil'    => 'permit_empty|valid_date',
+        'rincian.kembali'  => 'permit_empty|valid_date',
+        'rincian.jaminan'  => 'permit_empty|max_length[100]',
+    ];
+    /**
+     * Nama orang (pemesan dan penerima) dipakai bersama di layar pelanggan dan
+     * di kartu alamat orderan. Angka di kolom nama hampir selalu jari yang
+     * nyasar ke HP - dan begitu tersimpan, nama itu ikut di seluruh laporan.
+     * Yang boleh: huruf (termasuk beraksen), spasi, titik, apostrof, hubung.
+     */
+    public $tambahPelanggan = [
+        'nama_pelanggan' => 'required|max_length[100]|regex_match[/^[\p{L}\p{M}\s\'\.\-]+$/u]',
+    ];
+    // lok api masih 'en', jadi aturan nama di atas dibahasakan di sini
+    public $tambahPelanggan_errors = [
+        'nama_pelanggan' => [
+            'required'    => 'Nama pelanggan belum diisi.',
+            'max_length'  => 'Nama pelanggan terlalu panjang (maksimal 100 karakter).',
+            'regex_match' => 'Nama hanya boleh berisi huruf.',
+        ],
+    ];
     public $simpanProgress = [
         'id_invoice' => 'required|integer',
         'status'     => 'required',
         'stat'       => 'required',
         // 'keterangan' 	=> 'required'
+    ];
+    /**
+     * Jawaban validasi orderan dikirim apa adanya ke popup di halaman tulis,
+     * jadi teks bawaan "The produk field is required" akan terbaca sebagai
+     * bahasa asing di tengah pekerjaan CS. Dibahasakan di sini, bukan di JS,
+     * supaya jalur non-AJAX dan API lain membawa pesan yang sama.
+     */
+    public $addInvoice_errors = [
+        'produk'        => ['required' => 'Tambahkan dulu minimal satu produk ke daftar orderan.'],
+        'juragan'       => ['required' => 'Tokonya belum dipilih.'],
+        'pengguna'      => ['required' => 'Admin/CS yang melayani belum dipilih.'],
+        'asal_orderan'  => ['required' => 'Asal orderan belum dipilih.'],
+        'tanggal_order' => ['required' => 'Tanggal order belum diisi.'],
+        'id_pemesan'    => ['required' => 'Data pemesan belum diisi.'],
+        'id_kirimKe'    => ['required' => 'Data penerima belum diisi.'],
+    ];
+    public $addInvoiceRombongan_errors = [
+        'anggota'       => ['required' => 'Isi dulu daftar anggota rombongannya - kategori Rombongan tidak memakai baris produk.'],
+        'juragan'       => ['required' => 'Tokonya belum dipilih.'],
+        'pengguna'      => ['required' => 'Admin/CS yang melayani belum dipilih.'],
+        'asal_orderan'  => ['required' => 'Asal orderan belum dipilih.'],
+        'tanggal_order' => ['required' => 'Tanggal order belum diisi.'],
+        'id_pemesan'    => ['required' => 'Data pemesan belum diisi.'],
+        'id_kirimKe'    => ['required' => 'Data penerima belum diisi.'],
+    ];
+    public $updateInvoice_errors = [
+        'produk'     => ['required' => 'Tambahkan dulu minimal satu produk ke daftar orderan.'],
+        'id_invoice' => ['required' => 'Nomor notanya tidak dikenali.'],
+        'juragan'    => ['required' => 'Tokonya belum dipilih.'],
+        'pengguna'   => ['required' => 'Admin/CS yang melayani belum dipilih.'],
+    ];
+    public $updateInvoiceRombongan_errors = [
+        'anggota'    => ['required' => 'Isi dulu daftar anggota rombongannya - kategori Rombongan tidak memakai baris produk.'],
+        'id_invoice' => ['required' => 'Nomor notanya tidak dikenali.'],
+        'juragan'    => ['required' => 'Tokonya belum dipilih.'],
+        'pengguna'   => ['required' => 'Admin/CS yang melayani belum dipilih.'],
     ];
     public $tambahPembayaran = [
         'invoice_id'       => 'required|integer',

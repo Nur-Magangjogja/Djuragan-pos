@@ -172,12 +172,14 @@ class Checklist extends BaseController
             ->with($hasil['ok'] ? 'sukses' : 'galat', $hasil['pesan']);
     }
 
-    /** Angka badge di menu: sesi hari ini yang masih berjalan. */
+    /** Angka badge di menu: butir catatan yang masih 'belum' untuk akun ini. */
     public function jumlah()
     {
+        helper('fungsi');
+
         return $this->response->setJSON([
             'status' => 'success',
-            'count'  => (new ChecklistModel())->hitungTerbuka(array_keys($this->tokoCek()), date('Y-m-d')),
+            'count'  => cek_toko_terbuka_sesi(),
         ]);
     }
 
@@ -855,6 +857,13 @@ class Checklist extends BaseController
             'toko_id'  => (int) $this->request->getGet('toko'),
             'kerja'    => in_array($kerja, ['belum', 'sudah'], true) ? $kerja : 'belum',
             'toko_ids' => array_keys($toko),
+            // catatan yang ditunjukkan ke satu orang hanya milik orang itu: CS lain
+            // yang memegang toko yang sama tidak boleh melihatnya, kalau tidak daftar
+            // kerjanya berisi pekerjaan orang lain. Yang tanpa tujuan memang bulk -
+            // satu perintah untuk semua pemegang toko - jadi tetap tampil ke semua.
+            // Admin & Superadmin mengirim 0: mereka yang menugasi, jadi melihat
+            // semuanya.
+            'untuk'    => $this->bolehKelola() ? 0 : (int) session()->get('id'),
         ];
     }
 

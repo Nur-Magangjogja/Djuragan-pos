@@ -258,6 +258,12 @@ $routes->group('admin', static function ($routes) {
         $routes->get('cari-pelanggan', 'Admin\Tugas::cariPelanggan');
         $routes->get('catatan', 'Admin\Tugas::catatan');
         $routes->post('catatan', 'Admin\Tugas::simpanCatatan');
+        // Menu Tagihan untuk CS: halaman daftar piutang yang sama seperti milik
+        // Admin (Admin\Crm::followup), hanya saja controller memotong daftarnya
+        // ke toko yang CS itu pegang. Dirute di sini supaya hak CS ikut filter
+        // grup tugas di atas tanpa membuka seluruh grup crm (duplikat, ringkasan)
+        // ke CS.
+        $routes->get('tagihan', 'Admin\Crm::followup');
         // (:num) saja, jadi 'jumlah' di atas tidak pernah dikira id tugas
         $routes->get('(:num)', 'Admin\Tugas::lihat/$1');
         $routes->post('simpan', 'Admin\Tugas::simpan');
@@ -372,6 +378,8 @@ $routes->group('admin', static function ($routes) {
         $routes->get('pengguna', 'Admin\Settings\Pengguna::pengguna');
         $routes->post('save_pengguna', 'Admin\Settings\Pengguna::save_pengguna');
         $routes->post('update_pengguna', 'Admin\Settings\Pengguna::update_pengguna');
+        // hapus lunak akun: baris tetap ada, hanya akses loginnya hilang
+        $routes->post('hapus_pengguna', 'Admin\Settings\Pengguna::hapus_pengguna');
 
         // kunci untuk pihak luar (website partner): hanya Superadmin yang bisa
         // menerbitkan dan mencabut, karena isinya cakupan toko + hak baca
@@ -401,9 +409,9 @@ $routes->group('user', ['filter' => 'auth:user'], static function ($routes) {
     $routes->group('invoices', static function ($routes) {
         $routes->get('/', 'User\Invoices::lihat', ['as' => 'hal.user']);
         $routes->get('tulis', 'User\Invoices::tulis');
-        $routes->get('lihat/([a-z0-9]{40})', 'User\Invoices::lihat/$1');
-        $routes->get('lihat/([a-z0-9]{40})/(:tab)', 'User\Invoices::lihat/$1/$2');
-        $routes->get('lihat/([a-z0-9]{40})/(:tab)/(:segment)', 'User\Invoices::lihat/$1/$2/$3');
+        $routes->get('lihat/(:juragan)', 'User\Invoices::lihat/$1');
+        $routes->get('lihat/(:juragan)/(:tab)', 'User\Invoices::lihat/$1/$2');
+        $routes->get('lihat/(:juragan)/(:tab)/(:segment)', 'User\Invoices::lihat/$1/$2/$3');
         $routes->get('info_pembayaran', 'User\Invoices::info_pembayaran');
         $routes->post('simpan_pembayaran', 'User\Invoices::simpan_pembayaran');
         $routes->post('save', 'User\Invoices::save');
@@ -499,6 +507,10 @@ $routes->get('download/invoice/(:any)', 'Download::invoice/$1', ['filter' => 'au
 // satu nota yang sama dicetak jadi dua dokumen: invoice untuk pelanggan (memuat uang),
 // lembar kerja untuk penjahit (hanya spesifikasi jahit, tanpa harga)
 $routes->get('download/penjahit/(:any)', 'Download::penjahit/$1', ['filter' => 'auth:admin,superadmin,user']);
+// tautan yang dikirim ke pelanggan lewat tombol "Salin tautan invoice": sengaja
+// TANPA filter auth supaya bisa dibuka tanpa login; akses tetap terkunci token
+// HMAC di dalam URL (Download::nota), jadi nota orang lain tidak tertebak
+$routes->get('nota/(:any)/(:any)', 'Download::nota/$1/$2');
 $routes->get('pelanggan/cari', 'Pelanggan::cari', ['filter' => 'auth:admin,superadmin,user']);
 $routes->get('pelanggan/data/(:num)', 'Pelanggan::data/$1', ['filter' => 'auth:admin,superadmin,user']);
 $routes->post('pelanggan/baru', 'Pelanggan::baru', ['filter' => 'auth:admin,superadmin,user']);

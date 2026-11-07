@@ -16,9 +16,10 @@ use CodeIgniter\I18n\Time;
  * menyapu sendiri (NotifikasiModel::sapuJadwal(), dipanggil dari halaman
  * notifikasi dan endpoint lonceng, atau dari cron lewat `php spark notif:bersihkan`).
  *
- * Yang boleh masuk hanyalah admin dan superadmin; rutenya yang memagari. CS tetap
- * bisa menghapus notifikasi miliknya sendiri satu per satu dari halaman daftar,
- * karena itu kotaknya sendiri, bukan pengaturan orang lain.
+ * Yang boleh masuk hanyalah admin dan superadmin; rutenya yang memagari. CS
+ * tidak menghapus notifikasinya sendiri sama sekali — tidak satu-satu, tidak
+ * pula manual massal; kotak CS dibersihkan dari sisi manajemen lewat sapuan
+ * manual di layar ini atau penjadwalan otomatis (umur_hari + sapuJadwal).
  */
 class Notifikasi extends BaseController
 {

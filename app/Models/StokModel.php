@@ -553,15 +553,17 @@ class StokModel extends Model
 
     /**
      * Saran varian untuk form orderan: varian yang nama barangnya cocok dengan
-     * kata yang diketik di satu toko. Saringannya sengaja memakai `saring()`
-     * yang dipakai katalog juga, jadi kode, ukuran, harga, dan stok yang dilihat
-     * CS di form sama persis dengan kartu katalog.
+     * kata yang diketik, atau seluruh varian kolam itu kalau katanya kosong --
+     * itu yang dipakai dropdown "Ambil dari stok produk" untuk memperlihatkan
+     * isi toko. Saringannya sengaja memakai `saring()` yang dipakai katalog
+     * juga, jadi kode, ukuran, harga, dan stok yang dilihat CS di form sama
+     * persis dengan kartu katalog.
      *
      * @return list<array<string, mixed>>
      */
     public function saran(array $juragan_ids, int $juragan_id, string $cari, int $limit = 12, string $kolam = 'jual'): array
     {
-        if ($cari === '' || $juragan_id <= 0) {
+        if ($juragan_id <= 0) {
             return [];
         }
 

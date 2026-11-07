@@ -282,7 +282,9 @@ class Crm extends BaseController
     }
 
     /**
-     * Halaman Follow-up Terpadu: Follow-up Customer, Follow-up Tagihan, dan Reminder
+     * Halaman Tagihan Terpadu: daftar tagihan invoice + Follow-up Customer.
+     * Tab Pengingat Otomatis dan pemisah "Siap Ditagih" sudah dilebur: seluruh
+     * piutang tampil dalam satu tabel yang sama.
      */
     public function followup()
     {
@@ -290,69 +292,90 @@ class Crm extends BaseController
         // Transaksi, jadi label di daftar tagihan tidak pernah berbeda dengan di nota
         helper('fungsi');
 
-        $tab    = $this->request->getGet('tab') ?? 'tagihan'; // tagihan, reminder, customer
+        $tab = $this->request->getGet('tab') ?? 'tagihan'; // tagihan, customer
+        // tab 'reminder' tidak lagi punya isi; tautan lama diarahkan ke daftar tagihan
+        if (! in_array($tab, ['tagihan', 'customer'], true)) {
+            $tab = 'tagihan';
+        }
         $cari   = trim($this->request->getGet('cari') ?? '');
         $status = $this->request->getGet('status') ?? 'menunggu';
 
+        // Menu Tagihan juga terbuka untuk CS lewat submenu Tugas CS: daftarnya
+        // lalu dipotong ke toko yang ia pegang, dan tab follow-up customer (yang
+        // tidak punya kolom toko untuk disaring) disembunyikan di layar.
+        $isCs      = (string) session()->get('level') === 'cs';
+        $tokoLihat = [];
+
+        if ($isCs) {
+            $tokoSaya  = $this->tokoBoleh();
+            $tokoLihat = $tokoSaya === [] ? [0] : $tokoSaya;
+        }
+
+        // rentang tanggal pesan: hanya format Y-m-d yang dipercaya, nilai aneh dibuang
+        // (bukan ditolak dengan pesan); kalau terbalik, keduanya ditukar saja
+        $awal   = (string) ($this->request->getGet('awal') ?? '');
+        $akhir  = (string) ($this->request->getGet('akhir') ?? '');
+        if ($awal !== '' && ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $awal)) {
+            $awal = '';
+        }
+        if ($akhir !== '' && ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $akhir)) {
+            $akhir = '';
+        }
+        if ($awal !== '' && $akhir !== '' && $awal > $akhir) {
+            [$awal, $akhir] = [$akhir, $awal];
+        }
+
+        // keranjang status barang untuk kartu saringan; kode tak dikenal berarti "semua"
+        $statusBarang = (string) ($this->request->getGet('status_barang') ?? '');
+        if (! in_array($statusBarang, ['belum', 'proses', 'packing', 'terkirim'], true)) {
+            $statusBarang = '';
+        }
+
         // 1. Data Follow-up Customer
-        $followupList = $this->crmModel->getFollowupList([
+        $followupList = $isCs ? [] : $this->crmModel->getFollowupList([
             'tipe'   => 'customer',
             'status' => $status !== 'semua' ? $status : '',
             'cari'   => $cari,
         ], 50);
 
         // 2. Data Follow-up Tagihan
-        // 'siap' (bawaan): hanya nota yang barangnya sudah selesai/packing, karena
-        // itulah yang realistis ditagih hari ini. 'semua' menampilkan seluruh
-        // piutang, termasuk yang masih dikerjakan.
-        $saring = (string) ($this->request->getGet('saring') ?? 'siap');
-        if (! in_array($saring, ['siap', 'semua'], true)) {
-            $saring = 'siap';
-        }
-
+        // satu tabel utuh: seluruh piutang yang belum lunas tampil bersamaan,
+        // termasuk yang barangnya masih dikerjakan — pemisah "siap ditagih" dilepas;
+        // kartu status barang dan rentang tanggal menyempitkan daftar lewat saringPiutang
         $page                 = max(1, (int) ($this->request->getGet('page') ?? 1));
         $limit                = 25;
         $offset               = ($page - 1) * $limit;
-        $invoicesTagihan      = $this->crmModel->getInvoiceBelumLunas($cari, $limit, $offset, $saring);
-        $totalInvoicesTagihan = $this->crmModel->countInvoiceBelumLunas($cari, $saring);
+        $invoicesTagihan      = $this->crmModel->getInvoiceBelumLunas($cari, $limit, $offset, 'semua', $awal, $akhir, $statusBarang, $tokoLihat);
+        $totalInvoicesTagihan = $this->crmModel->countInvoiceBelumLunas($cari, 'semua', $awal, $akhir, $statusBarang, $tokoLihat);
         $totalPagesTagihan    = (int) ceil($totalInvoicesTagihan / $limit);
 
-        // kedua angka dipakai tombol pengalih, supaya pengguna melihat berapa yang
-        // siap ditagih dan berapa total piutang tanpa perlu berganti tab
-        $jumlahSiap  = $saring === 'siap'
-            ? $totalInvoicesTagihan
-            : $this->crmModel->countInvoiceBelumLunas($cari, 'siap');
-        $jumlahSemua = $saring === 'semua'
-            ? $totalInvoicesTagihan
-            : $this->crmModel->countInvoiceBelumLunas($cari, 'semua');
-
-        // 3. Data Reminder Otomatis
-        $reminders = $this->crmModel->getReminders();
+        // angka tiap kartu status; sengaja tidak ikut dipotong $statusBarang supaya
+        // pengguna tetap melihat isi keranjang lain saat satu kartu sedang aktif
+        $perStatus = $this->crmModel->hitungStatusBelumLunas($cari, $awal, $akhir, $tokoLihat);
 
         // Template tagihan
         $db = Database::connect();
         $templateTagihan = $db->table('crm_template')->where('kode', 'tagihan_belum_lunas')->get()->getRowArray();
 
         $data = [
-            'title'                => 'Pusat Follow-up & Reminder CRM',
+            'title'                => 'Pusat Tagihan & Follow-up',
             'tab'                  => $tab,
+            // layar versi CS: tab customer disembunyikan, navbar ikut disesuaikan
+            'melihat_cs'           => $isCs,
             'cari'                 => $cari,
             'status'               => $status,
             'page'                 => $page,
             'limit'                => $limit,
-            'saring'               => $saring,
-            'jumlahSiap'           => $jumlahSiap,
-            'jumlahSemua'          => $jumlahSemua,
+            'awal'                 => $awal,
+            'akhir'                => $akhir,
+            'statusBarang'         => $statusBarang,
+            'perStatus'            => $perStatus,
             'tahap'                => tahap_produksi(),
             'totalPagesTagihan'    => $totalPagesTagihan,
             'followupList'         => $followupList,
             'invoicesTagihan'      => $invoicesTagihan,
             'totalInvoicesTagihan' => $totalInvoicesTagihan,
-            'reminders'            => $reminders,
             'templateTagihan'      => $templateTagihan['pesan'] ?? '',
-            // popup "Catat Penagihan" menulis catatan, jadi petanya harus sekopi
-            // dengan pagar yang dipakai Tugas::simpanCatatan
-            'toko'                 => $this->tokoCatatan(),
         ];
 
         return view('admin/crm/followup', $data);

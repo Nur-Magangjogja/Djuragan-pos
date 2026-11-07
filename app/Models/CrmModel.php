@@ -1213,6 +1213,75 @@ class CrmModel extends Model
     }
 
     /**
+     * Keranjang status barang untuk kartu saringan daftar tagihan. Urutan kondisinya
+     * meniru lencana di tabel: Terkirim menang, lalu Sudah Packing, lalu yang masih
+     * dalam tahap, sisanya Belum Diproses — jadi satu nota hanya masuk satu keranjang.
+     *
+     * @return array<string, string> kode => kondisi SQL
+     */
+    private function keranjangStatusBarang(): array
+    {
+        return [
+            'terkirim' => "COALESCE(inv.status_pengiriman, '') = '3'",
+            'packing'  => "COALESCE(inv.status_pengiriman, '') <> '3' AND COALESCE(st.packing_selesai, 0) = 1",
+            'proses'   => "COALESCE(inv.status_pengiriman, '') <> '3' AND COALESCE(st.packing_selesai, 0) <> 1 AND COALESCE(st.tahap, 0) > 0",
+            'belum'    => "COALESCE(inv.status_pengiriman, '') <> '3' AND COALESCE(st.packing_selesai, 0) <> 1 AND COALESCE(st.tahap, 0) = 0",
+        ];
+    }
+
+    /**
+     * Sisa klausa WHERE daftar piutang (status pembayaran, selisih bayar, pencarian,
+     * rentang tanggal pesan, keranjang status barang). Satu sumber dipakai bertiga —
+     * daftar, total, dan kartu status — supaya angkanya tidak pernah berbeda.
+     *
+     * $toko_ids membatasi nota ke sekerumun toko (mis. hanya toko yang dipegang CS
+     * di menu Tagihan); daftar kosong berarti tanpa batas seperti sebelumnya.
+     *
+     * @return array{0: string, 1: array<int, string>}
+     */
+    private function saringPiutang(string $cari, string $saring, string $awal, string $akhir, string $statusBarang, array $toko_ids = []): array
+    {
+        $where  = "AND inv.deleted_at IS NULL
+          AND inv.status_pembayaran IN ('1','2','3','4')
+          AND ((COALESCE(b.total_barang, 0) + COALESCE(bc.total_biaya, 0)) - COALESCE(pm.total_bayar, 0)) > 0";
+        $params = [];
+
+        if ($saring === 'siap') {
+            $where .= ' AND ' . $this->siapDitagih();
+        }
+
+        $keranjang = $this->keranjangStatusBarang();
+        if (isset($keranjang[$statusBarang])) {
+            $where .= ' AND ' . $keranjang[$statusBarang];
+        }
+
+        if ($cari !== '') {
+            $where .= ' AND (inv.seri LIKE ? OR pel.nama_pelanggan LIKE ? OR kon.nomor LIKE ?)';
+            $params = ["%{$cari}%", "%{$cari}%", "%{$cari}%"];
+        }
+
+        // tanggal pesan, bukan jam: DATE() membuat batas atas ikut mencakup
+        // nota yang tercatat siang/sore di hari yang sama
+        if ($awal !== '') {
+            $where .= ' AND DATE(inv.tanggal_pesan) >= ?';
+            $params[] = $awal;
+        }
+        if ($akhir !== '') {
+            $where .= ' AND DATE(inv.tanggal_pesan) <= ?';
+            $params[] = $akhir;
+        }
+
+        // placeholder dibuat sebanyak id-nya; nilainya int murni, jadi aman
+        if ($toko_ids !== []) {
+            $id    = array_values(array_unique(array_map('intval', $toko_ids)));
+            $where .= ' AND inv.juragan_id IN (' . implode(',', array_fill(0, count($id), '?')) . ')';
+            $params = array_merge($params, $id);
+        }
+
+        return [$where, $params];
+    }
+
+    /**
      * Daftar invoice belum lunas untuk Follow-up Tagihan.
      *
      * $saring 'siap' membatasi pada nota yang barangnya sudah selesai/packing -
@@ -1220,7 +1289,7 @@ class CrmModel extends Model
      * sebelumnya, hanya saja yang sudah selesai diurutkan lebih dulu. Keduanya
      * menampilkan nota terbaru lebih dulu.
      */
-    public function getInvoiceBelumLunas(string $cari = '', int $limit = 50, int $offset = 0, string $saring = 'semua'): array
+    public function getInvoiceBelumLunas(string $cari = '', int $limit = 50, int $offset = 0, string $saring = 'semua', string $awal = '', string $akhir = '', string $statusBarang = '', array $toko_ids = []): array
     {
         $pInv  = $this->db->prefixTable('invoice');
         $pPel  = $this->db->prefixTable('pelanggan');
@@ -1230,15 +1299,9 @@ class CrmModel extends Model
         $pBay  = $this->db->prefixTable('pembayaran');
         $pKon  = $this->db->prefixTable('pelanggan_kontak');
 
-        $whereCari = '';
-        $params = [];
-        if (!empty($cari)) {
-            $whereCari = "AND (inv.seri LIKE ? OR pel.nama_pelanggan LIKE ? OR kon.nomor LIKE ?)";
-            $params = ["%{$cari}%", "%{$cari}%", "%{$cari}%"];
-        }
+        [$sisaWhere, $params] = $this->saringPiutang($cari, $saring, $awal, $akhir, $statusBarang, $toko_ids);
 
-        $siap  = $this->siapDitagih();
-        $hanya = $saring === 'siap' ? 'AND ' . $siap : '';
+        $siap = $this->siapDitagih();
 
         // yang siap ditagih didahulukan; di dalam kelompok itu nota terbaru datang
         // lebih dulu, sama seperti daftar Semua, supaya yang baru selesai langsung
@@ -1287,11 +1350,8 @@ class CrmModel extends Model
             WHERE status = '3'
             GROUP BY invoice_id
         ) pm ON pm.invoice_id = inv.id_invoice
-        WHERE inv.deleted_at IS NULL 
-          AND inv.status_pembayaran IN ('1','2','3','4')
-          AND ((COALESCE(b.total_barang, 0) + COALESCE(bc.total_biaya, 0)) - COALESCE(pm.total_bayar, 0)) > 0
-          {$hanya}
-          {$whereCari}
+        WHERE 1 = 1
+          {$sisaWhere}
         {$urut}
         LIMIT {$limit} OFFSET {$offset}";
 
@@ -1299,12 +1359,13 @@ class CrmModel extends Model
     }
 
     /**
-     * Menghitung total invoice belum lunas untuk badge tab Follow-up Tagihan.
+     * Menghitung total invoice belum lunas untuk daftar tagihan dan badge-nya.
      *
-     * JOIN dan saringannya harus sama persis dengan getInvoiceBelumLunas()
-     * supaya angka badge tidak pernah berbeda dari daftar yang tampil.
+     * JOIN dan saringannya harus sama persis dengan getInvoiceBelumLunas() dan
+     * hitungStatusBelumLunas() (satu sumber: saringPiutang) supaya angka badge
+     * dan kartu status tidak pernah berbeda dari daftar yang tampil.
      */
-    public function countInvoiceBelumLunas(string $cari = '', string $saring = 'semua'): int
+    public function countInvoiceBelumLunas(string $cari = '', string $saring = 'semua', string $awal = '', string $akhir = '', string $statusBarang = '', array $toko_ids = []): int
     {
         $pInv  = $this->db->prefixTable('invoice');
         $pPel  = $this->db->prefixTable('pelanggan');
@@ -1313,14 +1374,7 @@ class CrmModel extends Model
         $pBay  = $this->db->prefixTable('pembayaran');
         $pKon  = $this->db->prefixTable('pelanggan_kontak');
 
-        $whereCari = '';
-        $params = [];
-        if (!empty($cari)) {
-            $whereCari = "AND (inv.seri LIKE ? OR pel.nama_pelanggan LIKE ? OR kon.nomor LIKE ?)";
-            $params = ["%{$cari}%", "%{$cari}%", "%{$cari}%"];
-        }
-
-        $hanya = $saring === 'siap' ? 'AND ' . $this->siapDitagih() : '';
+        [$sisaWhere, $params] = $this->saringPiutang($cari, $saring, $awal, $akhir, $statusBarang, $toko_ids);
 
         $sql = "SELECT COUNT(DISTINCT inv.id_invoice) as total
         FROM `{$pInv}` inv
@@ -1344,14 +1398,71 @@ class CrmModel extends Model
             WHERE status = '3'
             GROUP BY invoice_id
         ) pm ON pm.invoice_id = inv.id_invoice
-        WHERE inv.deleted_at IS NULL 
-          AND inv.status_pembayaran IN ('1','2','3','4')
-          AND ((COALESCE(b.total_barang, 0) + COALESCE(bc.total_biaya, 0)) - COALESCE(pm.total_bayar, 0)) > 0
-          {$hanya}
-          {$whereCari}";
-
+        WHERE 1 = 1
+          {$sisaWhere}";
+    
         $row = $this->db->query($sql, $params)->getRowArray();
         return (int) ($row['total'] ?? 0);
+    }
+    
+    /**
+     * Jumlah per keranjang status barang untuk kartu saringan di daftar tagihan.
+     * FROM dan WHERE-nya berasal dari sumber yang sama dengan daftar dan total
+     * (saringPiutang); hanya kondisi per keranjang yang dikumpulkan sebagai CASE
+     * dalam satu query. Angka kartu sengaja tidak ikut dipotong saring status
+     * yang sedang aktif supaya pengguna tetap melihat isi keranjang lain.
+     *
+     * @return array<string, int> total|belum|proses|packing|terkirim
+     */
+    public function hitungStatusBelumLunas(string $cari = '', string $awal = '', string $akhir = '', array $toko_ids = []): array
+    {
+        $pInv  = $this->db->prefixTable('invoice');
+        $pPel  = $this->db->prefixTable('pelanggan');
+        $pDib  = $this->db->prefixTable('dibeli');
+        $pBi   = $this->db->prefixTable('biaya');
+        $pBay  = $this->db->prefixTable('pembayaran');
+        $pKon  = $this->db->prefixTable('pelanggan_kontak');
+    
+        [$sisaWhere, $params] = $this->saringPiutang($cari, 'semua', $awal, $akhir, '', $toko_ids);
+    
+        $pil = '';
+        foreach ($this->keranjangStatusBarang() as $kode => $kondisi) {
+            $pil .= "COUNT(DISTINCT CASE WHEN {$kondisi} THEN inv.id_invoice END) AS {$kode},\n                ";
+        }
+    
+        $sql = "SELECT {$pil}COUNT(DISTINCT inv.id_invoice) AS total
+        FROM `{$pInv}` inv
+        JOIN `{$pPel}` pel ON pel.id_pelanggan = inv.pemesan_id
+        {$this->gabungTahap()}
+        LEFT JOIN (
+            SELECT pelanggan_id, MIN(nomor_pure) as nomor
+            FROM `{$pKon}` GROUP BY pelanggan_id
+        ) kon ON kon.pelanggan_id = pel.id_pelanggan
+        LEFT JOIN (
+            SELECT invoice_id, SUM(qty * harga) as total_barang
+            FROM `{$pDib}` GROUP BY invoice_id
+        ) b ON b.invoice_id = inv.id_invoice
+        LEFT JOIN (
+            SELECT invoice_id, SUM(nominal) as total_biaya
+            FROM `{$pBi}` GROUP BY invoice_id
+        ) bc ON bc.invoice_id = inv.id_invoice
+        LEFT JOIN (
+            SELECT invoice_id, SUM(total_pembayaran) as total_bayar
+            FROM `{$pBay}`
+            WHERE status = '3'
+            GROUP BY invoice_id
+        ) pm ON pm.invoice_id = inv.id_invoice
+        WHERE 1 = 1
+          {$sisaWhere}";
+    
+        $row = $this->db->query($sql, $params)->getRowArray();
+        return [
+            'total'    => (int) ($row['total'] ?? 0),
+            'belum'    => (int) ($row['belum'] ?? 0),
+            'proses'   => (int) ($row['proses'] ?? 0),
+            'packing'  => (int) ($row['packing'] ?? 0),
+            'terkirim' => (int) ($row['terkirim'] ?? 0),
+        ];
     }
 
     /**
@@ -1465,6 +1576,9 @@ class CrmModel extends Model
      */
     public function getTokenPesan(int $id_pelanggan = 0, int $id_invoice = 0, string $nama_kontak = ''): array
     {
+        // tautan_invoice_publik hidup di fungsi_helper yang tidak autoload
+        helper('fungsi');
+
         $inv = null;
 
         if ($id_invoice > 0) {
@@ -1495,7 +1609,9 @@ class CrmModel extends Model
             $token['invoice']      = $inv['seri'];
             $token['total']        = number_format((float) $inv['total_tagihan'], 0, ',', '.');
             $token['sisa']         = number_format((float) $inv['sisa_tagihan'], 0, ',', '.');
-            $token['link_invoice'] = site_url('download/invoice/' . $inv['seri']);
+            // tautan publik: pelanggan tidak punya akun, jadi link harus bisa
+            // dibuka tanpa login (token HMAC mengikat nota ini saja)
+            $token['link_invoice'] = tautan_invoice_publik((int) $inv['id_invoice'], (string) $inv['seri']);
             $token['kurir']        = $inv['kurir'];
             $token['resi']         = $inv['resi'];
         }

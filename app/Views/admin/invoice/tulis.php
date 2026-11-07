@@ -10,6 +10,16 @@ $session  = \Config\Services::session();
 
 <?= $this->section('css') ?>
 <style>
+    /* Mode pesanan rombongan pada modal Tambah/Edit Orderan:
+       Hanya tampilkan pilihan jenis busana, sembunyikan isian ukuran satuan */
+    #tambahProduk.is-rombongan-modal #ukuranModal .uk-isi,
+    #tambahProduk.is-rombongan-modal .custom-satuan-only {
+        display: none !important;
+    }
+    #tambahProduk.is-rombongan-modal .helper-rombongan-busana {
+        display: block !important;
+    }
+
     /* Responsif modal Tambah/Edit Orderan saat ukuran Custom dipilih:
        Tampilannya dibuat setengah tinggi layar (50vh), posisi pas di tengah-tengah
        layar (centered), dan isinya bisa digulir sampai isian terakhir serta tombol simpan.
@@ -77,66 +87,9 @@ $session  = \Config\Services::session();
         }
     }
 
-    /* Strip katalog produk toko, muncul di bawah pemilih juragan: kartu kecil
-       (gambar + nama + stok) yang bisa digulir mendatar. */
-    .katalog-juragan { margin-top: .15rem; }
-    .katalog-juragan-scroll {
-        display: flex;
-        gap: .6rem;
-        overflow-x: auto;
-        padding: .35rem .15rem .6rem;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: thin;
-    }
-    .katalog-kartu {
-        flex: 0 0 auto;
-        width: 6.5rem;
-        background: #fff;
-        border: 1px solid #e2e8f0;
-        border-radius: .8rem;
-        padding: .4rem;
-        text-align: center;
-    }
-    .katalog-kartu img,
-    .katalog-kartu .kk-inisial {
-        width: 100%;
-        height: 5rem;
-        object-fit: cover;
-        border-radius: .55rem;
-        display: block;
-    }
-    .katalog-kartu .kk-inisial {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: #f1f5f9;
-        color: #64748b;
-        font-weight: 700;
-        font-size: 1.4rem;
-    }
-    .katalog-kartu .kk-nama {
-        margin-top: .35rem;
-        font-size: .78rem;
-        font-weight: 600;
-        color: #334155;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    .katalog-kartu .kk-jenis {
-        font-size: .7rem;
-        font-weight: 600;
-        color: #475569;
-    }
-    .katalog-kartu .kk-stok {
-        font-size: .72rem;
-        color: #64748b;
-    }
-    .katalog-juragan-info {
-        font-size: .78rem;
-        color: #94a3b8;
-        padding: .2rem .15rem;
-    }
+    /* Strip katalog preview dan dropdown "Produk" di modal sudah dilepas:
+       pemilih produk satu-satunya kini combobox di panel "Ambil dari stok
+       produk", yang juga memuat kode, harga, ukuran, dan stok yang sama. */
 </style>
 <?= $this->endSection() ?>
 
@@ -154,7 +107,7 @@ $session  = \Config\Services::session();
         <h1 class="h3 mt-5">Tulis Orderan</h1>
     </div>
 
-    <?= form_open('admin/invoices/save', ['class' => 'row mb-5', 'id' => 'iForm']); ?>
+    <?= form_open('admin/invoices/save', ['class' => 'row mb-5', 'id' => 'iForm', 'novalidate' => '']); ?>
 
     <div class="col-12 col-lg-6 mb-3">
         <div class="h-full rounded-kartu border border-ink-200 bg-white shadow-kartu">
@@ -175,7 +128,8 @@ $session  = \Config\Services::session();
                         </div>
                     </div>
 
-                    <?= '<div id="katalogJuragan" class="katalog-juragan d-none" aria-live="polite"></div>' ?>
+                    <?php /* strip katalog preview sudah dilepas: pemilihan produk
+                     kini lewat dropdown di modal tambah item (lihat kode_produk) */ ?>
                     <div class="row gx-2">
                         <div class="col">
                             <?php
@@ -656,19 +610,24 @@ $session  = \Config\Services::session();
 
                 </button>
             </div>
-            <?= form_open('', ['id' => 'nambahProduk']); ?>
+            <?= form_open('', ['id' => 'nambahProduk', 'novalidate' => '']); ?>
             <div class="modal-body">
                 <?= stok_panel_form() ?>
+                <?php /* kode produk kembali jadi isian terlihat di kiri harga: boleh
+                       diketik sendiri (barang tanpa katalog) dan tetap diisi otomatis
+                       oleh combobox "Ambil dari stok produk" di atas. Nama & id tidak
+                       berubah, jadi seluruh jalur lama (pembuat baris, pengisi
+                       rombongan, sunting baris) tetap membaca field yang sama */ ?>
                 <div class="row gx-2 gy-2">
-                    <div class="col-6 col-sm-6 col-md-3">
+                    <div class="col-12 col-sm-3">
                         <?= form_label('Kode Produk', 'kode_produk', ['class' => 'form-label']); ?>
                         <?= form_input(['name' => 'kode_produk', 'id' => 'kode_produk', 'class' => 'form-control', 'required' => '', 'placeholder' => 'cth: ' . random_element(['SK-45', 'BK-01', 'Z-01'])]); ?>
                     </div>
-                    <div class="col-6 col-sm-6 col-md-3">
+                    <div class="col-12 col-sm-3">
                         <?= form_label('Harga Satuan', 'harga_satuan', ['class' => 'form-label']); ?>
                         <?= form_input(['name' => 'harga_satuan', 'min' => '0', 'id' => 'harga_satuan', 'class' => 'form-control', 'required' => '', 'placeholder' => 'cth: ' . random_element(['225000', '280000', '295000', '320000']), 'type' => 'number']); ?>
                     </div>
-                    <div class="col-6 col-sm-6 col-md-3">
+                    <div class="col-12 col-sm-3">
                         <?= form_label('Ukuran', 'ukuran', ['class' => 'form-label']); ?>
                         <?= '<select name="ukuran" class="form-select" id="ukuran" required="">';
                         echo '<option value="" disabled="" selected="">Pilih ukuran</option>';
@@ -685,7 +644,7 @@ $session  = \Config\Services::session();
                         echo '</select>';
                         ?>
                     </div>
-                    <div class="col-6 col-sm-6 col-md-3">
+                    <div class="col-12 col-sm-3">
                         <?= form_label('QTY', 'QTY', ['class' => 'form-label']); ?>
                         <?= form_input(['name' => 'QTY', 'id' => 'QTY', 'class' => 'form-control', 'required' => '', 'placeholder' => 'cth: ' . mt_rand(1, 20), 'type' => 'number', 'min' => '1']); ?>
                     </div>
@@ -698,24 +657,29 @@ $session  = \Config\Services::session();
                             <span class="fw-normal text-muted small">- opsional, hanya untuk pesanan custom</span>
                         </h6>
                     </div>
+                    <div class="col-12 helper-rombongan-busana d-none mb-2">
+                        <div class="alert alert-info py-2 px-3 small border-0 bg-brand-50 text-brand-700 rounded-lg mb-0">
+                            <i class="fal fa-info-circle me-1.5"></i> Cukup pilih jenis busana. Jenis ini akan otomatis digunakan sebagai acuan ukuran tiap anggota di daftar Anggota Rombongan.
+                        </div>
+                    </div>
                     <?= ukuran_form_panel(['id' => 'ukuranModal']) ?>
-                    <div class="col-sm-6 mb-2">
+                    <div class="col-sm-6 mb-2 custom-satuan-only">
                         <?= form_label('Ukuran Jadi', 'ri_ukuran_jadi', ['class' => 'form-label']); ?>
                         <input type="text" class="form-control ri-field" id="ri_ukuran_jadi" data-key="ukuran_jadi" placeholder="cth: L / PM" autocomplete="off">
                     </div>
-                    <div class="col-sm-6 mb-2">
+                    <div class="col-sm-6 mb-2 custom-satuan-only">
                         <?= form_label('Nama Pemilik Ukuran', 'ri_pemilik', ['class' => 'form-label']); ?>
                         <input type="text" class="form-control ri-field" id="ri_pemilik" data-key="pemilik" placeholder="cth: AFRIZAL" autocomplete="off">
                     </div>
-                    <div class="col-sm-6 mb-2">
+                    <div class="col-sm-6 mb-2 custom-satuan-only">
                         <?= form_label('Bahan', 'ri_bahan', ['class' => 'form-label']); ?>
                         <input type="text" class="form-control ri-field" id="ri_bahan" data-key="bahan" placeholder="cth: JETBLACK" autocomplete="off">
                     </div>
-                    <div class="col-sm-6 mb-2">
+                    <div class="col-sm-6 mb-2 custom-satuan-only">
                         <?= form_label('Model & Jahitan', 'ri_spesifikasi', ['class' => 'form-label']); ?>
                         <input type="text" class="form-control ri-field" id="ri_spesifikasi" data-key="spesifikasi" placeholder="cth: KANCING JAS 2, SAKU BAWAH VARIASI" autocomplete="off">
                     </div>
-                    <div class="col-12">
+                    <div class="col-12 custom-satuan-only">
                         <?= form_label('Catatan', 'ri_ukuran_detail', ['class' => 'form-label']); ?>
                         <textarea class="form-control ri-field" id="ri_ukuran_detail" data-key="ukuran_detail" rows="2" placeholder="cth: lengan diperpendek 2 cm, ada kancing cadangan"></textarea>
                     </div>
@@ -766,7 +730,6 @@ $link_invoice        = site_url('admin/invoices/lihat/');
 $link_post_pelanggan = site_url('pelanggan/baru');
 $link_data_pelanggan = rtrim(site_url('pelanggan/data'), '/') . '/';
 $link_stok_jumlah    = site_url('api/stok/jumlah');
-$link_stok_katalog   = site_url('api/stok/katalog');
 // nama field token CSRF: tidak boleh ikut disimpan/dipulihkan draf, sebab tiap
 // muat halaman token-nya berganti dan menimpa yang baru bikin simpan ditolak.
 $nama_csrf           = csrf_token();
@@ -778,6 +741,7 @@ $nama_csrf           = csrf_token();
 </script>
 <script defer src="<?= base_url('assets/js/ukuran-form.js') ?>?v=<?= (int) @filemtime(FCPATH . 'assets/js/ukuran-form.js') ?>"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script defer src="<?= base_url('assets/js/kabaran.js') ?>?v=<?= (int) @filemtime(FCPATH . 'assets/js/kabaran.js') ?>"></script>
 <script defer src="<?= base_url('assets/js/anggota-form.js') ?>?v=<?= (int) @filemtime(FCPATH . 'assets/js/anggota-form.js') ?>"></script>
 <script defer src="<?= base_url('assets/js/cari-pelanggan.js') ?>?v=<?= (int) @filemtime(FCPATH . 'assets/js/cari-pelanggan.js') ?>"></script>
 <script defer src="<?= base_url('assets/js/foto-form.js') ?>?v=<?= (int) @filemtime(FCPATH . 'assets/js/foto-form.js') ?>"></script>
@@ -862,77 +826,20 @@ $js = <<< JS
     		$.each(b[{$current_user_id}].juragan,function(c,x){
     			$('<option />',{value:x.id,text:x.nama}).data('nama', x.nama).appendTo($('select[name="juragan"]'));
     		});
-    		isiJumlahProduk();
     		// opsi tiba: pasang pilihan dari draf yang tadi ditahan
     		if (window.drafTundaJuragan) { window.drafTundaJuragan(); }
     	});
 
-    	// angka indikator jumlah produk di tiap opsi dropdown juragan
-    	function isiJumlahProduk() {
-    		$.getJSON('{$link_stok_jumlah}', function(res) {
-    			var peta = (res && res.data) || {};
-    			$('select[name="juragan"] option').each(function() {
-    				if (this.value === '') {
-    					return;
-    				}
-    				var nama = $(this).data('nama') || this.text;
-    				var n = peta[this.value];
-    				$(this).text(nama + ' (' + (n ? n : 0) + ')');
-    			});
-    		});
-    	}
-
-    	// strip katalog produk toko terpilih, digulir mendatar; ikut disegarkan
-    	// saat tipe layanan ganti karena kolam (jual/sewa) menentukan stoknya
-    	function muatKatalogJuragan() {
-    		var el = $('#katalogJuragan');
-    		if (el.length === 0) {
-    			return;
-    		}
-    		var j = parseInt($('select[name="juragan"]').val(), 10) || 0;
-    		if (j < 1) {
-    			el.addClass('d-none').empty();
-    			return;
-    		}
-    		el.removeClass('d-none').html('<div class="katalog-juragan-info">Memuat katalog...</div>');
-    		$.getJSON('{$link_stok_katalog}', { juragan_id: j }, function(res) {
-    			var data = (res && res.data) || [];
-    			if (data.length === 0) {
-    				el.html('<div class="katalog-juragan-info">Toko ini belum punya produk tercatat.</div>');
-    				return;
-    			}
-    			var html = '<div class="katalog-juragan-scroll">';
-    			$.each(data, function(i, p) {
-    				var gambar = p.foto
-    					? '<img src="' + kkEsc(p.foto) + '" alt="" loading="lazy">'
-    					: '<span class="kk-inisial">' + kkInisial(p.kode) + '</span>';
-    				html += '<div class="katalog-kartu">' + gambar
-    					+ '<div class="kk-nama" title="' + kkEsc(p.kode) + '">' + kkEsc(p.kode) + '</div>'
-    					+ '<div class="kk-jenis">Jenis: ' + kkEsc(p.jenis || '-') + '</div>'
-    					+ '<div class="kk-stok">Stok ' + (p.stok || 0) + '</div>'
-    					+ '</div>';
-    			});
-    			html += '</div>';
-    			el.html(html);
-    		}).fail(function() {
-    			el.html('<div class="katalog-juragan-info">Gagal memuat katalog.</div>');
-    		});
-    	}
-
-    	function kkEsc(s) {
-    		return String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, function(m) {
-    			return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
-    		});
-    	}
-
-    	function kkInisial(kode) {
-    		kode = String(kode || '?').trim();
-    		return kkEsc((kode.slice(0, 2).toUpperCase()) || '?');
-    	}
-
-    	$('select[name="juragan"]').on('change', muatKatalogJuragan);
-
-    	// strip katalog tidak lagi ikut tipe: semua produk tampil sekaligus
+    	// pemilih produk di modal kini satu saja: combobox di panel "Ambil dari
+    	// stok produk" (public/assets/js/ambil-stok.js). Dropdown katalog yang dulu
+    	// duduk di luar panel sudah dilepas bersama isi-opsinya, penanda stok
+    	// menipisnya, dan teks stoknya: daftar varian di combobox itu sudah memuat
+    	// kode, harga, ukuran, dan stok yang sama, plus bisa diketik untuk menyaring.
+    	$('#tambahProduk').on('show.bs.modal', function() {
+    		sinkronModalRombongan();
+    		// toko bisa saja baru dipasangkan dari draf, jadi daftarnya dimuat ulang
+    		if (window.STOK && STOK.segar) { STOK.segar(); }
+    	});
 
 
     	// load admin/cs
@@ -1096,14 +1003,10 @@ $js = <<< JS
     		}
     	});
 
-    	// nama penerima: huruf saja, spasi dan titik (cth: H. AGUS) boleh
-    	$(document).on('input', '#nama_penerima', function() {
-    		var v = this.value.replace(/[^A-Za-zÀ-ÿ.'\s]/g, '');
-
-    		if (v !== this.value) {
-    			this.value = v;
-    		}
-    	});
+    	// nama pemesan DAN nama penerima: huruf, spasi, titik, apostrof, hubung.
+    	// Dulu hanya nama_penerima yang dijaga (dan tanpa apostrof/hubung), jadi
+    	// angka masih bisa masuk ke nama pelanggan - server pun belum menolaknya
+    	if (window.KABAR) { KABAR.jagaNama('#nama_pelanggan, #nama_penerima'); }
 
     	// nomor HP & kode pos: angka saja; HP maksimal 13 digit, kode pos 5
     	$(document).on('input', '.hp-num, #kodepos', function() {
@@ -1226,7 +1129,23 @@ $js = <<< JS
 
     		// Callback handler that will be called on failure
     		request_pelanggan.fail(function (jqXHR, textStatus, errorThrown){
-    			// Log the error to the console
+    			// kegagalan menyimpan pelanggan dulu berhenti di console saja: modal
+    			// menutup tanpa kabar dan data pemesan tetap kosong. Sekarang tiap
+    			// pesan server menjadi popup, dan yang tanpa pesan pun diberi alasan
+    			if (window.KABAR) {
+    				var pesan = (jqXHR && jqXHR.responseJSON) ? jqXHR.responseJSON : {};
+    				var ada = false;
+
+    				$.each(pesan, function (k, v) {
+    					KABAR.galat(typeof v === 'string' ? v : k);
+    					ada = true;
+    				});
+
+    				if (! ada) {
+    					KABAR.galat('Data pelanggan gagal disimpan, coba lagi ya.');
+    				}
+    			}
+
     			console.error(
     				"The following error occurred: "+
     				textStatus, errorThrown
@@ -1358,24 +1277,68 @@ $js = <<< JS
     		} else {
     			var df = pnl.find('.anggota-daftar').first();
     			if (df.children('.anggota-baris').length === 0) {
-    				$('.tambah-anggota').first().trigger('click');
+    				var qty = parseInt($('#QTY').val()) || 1;
+    				for (var qi = 0; qi < qty; qi++) {
+    					$('.tambah-anggota').first().trigger('click');
+    				}
     			}
     		}
     	}
 
-    	// kategori menentukan panel yang tampil, dua arah:
-    	// satuan -> tabel rombongan hilang, rombongan -> card orderan hilang
+    	// kategori menentukan panel yang tampil
     	function tampilKategori(v) {
     		$('.anggota-isi').first().closest('.card').toggleClass('d-none', v !== 'rombongan');
-    		$('.list-orderan').first().closest('.card').toggleClass('d-none', v === 'rombongan');
     	}
+
+    	function sinkronModalRombongan() {
+    		var isRombongan = $('#tipe_orderan').val() === 'rombongan';
+    		$('#tambahProduk').toggleClass('is-rombongan-modal', isRombongan);
+    	}
+
+    	function terapkanJenisRombongan(jenis) {
+    		if (!jenis) return;
+    		window.JENIS_BUSANA_ROMBONGAN = jenis;
+    		$('.anggota-isi').attr('data-jenis-rombongan', jenis);
+
+    		$('.anggota-daftar .anggota-baris').each(function() {
+    			var pnl = $(this).find('.ukuran-panel').first();
+    			pnl.attr('data-jenis', jenis);
+    			var uk = pnl.find('.uk-jenis');
+    			if (uk.length > 0) {
+    				if (uk.val() !== jenis) {
+    					uk.val(jenis).trigger('change');
+    				}
+    			} else if (window.UKURAN && typeof window.UKURAN.pilihJenis === 'function') {
+    				window.UKURAN.pilihJenis(pnl, jenis);
+    			}
+    		});
+    	}
+
+    	$(document).on('change', '#ukuranModal .uk-jenis', function() {
+    		var v = $(this).val();
+    		if ($('#tipe_orderan').val() === 'rombongan' && v) {
+    			var teks = $.trim($(this).find('option:selected').text() || '');
+    			if (teks && teks.indexOf('--') === -1) {
+    				var cur = $.trim($('#kode_produk').val() || '');
+    				if (!cur || cur === 'Pesanan Rombongan') {
+    					$('#kode_produk').val(teks);
+    				}
+    			}
+    			terapkanJenisRombongan(v);
+    		}
+    	});
 
     	$('#tipe_orderan').on('change', function() {
     		var v = $(this).val();
+    		sinkronModalRombongan();
 
     		if (v === 'rombongan') {
     			tampilAnggota(true);
     			tampilKategori(v);
+    			var jAwal = $('#ukuranModal .uk-jenis').val() || $('.list-orderan .ukuran-panel').first().attr('data-jenis');
+    			if (jAwal) {
+    				terapkanJenisRombongan(jAwal);
+    			}
     		}
     		else if (v === 'satuan') {
     			if ($('.anggota-daftar .anggota-baris').length === 0 || confirm('Kosongkan daftar anggota rombongan?')) {
@@ -1384,6 +1347,7 @@ $js = <<< JS
     			}
     			else {
     				$(this).val('rombongan');
+    				sinkronModalRombongan();
     			}
     		}
     		else {
@@ -1393,6 +1357,24 @@ $js = <<< JS
 
     	// default kategori satuan: card rombongan langsung tersembunyi sejak awal
     	tampilKategori($('#tipe_orderan').val());
+    	sinkronModalRombongan();
+
+    	// QTY → sesuaikan jumlah baris anggota rombongan secara otomatis
+    	$(document).on('input change', '#QTY', function() {
+    		if ($('#tipe_orderan').val() !== 'rombongan') return;
+    		var qty = parseInt($(this).val()) || 0;
+    		if (qty <= 0) return;
+    		var dftQty = $('.anggota-daftar').first();
+    		var adaQty = dftQty.children('.anggota-baris').length;
+    		if (qty > adaQty) {
+    			for (var qi = adaQty; qi < qty; qi++) {
+    				$('.tambah-anggota').first().trigger('click');
+    			}
+    		} else if (qty < adaQty) {
+    			dftQty.children('.anggota-baris').slice(qty).remove();
+    			$('.jumlah-anggota').text(qty);
+    		}
+    	});
 
     	// spesifikasi custom hanya muncul saat ukuran = Custom; ukuran terstruktur
     	// sekarang ikut di dalam panelnya
@@ -1493,6 +1475,12 @@ $js = <<< JS
     		c.preventDefault(),
     		c.stopPropagation();
 
+    		// isian wajib yang kosong tidak lagi menunggu gelembung peramban: popup
+    		// ini menyebut nama isianya dan hilang sendiri setelah 5 detik
+    		if (window.KABAR && ! KABAR.saringForm(this)) {
+    			return;
+    		}
+
     		var d=fpro.find('[name="kode_produk"]').val(),
     			a=fpro.find('[name="harga_satuan"]').val(),
     			e=fpro.find('[name="ukuran"]').val(),
@@ -1504,6 +1492,24 @@ $js = <<< JS
     			jenis=$('#ukuranModal .uk-jenis').val() || '',
     			k = rowEdit ? rowEdit.attr('data-kunci') : uniqId(),
     			tb = $('.list-orderan');
+
+    		// Pada kategori rombongan, pengambilan dari stok produk bersifat opsional.
+    		// Jika tidak memilih dari stok, nama produk otomatis diambil dari jenis busana yang dipilih.
+    		if ($.trim(String(d || '')) === '') {
+    			if ($('#tipe_orderan').val() === 'rombongan') {
+    				var jenisTeks = $.trim($('#ukuranModal .uk-jenis option:selected').text() || '');
+    				d = (jenisTeks && jenisTeks.indexOf('--') === -1) ? jenisTeks : 'Pesanan Rombongan';
+    				fpro.find('[name="kode_produk"]').val(d);
+    			} else {
+    				if (window.STOK && STOK.kabari) {
+    					STOK.kabari('Pilih barang dari daftar, atau ketik nama barangnya sendiri untuk item tanpa katalog (mis. jahitan custom).');
+    				}
+    				if (window.KABAR) {
+    					KABAR.galat('Nama barangnya belum diisi — pilih dari katalog atau ketik namanya.');
+    				}
+    				return;
+    			}
+    		}
 
     		fpro.find('#customDetail .ri-field').each(function(){
     			var key = $(this).data('key'),
@@ -1521,6 +1527,10 @@ $js = <<< JS
 
     		var tr = bikinBaris(k, d, a, e, b, rincian, jenis, nilai, s, kolam);
 
+    		if ($('#tipe_orderan').val() === 'rombongan' && jenis) {
+    			terapkanJenisRombongan(jenis);
+    		}
+
     		if (rowEdit) {
     			rowEdit.replaceWith(tr);
     			rowEdit = null;
@@ -1537,16 +1547,24 @@ $js = <<< JS
 
     		subtotal();
     		$('#tambahProduk').modal('hide');
+
+    		// baris masuk tanpa meninggalkan halaman: kabar suksesnya yang
+    		// memberitahu, bukan popup yang menutupi pekerjaan berikutnya
+    		if (window.KABAR) {
+    			KABAR.sukses('Baris ' + $.trim(String(d || '')) + ' masuk ke daftar orderan.');
+    		}
     	});
 
     	$(document).on('click','.hapus_row',function(){
     		this.closest('tr').remove(),
     		$(this).hasClass('orderan')&&(
-    			pl=$('.list-orderan').data('length'),
-    			$('.list-orderan').data('length',
-    			ps-1),
+    			// panjang baru dihitung dari baris yang tersisa, bukan variabel lama:
+    			// sebelumnya baris sisa salah, listOrder() ikut menyembunyikan blok
+    			// subtotal sehingga total terlihat tidak berkurang
+    			$('.list-orderan').data('length', $('.list-orderan').children('tr[data-kunci]').length + 1),
     			listOrder(),
-    			subtotal()
+    			subtotal(),
+    			window.STOK&&STOK.sinkronFoto&&STOK.sinkronFoto()
     		),
     		totalbiaya();
     	});
@@ -1577,7 +1595,7 @@ $js = <<< JS
     			}
     		});
 
-    		fpro.find('[name="kode_produk"]').val(d.kode),
+    		(fpro.find('[name="kode_produk"]').val(d.kode)),
     		fpro.find('[name="harga_satuan"]').val(d.harga),
     		fpro.find('[name="QTY"]').val(d.qty),
     		fpro.find('[name="ukuran"]').val(d.ukuran).trigger('change'),
@@ -1597,6 +1615,9 @@ $js = <<< JS
     		// jadi fotonya tidak hilang waktu orderannya disunting
     		if (window.STOK) {
     			STOK.tata(d.stok_id || 0, tr.attr('data-kolam') || '');
+    			// Panel stok tidak perlu langsung terbuka saat Edit Orderan
+    			$('.stok-panel').addClass('d-none');
+    			$('.stok-pemicu').removeClass('d-none');
     		}
 
     		rowEdit = tr;
@@ -1764,8 +1785,16 @@ $js = <<< JS
     				q = r.append(c1).append(c2).append('<td></td>');
     			$(q).appendTo('.listBiaya');
     			totalbiaya();
+
+    			if (window.KABAR) { KABAR.sukses('Biaya ditambahkan ke orderan.'); }
+
+    			$('#biayaOrder').modal('hide');
     		}
-    		$('#biayaOrder').modal('hide');
+    		else if (window.KABAR) {
+    			// nominal kosong atau nol: modalnya dibiarkan terbuka supaya angka
+    			// yang dimaksud bisa langsung dikoreksi
+    			KABAR.galat('Nominal biaya belum diisi — atau memang nol, jadi tidak masuk daftar.');
+    		}
     	});
 
     	// main form
@@ -1788,6 +1817,15 @@ $js = <<< JS
     		// ada yang jelas tidak akan diterima server, orderannya jangan disimpan
     		// dulu — fotonya dihapus atau diganti, baru Simpan lagi
     		if (window.FOTO && window.FOTO.hambatkan() !== '') {
+    			if (window.KABAR) { KABAR.galat(window.FOTO.hambatkan()); }
+
+    			return false;
+    		}
+
+    		// isian yang kosong atau salah format dibersihkan di sini, bukan oleh
+    		// gelembung peramban (form ini memakai novalidate); server tetap hakim
+    		// terakhir untuk hal-hal yang tidak bisa dilihat dari sini
+    		if (window.KABAR && ! KABAR.saringForm(this)) {
     			return false;
     		}
 
@@ -1837,23 +1875,15 @@ $js = <<< JS
     			terkunci = false;
     			inputs.prop("disabled", false);
 
-    			//
-    			// console.log( Object.keys(jqXHR['responseJSON']).length);
-    			$( Object.entries(jqXHR['responseJSON']) ).each(function( i,v ) {
-    				var Tid = 't-'+uniqId();
-
-    				// console.log(v);
-    				$('#lTo').append(makeToast(Tid, v[1], 'Galat'));
-    				$('#'+Tid).toast('show');
-    			});
-
-
-    			var myToastEl = document.getElementsByClassName('toast')[0];
-    			myToastEl.addEventListener('hidden.bs.toast', function () {
-    				// do something...
-    				$(this).remove();
-    			});
-
+    			// pesan validasi dari server dulu dituang ke wadah #lTo yang tidak
+    			// pernah ada di halaman ini, lalu ditampil dengan API toast Bootstrap 4
+    			// padahal aplikasinya memakai Bootstrap 5 — jadi galat apa pun hilang
+    			// tanpa jejak. Sekarang tiap pesan menjadi popup yang menutup sendiri.
+    			if (window.KABAR) {
+    				$.each(jqXHR.responseJSON || {}, function (k, v) {
+    					KABAR.galat(v);
+    				});
+    			}
     		});
 
     		// sengaja tidak ada handler "always": setelah sukses kolom memang
@@ -1861,17 +1891,8 @@ $js = <<< JS
     		// cuma fotonya — menekan Simpan lagi harus melahirkan orderan baru
     	});
 
-    	function makeToast(id,text,status) {
-    		return `<div id="`+id+`" class="toast" role="alert" aria-live="assertive" aria-atomic="true" data-delay="5000">
-    			<div class="toast-header">
-    				<strong class="me-auto">`+status+`</strong>
-    				<button type="button" class="ms-2 mb-1 close" data-bs-dismiss="toast" aria-label="Close">
-
-    				</button>
-    			</div>
-    			<div class="toast-body">`+text+`</div>
-    		</div>`;
-    	}
+    	// makeToast() ikut dibuang bersama pemanggilnya yang Bootstrap 4; popup
+    	// sekarang dibangun window.KABAR di assets/js/kabaran.js
 
     	// disable hit enter
     	// https://stackoverflow.com/a/895231/2094645

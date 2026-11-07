@@ -253,10 +253,14 @@
                                 <i class="fal fa-check"></i> <span class="d-none d-lg-inline">Tandai dibaca</span>
                             </button>
                         <?php else : ?>
-                            <?php /* yang sudah terbaca boleh dibuang dari kotak sendiri; kotaknya punya orang lain tidak tersentuh */ ?>
-                            <button type="button" class="btn btn-sm btn-link text-decoration-none text-muted notif-hapus" data-id="<?= (int) $item['id'] ?>" title="Hapus notifikasi ini">
-                                <i class="fal fa-trash"></i>
-                            </button>
+                            <?php /* membuang notifikasi terbaca bukan hak CS lagi: hanya sisi
+                               manajemen yang boleh satu-satu; kotak CS dibersihkan lewat
+                               Pengaturan Notifikasi atau sapuan terjadwal */ ?>
+                            <?php if ($boleh_sapu) : ?>
+                                <button type="button" class="btn btn-sm btn-link text-decoration-none text-muted notif-hapus" data-id="<?= (int) $item['id'] ?>" title="Hapus notifikasi ini">
+                                    <i class="fal fa-trash"></i>
+                                </button>
+                            <?php endif; ?>
                         <?php endif; ?>
                     </div>
                 </div>

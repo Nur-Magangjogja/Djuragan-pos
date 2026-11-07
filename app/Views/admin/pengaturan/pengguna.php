@@ -451,6 +451,27 @@ $per_halaman = (int) config('Pager')->perPage;
     </div>
 </div>
 
+<!-- Konfirmasi hapus satu modal untuk semua baris: isinya diisi lewat JS dari
+     atribut data tombol yang dibuka, jadi tidak perlu satu popus per akun -->
+<div class="modal fade" id="modalHapusPengguna" tabindex="-1" aria-labelledby="modalHapusPenggunaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <?= form_open('admin/settings/hapus_pengguna', ['id' => 'formHapusPengguna']) ?>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalHapusPenggunaLabel"><i class="fal fa-triangle-exclamation text-danger me-1"></i>Hapus akun</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body small" id="modalHapusPenggunaPesan"></div>
+            <input type="hidden" name="id" id="hapusPenggunaId" value="">
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
+                <button type="submit" class="btn btn-sm btn-danger"><i class="fal fa-trash"></i> Hapus</button>
+            </div>
+        </div>
+        <?= form_close() ?>
+    </div>
+</div>
+
 <?= $this->endSection() ?>
 
 <?= $this->section('js') ?>
@@ -616,6 +637,13 @@ $js = <<< JS
     	}
 
     	function barisPengguna(u) {
+    		// tombol hapus tidak dipasang di baris milik sendiri: controller juga
+    		// menolaknya, jadi lebih baik pemicunya memang tidak terlihat
+    		var hapus = ('' + u.id === '{$current_user_id}')
+    			? ''
+    			: '<button type="button" class="btn btn-sm btn-outline-danger" title="Hapus ' + aman(u.nama) + '" aria-label="Hapus ' + aman(u.nama) + '" data-bs-toggle="modal" data-bs-target="#modalHapusPengguna"'
+    			+ ' data-id="' + aman(u.id) + '" data-nama="' + aman(u.nama) + '" data-username="' + aman(u.username) + '" data-level="' + aman(u.level) + '"><i class="fal fa-trash"></i></button>';
+
     		return '<tr>'
     			+ '<td><div class="fw-semibold">' + aman(u.nama)
     			+ '<span class="ms-2 badge rounded-pill bg-light text-dark border fw-normal">' + aman(u.username) + '</span></div>'
@@ -628,7 +656,7 @@ $js = <<< JS
     			+ ' data-username="' + aman(u.username) + '" data-level="' + aman(u.level) + '" data-status="' + aman(u.status) + '"'
     			+ ' data-lihat-semua="' + aman(u.lihat_semua_produk || 0) + '"'
     			+ ' data-sunting-transaksi="' + aman(u.sunting_transaksi || 0) + '"><i class="fal fa-pencil"></i></button>'
-    			+ '<button type="button" class="btn btn-sm btn-outline-danger" title="Hapus ' + aman(u.nama) + '" aria-label="Hapus ' + aman(u.nama) + '"><i class="fal fa-trash"></i></button>'
+    			+ hapus
     			+ '</td></tr>';
     	}
 
@@ -835,6 +863,34 @@ $js = <<< JS
     				// tokonya baru digambar sekarang, jadi centangannya baru bisa dihitung di sini
     				sinkronHintLevel(mP);
     		});
+    	});
+
+    	// popus konfirmasi hapus: satu modal untuk semua baris, isinya dirakit dari
+    	// atribut data tombol yang membuka — pola yang sama dengan modalHapusBank
+    	var mHapus = document.getElementById('modalHapusPengguna');
+    	mHapus.addEventListener('show.bs.modal', function (o) {
+    		var a = o.relatedTarget;
+
+    		if (! a) { return; }
+
+    		var nama  = a.getAttribute('data-nama') || '';
+    		var usre  = a.getAttribute('data-username') || '';
+    		var level = a.getAttribute('data-level') || '';
+    		var pesan = 'Hapus akun ' + nama + ' (' + usre + ')?';
+
+    		if (level === 'cs' || level === 'admin') {
+    			pesan += ' Tautan tokonya ikut dilepas, tapi nota dan catatan yang pernah ditulis akun ini tetap terbaca.';
+    		} else {
+    			pesan += ' Akun tidak benar-benar dihapus dari database — hanya akses loginnya yang hilang.';
+    		}
+
+    		// textContent, bukan innerHTML: pesannya datang dari atribut data
+    		document.getElementById('modalHapusPenggunaPesan').textContent = pesan;
+    		document.getElementById('hapusPenggunaId').value = a.getAttribute('data-id') || '';
+    	});
+
+    	mHapus.addEventListener('hidden.bs.modal', function () {
+    		document.getElementById('hapusPenggunaId').value = '';
     	});
     });
     JS;
