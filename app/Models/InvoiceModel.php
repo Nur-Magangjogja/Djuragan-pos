@@ -49,8 +49,9 @@ class InvoiceModel extends Model
      * @param int    $offset     Awal data yang akan ditampilkan
      * @param string $kategori   Kunci dari kategori_tab($hal), dipakai saat $hal pembayaran/belum-proses
      * @param array<int>|null $hanya Daftar id juragan yang boleh dilihat, null = tidak membatasi
+     * @param bool   $sewa_sudah Bagian tab Disewa: false = Masih Disewa, true = Sudah Kembali
      */
-    public function getAll(string $hal = 'semua', int $juragan_id = 0, $cari = '', int $limit = 0, int $offset = 0, string $kategori = 'perlu-cek', ?array $hanya = null): array
+    public function getAll(string $hal = 'semua', int $juragan_id = 0, $cari = '', int $limit = 0, int $offset = 0, string $kategori = 'perlu-cek', ?array $hanya = null, bool $sewa_sudah = false): array
     {
         $biayaModel      = new BiayaModel();
         $anggotaModel    = new AnggotaModel();
@@ -70,7 +71,7 @@ class InvoiceModel extends Model
         // IN () kosong adalah SQL invalid, gunakan [0] saat tidak ada id yang cocok
         $builder->whereIn('id_invoice', $this->ambilIds($cari) ?: [0]);
 
-        $this->terapkanTab($builder, $hal, $kategori);
+        $this->terapkanTab($builder, $hal, $kategori, $sewa_sudah);
 
         if ($juragan_id > 0) {
             $builder->where('juragan_id', $juragan_id);
@@ -129,7 +130,7 @@ class InvoiceModel extends Model
 
         return [
             'data'      => json_decode(json_encode(array_values($return))),
-            'totalPage' => $this->counter($hal, $juragan_id, $cari, $kategori, $hanya),
+            'totalPage' => $this->counter($hal, $juragan_id, $cari, $kategori, $hanya, $sewa_sudah),
         ];
     }
 
@@ -199,13 +200,13 @@ class InvoiceModel extends Model
      *
      * @param mixed $cari Bisa berupa array atau string
      */
-    private function counter(string $hal = 'semua', int $juragan_id = 0, $cari = '', string $kategori = 'perlu-cek', ?array $hanya = null): int
+    private function counter(string $hal = 'semua', int $juragan_id = 0, $cari = '', string $kategori = 'perlu-cek', ?array $hanya = null, bool $sewa_sudah = false): int
     {
         $builder = $this->select('id_invoice');
 
         $builder->whereIn('id_invoice', $this->ambilIds($cari) ?: [0]);
 
-        $this->terapkanTab($builder, $hal, $kategori);
+        $this->terapkanTab($builder, $hal, $kategori, $sewa_sudah);
 
         if ($juragan_id > 0) {
             $builder->where('juragan_id', $juragan_id);
@@ -222,19 +223,29 @@ class InvoiceModel extends Model
      *
      * @param \CodeIgniter\Model|\CodeIgniter\Database\BaseBuilder $builder
      */
-    private function terapkanTab($builder, string $hal, string $kategori = 'perlu-cek'): void
+    private function terapkanTab($builder, string $hal, string $kategori = 'perlu-cek', bool $sewa_sudah = false): void
     {
         switch ($hal) {
             case 'selesai':
                 $builder->where('status_pengiriman', '3');
 
                 // nota sewa belum selesai sampai barangnya dikembalikan: tab ini dan
-                // tab Masih Disewa tidak boleh memuat nota yang sama
+                // bagian Masih Disewa tidak boleh memuat nota yang sama
                 $builder->where('NOT (' . self::klausulSewaMenunggu($this->db->prefixTable('invoice')) . ')', null, false);
+
+                // sebaliknya, sewa yang sudah dicatat kembali pindah ke bagian
+                // "Sudah Kembali" di tab Disewa — tidak dihitung dua kali
+                $builder->where('NOT (' . self::klausulSewaKembali($this->db->prefixTable('invoice')) . ')', null, false);
                 break;
 
             case 'masih-disewa':
-                $builder->where(self::klausulMasihDisewa($this->db->prefixTable('invoice')), null, false);
+                $builder->where(
+                    $sewa_sudah
+                        ? self::klausulSewaKembali($this->db->prefixTable('invoice'))
+                        : self::klausulMasihDisewa($this->db->prefixTable('invoice')),
+                    null,
+                    false
+                );
                 break;
 
             case 'belum-proses':
@@ -344,24 +355,23 @@ class InvoiceModel extends Model
     }
 
     /**
-     * Klausul tab "Masih Disewa": nota sewa yang pengembaliannya belum dicatat,
-     * belum dibatalkan, DAN sudah ada dananya masuk — DP (3), sedang dicicil (4),
-     * atau lunas (5/6). Nota sewa yang belum ada pembayaran sama sekali belum
-     * menjadi sewa yang berjalan: dia tetap mengurus dirinya di tab Pembayaran /
-     * Belum Proses, bukan di sini.
+     * Klausul bagian "Masih Disewa" di tab Disewa: nota sewa yang pengembaliannya
+     * belum dicatat, belum dibatalkan, DAN sudah ada dananya masuk — DP (3),
+     * sedang dicicil (4), atau lunas (5/6). Nota sewa yang belum ada pembayaran
+     * sama sekali belum menjadi sewa yang berjalan: dia tetap mengurus dirinya di
+     * tab Pembayaran / Belum Proses, bukan di sini.
      *
      * Angka chip "unit terikat nota sewa" di halaman Produk sengaja TIDAK ikut
      * menyempit: kolom itu menghitung unit yang hilang dari "Tersedia", dan unit
      * sewa memang sudah diikat sejak notasnya ditulis (StokModel::sedangDisewa).
-     * Karena itu tab ini bisa memuat lebih sedikit nota daripada angka chip -
+     * Karena itu bagian ini bisa memuat lebih sedikit nota daripada angka chip -
      * bukan bug, tapi pilihan: yang di sini hanya sewa yang sudah ada uangnya.
      *
-     * Yang boleh MENekan tombol "Sudah kembali" tetap lebih ketat dan TIDAK ikut
-     * klausul ini: masihDisewa() mensyaratkan barang sudah diserahkan dan lunas,
-     * jadi nota yang baru diikat muncul di tab dengan tombol dinonaktifkan berikut
-     * alasannya. Memisahkan isi tab dari gerbang tombol adalah pilihan sadar —
-     * tab menjawab "sewa mana yang belum pulang", tombol menjawab "boleh dicatat
-     * pulang sekarang tidak".
+     * Yang boleh MENekan tombol "Sudah kembali" aturannya sendiri dan TIDAK ikut
+     * klausul ini: lihat masihDisewa(), yang hanya menuntut barang diserahkan dan
+     * lunas kalau nota punya unit stok. Memisahkan isi tab dari gerbang tombol
+     * adalah pilihan sadar — tab menjawab "sewa mana yang belum pulang", tombol
+     * menjawab "boleh dicatat pulang sekarang tidak".
      *
      * $tabel adalah nama tabel invoice lengkap dengan prefix-nya, karena
      * klausul ini dipakai pada where mentah yang tidak di-escape builder.
@@ -371,6 +381,32 @@ class InvoiceModel extends Model
         return self::klausulSewaMenunggu($tabel)
             . " AND {$tabel}.status_pesanan <> '3'"
             . ' AND ' . self::klausulDanaMasuk($tabel);
+    }
+
+    /**
+     * Klausul bagian "Sudah Kembali": nota sewa yang pengembaliannya sudah
+     * dicatat. Scope-nya sama persis dengan klausulMasihDisewa(), hanya penanda
+     * kepulangannya yang dibalik, jadi kedua bagian itu adalah dua potong dari
+     * isi tab Disewa yang sama — bukan dua aturan yang berbeda.
+     *
+     * Disebut di sini juga supaya tab Selesai bisa membuangnya: nota sewa yang
+     * sudah pulang punya riwayatnya sendiri di tab Disewa, tidak dihitung dua kali.
+     */
+    public static function klausulSewaKembali(string $tabel): string
+    {
+        return self::klausulSewaSelesai($tabel)
+            . " AND {$tabel}.status_pesanan <> '3'"
+            . ' AND ' . self::klausulDanaMasuk($tabel);
+    }
+
+    /**
+     * Nota sewa yang pengembaliannya sudah dicatat, tanpa syarat apa pun selain
+     * itu. Pasangannya klausulSewaMenunggu().
+     */
+    public static function klausulSewaSelesai(string $tabel): string
+    {
+        return "COALESCE(JSON_UNQUOTE(JSON_EXTRACT({$tabel}.rincian, '$.tipe')), '') = 'sewa'"
+            . " AND {$tabel}.sewa_kembali_at IS NOT NULL";
     }
 
     /**
@@ -447,29 +483,57 @@ class InvoiceModel extends Model
     }
 
     /**
-     * Gerbang tombol "Sudah kembali": barang sudah diserahkan (status_pengiriman
-     * '3'), pembayaran lunas, dan pengembalian belum dicatat. Lebih ketat dari
-     * isi tab Masih Disewa (klausulMasihDisewa) — nota yang sudah ada DP/cicilan
-     * boleh muncul di tab, tapi tombol ini baru hidup setelah barangnya benar-benar
-     * keluar dan lunas. Stok tidak ikut syarat ini; unit sewa sudah diikat
-     * notasnya sejak orderan ditulis, supaya tidak ada stok gaib.
+     * Gerbang tombol "Sudah kembali" — lebih ketat dari isi tab Disewa
+     * (klausulMasihDisewa): nota yang baru diikat DP boleh muncul di tab, tapi
+     * tombolnya hidup hanya kalau pengembaliannya memang boleh dicatat.
+     *
+     * Nota yang barangnya ditautkan ke unit stok memakai aturan lama: barang
+     * sudah diserahkan (status_pengiriman '3') dan pembayaran lunas, karena
+     * kepulangannya memindahkan unit di kolam sewa.
+     *
+     * Nota yang seluruh barangnya ditulis manual — pakaian custom yang tidak
+     * ada di stok — tidak punya unit sewa yang bisa diserahterimakan lewat
+     * packing/resi, jadi aturan itu tidak pernah bisa tercapai dan tombolnya
+     * mati permanen. Untuk mereka penanda kepulangan boleh ditulis kapan saja.
+     *
+     * @param bool $terikat_stok ada baris orderan yang ditautkan ke order_stok
      */
-    public static function masihDisewa(object $nota): bool
+    public static function masihDisewa(object $nota, bool $terikat_stok): bool
     {
-        return self::sewaMenunggu($nota)
-            && (string) ($nota->status_pengiriman ?? '') === '3'
-            && (string) ($nota->status_pesanan ?? '') !== '3'
+        if (! self::sewaMenunggu($nota)) {
+            return false;
+        }
+
+        if ((string) ($nota->status_pesanan ?? '') === '3') {
+            return false;
+        }
+
+        if (! $terikat_stok) {
+            return true;
+        }
+
+        return (string) ($nota->status_pengiriman ?? '') === '3'
             && self::sudahLunas($nota);
     }
 
     /**
      * Kenapa tombolnya masih mati, untuk ditulis di tooltip. null = boleh ditekan.
-     * Urutan alasannya sengaja dari yang paling awal dalam alur kerja: belum
-     * diserahkan, belum dibayar, baru batal.
+     * Urutan alasannya sama dengan masihDisewa(): batal lebih dulu, lalu bagi
+     * barang berstok — belum diserahkan, belum dibayar.
+     *
+     * @param bool $terikat_stok ada baris orderan yang ditautkan ke order_stok
      */
-    public static function alasanBelumDisewa(object $nota): ?string
+    public static function alasanBelumDisewa(object $nota, bool $terikat_stok): ?string
     {
         if (! self::sewaMenunggu($nota)) {
+            return null;
+        }
+
+        if ((string) ($nota->status_pesanan ?? '') === '3') {
+            return 'Nota ini dibatalkan, pengembaliannya tidak dicatat lagi.';
+        }
+
+        if (! $terikat_stok) {
             return null;
         }
 
@@ -481,11 +545,24 @@ class InvoiceModel extends Model
             return 'Belum bisa dicatat kembali: pembayaran nota ini belum lunas.';
         }
 
-        if ((string) ($nota->status_pesanan ?? '') === '3') {
-            return 'Nota ini dibatalkan, pengembaliannya tidak dicatat lagi.';
-        }
-
         return null;
+    }
+
+    /**
+     * Ada item nota yang ditautkan ke unit stok? Item yang ditulis manual
+     * menjawab false (order_dibeli.stok_id NULL), dan itu yang membedakan sewa
+     * yang angka kolam sewanya bergerak dari sewa yang murni catatan tangan.
+     *
+     * Daftar transaksi sudah memuat baris `barang` per nota, jadi layar tidak
+     * perlu memanggil ini; ia hanya untuk jalur yang memegang satu nota saja,
+     * misal pencatatan pengembalian.
+     */
+    public function terikatStok(int $invoice_id): bool
+    {
+        return (new BarangDibeli())
+                ->where('invoice_id', $invoice_id)
+                ->where('stok_id IS NOT NULL', null, false)
+                ->countAllResults() > 0;
     }
 
     /**
@@ -509,13 +586,15 @@ class InvoiceModel extends Model
             return ['ok' => false, 'pesan' => 'Hanya orderan sewa yang punya pencatatan pengembalian.', 'waktu' => null];
         }
 
-        // penanda ini adalah pintu masuk tab Selesai, stok pulih, dan poin diberikan,
-        // jadi tidak boleh diisi untuk nota yang penyewaannya belum sah berjalan —
-        // sama seperti tombolnya yang hanya hidup di tab Masih Disewa
-        if (! self::masihDisewa($nota)) {
+        // penanda ini adalah pintu masuk bagian "Sudah Kembali", stok kolam sewa
+        // ikut pulih, dan poin diberikan, jadi tidak boleh diisi untuk nota yang
+        // penyewaannya belum sah berjalan — sama seperti tombolnya di daftar
+        $terikat_stok = $this->terikatStok($invoice_id);
+
+        if (! self::masihDisewa($nota, $terikat_stok)) {
             return [
                 'ok'    => false,
-                'pesan' => self::alasanBelumDisewa($nota) ?? 'Nota ini tidak sedang disewa.',
+                'pesan' => self::alasanBelumDisewa($nota, $terikat_stok) ?? 'Nota ini tidak sedang disewa.',
                 'waktu' => null,
             ];
         }
@@ -563,7 +642,7 @@ class InvoiceModel extends Model
 
         $this->update($invoice_id, ['sewa_kembali_at' => null, 'sewa_kembali_oleh' => null]);
 
-        return ['ok' => true, 'pesan' => 'Pengembalian dibatalkan; nota kembali ke tab Masih Disewa.', 'waktu' => null];
+        return ['ok' => true, 'pesan' => 'Pengembalian dibatalkan; nota kembali ke bagian Masih Disewa.', 'waktu' => null];
     }
 
     /**
@@ -677,6 +756,7 @@ class InvoiceModel extends Model
         $countCekBayar    = $this->counts($id_juragan, 'cek-bayar', $hanya);
         $countDalamProses = $this->counts($id_juragan, 'dalam-proses', $hanya);
         $countMasihDisewa = $this->counts($id_juragan, 'masih-disewa', $hanya);
+        $countSudahKembali = $this->counts($id_juragan, 'sudah-kembali', $hanya);
 
         return [
             'semua' => [
@@ -709,6 +789,11 @@ class InvoiceModel extends Model
                 'text' => formatRibuan($countMasihDisewa),
 
             ],
+            'sudah_disewa' => [
+                'num'  => $countSudahKembali,
+                'text' => formatRibuan($countSudahKembali),
+
+            ],
         ];
     }
 
@@ -727,9 +812,11 @@ class InvoiceModel extends Model
                 $q->where('invoice.status_pengiriman', '3');
 
                 // sama dengan terapkanTab(): sewa yang barangnya belum kembali
-                // belum berhak masuk Selesai, jadi counter tab tidak boleh
-                // menghitungnya
-                $q->where('NOT (' . self::klausulSewaMenunggu($this->db->prefixTable('invoice')) . ')', null, false);
+                // belum berhak masuk Selesai, dan yang sudah kembali punya
+                // tempatnya sendiri di tab Disewa — tidak dihitung dua kali
+                $tabel = $this->db->prefixTable('invoice');
+                $q->where('NOT (' . self::klausulSewaMenunggu($tabel) . ')', null, false);
+                $q->where('NOT (' . self::klausulSewaKembali($tabel) . ')', null, false);
 
                 break;
 
@@ -753,6 +840,12 @@ class InvoiceModel extends Model
                 // soft delete sudah disaring otomatis oleh model (getCount hanya
                 // dipanggil lewat builder model ini), sisanya satu klausul mentah
                 $q->where(self::klausulMasihDisewa($this->db->prefixTable('invoice')), null, false);
+
+                break;
+
+            case 'sudah-kembali':
+                // bagian kedua tab Disewa: klausul yang sama, penanda pulang dibalik
+                $q->where(self::klausulSewaKembali($this->db->prefixTable('invoice')), null, false);
 
                 break;
         }
