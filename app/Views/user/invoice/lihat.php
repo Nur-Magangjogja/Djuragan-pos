@@ -236,8 +236,8 @@ $kelolaTransaksi = wewenang_sunting_transaksi();
         ['pembayaran', 'Pembayaran', 'counterCekBayar', 'Transaksi yang pembayarannya perlu dicek'],
         ['belum-proses', 'Belum Proses', 'counterBelumProses', 'Transaksi yang belum mulai dikerjakan'],
         ['dalam-proses', 'Dalam Proses', 'counterDalamProses', 'Transaksi yang sedang dikerjakan'],
-        ['selesai', 'Selesai', 'counterSelesai', 'Transaksi yang sudah selesai; nota sewa baru masuk sini setelah barangnya dicatat kembali'],
-        ['masih-disewa', 'Masih Disewa', 'counterMasihDisewa', 'Nota sewa yang pengembaliannya belum dicatat dan dananya sudah masuk: DP, sedang dicicil, atau lunas'],
+        ['selesai', 'Selesai', 'counterSelesai', 'Transaksi yang sudah selesai; nota sewa yang barangnya sudah dicatat kembali punya tempat sendiri di tab Disewa'],
+        ['masih-disewa', 'Disewa', 'counterDisewa', 'Nota sewa yang dananya sudah masuk (DP, dicicil, atau lunas). Angkanya hanya bagian Masih Disewa; bagian Sudah Kembali ada di dalam tab yang sama'],
     ];
     ?>
     <div class="baris-toolbar mb-4 flex flex-wrap items-center gap-x-1 gap-y-2">
@@ -344,13 +344,45 @@ $kelolaTransaksi = wewenang_sunting_transaksi();
         </div>
     <?php endif; ?>
 
+    <?php if ($hal === 'masih-disewa') : ?>
+        <?php
+        // Tab Disewa dibagi dua bagian. Parameternya `bagian`, sama seperti sub-tab
+        // halaman Email; kata yang sedang dicari ikut terbawa supaya tidak hilang
+        // saat berpindah bagian.
+        $kueri_bagian = ($cari === '' || $cari === []) ? [] : ['cari' => (array) $cari];
+        $bagian_sewa  = [
+            'belum' => ['Masih Disewa', 'counterBagianBelum', 'Nota sewa yang pengembaliannya belum dicatat'],
+            'sudah' => ['Sudah Kembali', 'counterBagianSudah', 'Nota sewa yang sudah dicatat kembali. Salah klik? Batalkan di barisnya.'],
+        ];
+        ?>
+        <div class="mb-4 flex flex-wrap items-center gap-2">
+            <?php foreach ($bagian_sewa as $slug_bagian => [$label_bagian, $id_bagian, $ket_bagian]) :
+                $aktif_bagian = $sewa_sudah ? $slug_bagian === 'sudah' : $slug_bagian === 'belum';
+
+                echo anchor(
+                    'user/invoices/lihat/' . $juragan . '/' . $hal . '/' . $kategori . '?'
+                        . http_build_query(array_merge(['bagian' => $slug_bagian], $kueri_bagian)),
+                    $label_bagian . ' <span class="badge rounded-pill bg-ink-100 text-ink-600" id="' . $id_bagian . '">0</span>',
+                    [
+                        'class' => 'btn rounded-pill btn-' . ($aktif_bagian ? 'primary' : 'outline-secondary'),
+                        'title' => $ket_bagian,
+                    ]
+                );
+            endforeach; ?>
+        </div>
+    <?php endif; ?>
+
     <?php if ($orderan['data'] === []) : ?>
         <div class="mb-4 rounded-2xl border border-dashed border-ink-200 bg-[#fcfdfe] px-4 py-6 text-center text-ink-500">
             <i class="fal fa-inbox block text-[1.35rem] text-ink-400 mb-2"></i>
             <?php if ($hal === 'saring') : ?>
                 Belum ada orderan pada saringan <?= esc($kategori_pembayaran[$kategori]['label']) ?>.
             <?php elseif ($hal === 'masih-disewa') : ?>
-                Belum ada barang yang sedang disewa. Tab ini hanya memuat nota sewa yang dananya sudah masuk (DP, dicicil, atau lunas) dan pengembaliannya belum dicatat — nota sewa yang belum dibayar sama sekali dicek di tab <strong>Pembayaran</strong> atau <strong>Belum Proses</strong>.
+                <?php if ($sewa_sudah) : ?>
+                    Belum ada nota sewa yang dicatat kembali di sini.
+                <?php else : ?>
+                    Belum ada barang yang sedang disewa. Bagian ini hanya memuat nota sewa yang dananya sudah masuk (DP, dicicil, atau lunas) dan pengembaliannya belum dicatat — nota sewa yang belum dibayar sama sekali dicek di tab <strong>Pembayaran</strong> atau <strong>Belum Proses</strong>.
+                <?php endif; ?>
             <?php elseif ($kategori !== 'semua' && in_array($hal, ['pembayaran', 'belum-proses'], true)) : ?>
                 Belum ada transaksi berkategori <?= esc($kategori_pembayaran[$kategori]['label']) ?>.
             <?php else : ?>
@@ -378,10 +410,14 @@ $kelolaTransaksi = wewenang_sunting_transaksi();
         <?php
         $count_barang = 0;
         $harga_barang = 0;
+        $terikat_stok = false;
 
         foreach ($pesanan->barang as $b) {
             $count_barang += $b->qty;
             $harga_barang += $b->qty * $b->harga;
+
+            // item yang ditulis manual (pakaian custom) tidak ditautkan ke unit stok
+            $terikat_stok = $terikat_stok || (int) $b->stok_id > 0;
         }
 
         $wajib_bayar = $harga_barang;
@@ -394,8 +430,8 @@ $kelolaTransaksi = wewenang_sunting_transaksi();
         $adalah_sewa    = \App\Models\InvoiceModel::adalahSewa($pesanan->rincian ?? null);
         $sewa_berjalan  = \App\Models\InvoiceModel::sewaMenunggu($pesanan);
         $sewa_pulang    = $adalah_sewa && ! $sewa_berjalan;
-        $siap_kembali   = \App\Models\InvoiceModel::masihDisewa($pesanan);
-        $alasan_kembali = \App\Models\InvoiceModel::alasanBelumDisewa($pesanan);
+        $siap_kembali   = \App\Models\InvoiceModel::masihDisewa($pesanan, $terikat_stok);
+        $alasan_kembali = \App\Models\InvoiceModel::alasanBelumDisewa($pesanan, $terikat_stok);
         ?>
         <div class="kartu-invoice mb-4 rounded-2xl sm:rounded-[1.5rem] border border-ink-200 bg-white shadow-sm transition hover:shadow-md">
             <div class="p-3.5 sm:p-5">
@@ -950,9 +986,9 @@ $kelolaTransaksi = wewenang_sunting_transaksi();
                     }
 
                     if ($sewa_berjalan) {
-                        // tombolnya mati selama nota belum masuk tab Masih Disewa:
-                        // dicatat kembali hanya masuk akal untuk barang yang memang
-                        // benar-benar sedang dipinjam orang
+                        // tombolnya hidup untuk nota yang pengembaliannya boleh
+                        // dicatat: barang berstok menunggu serah terima + lunas,
+                        // pakaian custom tanpa stok boleh langsung dicatat
                         $kembali = [
                             'content'      => '<i class="fal fa-tshirt"></i> <span class="label-kembali"><span class="kata-depan">Sudah </span>kembali</span>',
                             'data-invoice' => $pesanan->id_invoice,
@@ -2219,7 +2255,10 @@ $js = <<< JS
             pasangBadge('#counterBelumProses', counter.belum_proses);
             pasangBadge('#counterDalamProses', counter.dalam_proses);
             pasangBadge('#counterSelesai', counter.selesai);
-            pasangBadge('#counterMasihDisewa', counter.masih_disewa);
+            // angka tab Disewa hanya mengikuti bagian Masih Disewa
+            pasangBadge('#counterDisewa', counter.masih_disewa);
+            pasangBadge('#counterBagianBelum', counter.masih_disewa);
+            pasangBadge('#counterBagianSudah', counter.sudah_disewa);
             aturPanahTab();
         });
 

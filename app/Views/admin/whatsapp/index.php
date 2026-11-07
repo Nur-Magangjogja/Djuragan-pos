@@ -29,13 +29,6 @@
 $level    = (string) session()->get('level');
 $hari_ini = date('Y-m-d');
 
-/** Saringan yang sudah terisi — untuk angka pada kotak pemicu filter di HP. */
-$saring_aktif = count(array_filter([
-    (string) ($s['nomor'] ?? ''),
-    (string) ($s['tindak_lanjut'] ?? ''),
-    (string) ($s['juragan_id'] ?? ''),
-]));
-
 // kolom "Role" pada tab "Tidak Jadi Dikerjakan": level akun yang memegang tugasnya
 $role = ['cs' => 'CS', 'admin' => 'Admin', 'superadmin' => 'Superadmin'];
 
@@ -71,6 +64,11 @@ $tanya = static function (array $ubah): string {
 <style>
     .wa-halaman { max-width: 1180px; }
     .wa-head { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-bottom: 1rem; }
+    /* lonceng notifikasi desktop melayang di pojok kanan atas; sisihkan ruang di
+       kanan supaya tombol "Buat Reminder" tidak tertutupnya */
+    @media (min-width: 992px) {
+        .wa-head { padding-right: 4.5rem; }
+    }
     .wa-head p { margin: .3rem 0 0; font-size: .9rem; color: #64748b; }
 
     .wa-tab { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1rem; }
@@ -82,7 +80,7 @@ $tanya = static function (array $ubah): string {
     .wa-tab a.aktif { background: #101828; border-color: #101828; color: #fff; }
     .wa-tab a span { font-weight: 700; }
 
-    .wa-saring { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .55rem; margin-bottom: 1rem; }
+    .wa-saring { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .55rem; margin-bottom: 1rem; border-bottom: 1px solid #eaecf0; padding: 1rem 1.15rem; }
     .wa-saring .lapangan { display: flex; flex-direction: column; gap: .2rem; }
     .wa-saring label { font-size: .7rem; font-weight: 700; color: #667085; text-transform: uppercase; letter-spacing: .04em; }
     .wa-saring .form-control, .wa-saring .form-select { max-width: 190px; }
@@ -108,37 +106,10 @@ $tanya = static function (array $ubah): string {
     #modalSaringWa .modal-footer { align-items: stretch; }
     .wa-saring .wa-aksi { align-items: stretch; }
 
-    /* Yang boleh tergulir cuma isi tabel. Deretan tab + saringan menempel di atas
-       (.wa-lekat) dan kepala kolom ikut menempel di dalam wadah gulirnya
-       (.wa-gulir), jadi baris yang jalan tidak pernah menutupi pilihan tab.
-       Di bawah 992px dibiarkan seperti dulu: halaman yang digulir, sebab di layar
-       kecil blok saringan sudah makan separuh tinggi layar kalau ikut menempel. */
-    .wa-halaman { --wa-atas: 290px; }
+    /* Tab, saringan, dan daftar kini duduk dalam satu kartu dan halaman digulir
+       biasa. Gulir internal tabel + kepala tabel sticky dihapus karena saringan
+       sudah pindah ke dalam kartu, mengikuti pola halaman Cek Toko. */
     .wa-lekat { background: #f9fafb; }
-    .wa-gulir .table { border-collapse: separate; border-spacing: 0; }
-    /* separate di atas bukan hiasan: dengan border-collapse: collapse, garis kepala
-       tabel ikut hilang saat baris bergerak (perilaku sticky yang diketahui). */
-    .wa-gulir thead th { position: sticky; top: 0; z-index: 2; }
-    /* .table-responsive menata tinggi gulir mendatar (7px); gulir tegak yang baru
-       ini diberi ukuran yang sama supaya tidak terlihat dua jenis scrollbar */
-    .wa-gulir::-webkit-scrollbar { width: 7px; }
-
-    @media (min-width: 992px) {
-        .wa-lekat {
-            position: sticky; top: 0; z-index: 1025;
-            padding-top: .3rem; margin-top: -.3rem;
-        }
-        .wa-gulir {
-            /* 290px = judul + tab + saringan + pager; kalau perkiraan meleset,
-               tab dan saringan masih menempel, hanya sisanya yang ikut tergulir */
-            max-height: calc(100vh - var(--wa-atas));
-            max-height: calc(100dvh - var(--wa-atas));
-            min-height: 180px;
-            overflow: auto;
-            /* mentok gulir di tabel tidak boleh membuat halaman di belakangnya ikut bergerak */
-            overscroll-behavior: contain;
-        }
-    }
 
     .wa-kartu {
         background: #fff; border: 1px solid #e2e8f0; border-radius: 1.15rem;
@@ -216,6 +187,8 @@ $tanya = static function (array $ubah): string {
         .wa-head h1 > i { display: none; }
         .wa-head > .me-auto { flex: 1 1 100%; }
         .wa-head > a.btn, .wa-head > button.btn { flex: 1 1 auto; min-width: 0; }
+        /* tombol Buat Reminder melebar penuh satu baris di layar sempit */
+        .wa-saring .wa-btn-buat { grid-column: 1 / -1; width: 100%; }
         .wa-tab { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .wa-tab a { justify-content: center; }
         .wa-tab a:last-child:nth-child(odd) { grid-column: 1 / -1; }
@@ -244,9 +217,6 @@ $tanya = static function (array $ubah): string {
                 <i class="fal fa-phone-alt me-1"></i> Delegasi Nomor
             </a>
         <?php endif; ?>
-        <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalWaBaru">
-            <i class="fal fa-plus"></i> Buat Reminder
-        </button>
     </div>
 
     <?php if ($kabar !== '') : ?><div class="alert alert-success py-2" data-flash><?= esc($kabar) ?></div><?php endif; ?>
@@ -265,7 +235,9 @@ $tanya = static function (array $ubah): string {
                 <i class="fal fa-user"></i> Hanya punyaku
             </a>
         </div>
+    </div>
 
+    <div class="wa-kartu">
         <form class="wa-saring" method="get" action="<?= esc(site_url('admin/tugas/whatsapp')) ?>">
             <input type="hidden" name="tab" value="<?= esc($s['tab']) ?>">
             <input type="hidden" name="saya" value="<?= (int) $s['milik_saya'] === $milik ? '1' : '' ?>">
@@ -280,7 +252,6 @@ $tanya = static function (array $ubah): string {
                 <button type="button" class="wa-saring-kotak" id="saring"
                     data-bs-toggle="modal" data-bs-target="#modalSaringWa" aria-label="Buka filter">
                     <i class="fal fa-filter"></i> Filter
-                    <?php if ($saring_aktif > 0) : ?><span class="wa-saring-jumlah"><?= (int) $saring_aktif ?></span><?php endif; ?>
                 </button>
             </div>
             <div class="wa-saring-lapis" id="saringLapis">
@@ -314,9 +285,13 @@ $tanya = static function (array $ubah): string {
                 <label>&nbsp;</label>
                 <div class="wa-aksi">
                     <button type="submit" class="btn btn-sm btn-dark"><i class="fal fa-search"></i> Cari</button>
-                    <a class="btn btn-sm btn-link text-decoration-none" href="<?= esc(site_url('admin/tugas/whatsapp')) ?>">Ulangi</a>
+                    <button type="button" class="btn btn-sm btn-dark d-inline-flex" data-saring-reset="tab,saya,batas"
+                        title="Kosongkan saringan" aria-label="Kosongkan saringan"><i class="fal fa-sync"></i></button>
                 </div>
             </div>
+            <button type="button" class="btn btn-sm btn-primary ms-auto wa-btn-buat" data-bs-toggle="modal" data-bs-target="#modalWaBaru">
+                <i class="fal fa-plus"></i> Buat Reminder
+            </button>
 
             <!-- popus filter layar sempit: ditulis DI DALAM form yang sama supaya
                  field yang dipindah JS ke dalamnya tetap ikut terkirim saat submit -->
@@ -331,8 +306,8 @@ $tanya = static function (array $ubah): string {
                             <div id="saringWadah"></div>
                         </div>
                         <div class="modal-footer">
-                            <a class="btn btn-sm btn-dark text-decoration-none" href="<?= esc(site_url('admin/tugas/whatsapp')) ?>"
-                                title="Ulangi" aria-label="Ulangi"><i class="fal fa-sync"></i></a>
+                            <button type="button" class="btn btn-sm btn-dark d-inline-flex" data-saring-reset="tab,saya,batas"
+                                title="Kosongkan saringan" aria-label="Kosongkan saringan"><i class="fal fa-sync"></i></button>
                             <button type="submit" class="btn btn-sm btn-dark"><i class="fal fa-search me-1"></i> Cari</button>
                         </div>
                     </div>
@@ -369,13 +344,12 @@ $tanya = static function (array $ubah): string {
             sempit.addEventListener('change', tata);
         }());
         </script>
-    </div>
 
-    <div class="wa-kartu">
+        <div data-saring-wadah>
         <?php if ($baris === []) : ?>
             <div class="wa-kosong">
                 <i class="fal fa-circle-check text-success"></i>
-                <?php if ($s['tab'] === 'belum') : ?>Tidak ada reminder menunggu. Buat lewat tombol kanan atas.<?php else : ?>Kosong di tab ini.<?php endif; ?>
+                <?php if ($s['tab'] === 'belum') : ?>Tidak ada reminder menunggu. Pakai tombol Buat Reminder di atas.<?php else : ?>Kosong di tab ini.<?php endif; ?>
             </div>
         <?php elseif ($s['tab'] === 'tak_selesai') : ?>
             <?php if ($rekap !== []) : ?>
@@ -533,6 +507,7 @@ $tanya = static function (array $ubah): string {
                 </div>
             </div>
         <?php endif; ?>
+        </div>
     </div>
 
 </div>

@@ -103,6 +103,130 @@ $js = <<< JS
             setInterval(pollBadges, 5000);
         }
 
+        // Tombol "kosongkan saringan": field filter dikosongkan, lalu daftar
+        // hasil diambil ulang lewat fetch dan ditukar di tempat — halaman TIDAK
+        // dimuat ulang, jadi popus, guliran, dan posisi tetap utuh. URL ikut
+        // diperbarui (history.replaceState) sehingga kalau di-refresh saringan
+        // lama tidak muncul lagi. Halaman yang tidak punya wadah hasil
+        // (data-saring-wadah) atau saat fetch gagal jatuh ke kirim form (muat
+        // penuh) supaya datanya tetap benar. Satu pendengar untuk semua halaman;
+        // yang dipertahankan (mis. tab, batas) diambil dari data-saring-reset.
+
+        document.addEventListener('click', function (e) {
+            var tombol = e.target.closest ? e.target.closest('[data-saring-reset]') : null;
+
+            if (! tombol) {
+                return;
+            }
+
+            e.preventDefault();
+
+            var form = tombol.closest('form');
+
+            if (! form) {
+                return;
+            }
+
+            var simpan = (tombol.getAttribute('data-saring-reset') || '').split(',').map(function (n) {
+                return n.trim();
+            });
+
+            form.querySelectorAll('input, select, textarea').forEach(function (isian) {
+                // field yang tidak dikirim form memang tidak boleh disentuh
+                if (isian.disabled || simpan.indexOf(isian.name) > -1) {
+                    return;
+                }
+
+                if (isian.type === 'checkbox' || isian.type === 'radio') {
+                    isian.checked = isian.defaultChecked;
+
+                    return;
+                }
+
+                if (isian.tagName === 'SELECT') {
+                    // pilihan kosong ("Semua toko") yang dipilih; kalau tidak ada,
+                    // kembali ke pilihan pertama
+                    var adaKosong = Array.prototype.some.call(isian.options, function (o) {
+                        return o.value === '';
+                    });
+
+                    if (adaKosong) {
+                        isian.value = '';
+                    } else if (isian.options.length) {
+                        isian.selectedIndex = 0;
+                    }
+
+                    return;
+                }
+
+                isian.value = '';
+            });
+
+            // angka "berapa saringan yang aktif" ikut hilang karena saringannya
+            // sudah dikosongkan
+            document.querySelectorAll('.em-saring-angka, .wa-saring-jumlah, .tugas-saring-jumlah').forEach(function (angka) {
+                angka.remove();
+            });
+
+            var wadah = document.querySelector('[data-saring-wadah]');
+
+            if (! wadah) {
+                // halaman tanpa wadah hasil: muat penuh supaya datanya ikut pulih
+                form.submit();
+
+                return;
+            }
+
+            // URL bersih: hanya nama yang dipertahankan (tab/batas/saya/kerja) yang
+            // ikut terbawa; nilainya diambil dari field form, atau dari URL sekarang
+            // kalau field itu tidak ada di form (mis. batas). Semua saringan lain
+            // sudah dikosongkan, jadi hasilnya daftar penuh seperti awal.
+            var sekarang = new URLSearchParams(window.location.search);
+            var q = new URLSearchParams();
+
+            simpan.forEach(function (nama) {
+                if (nama === '') {
+                    return;
+                }
+
+                var field = form.querySelector('[name="' + nama + '"]');
+                var nilai = field ? field.value : sekarang.get(nama);
+
+                if (nilai !== null && nilai !== undefined && nilai !== '') {
+                    q.set(nama, nilai);
+                }
+            });
+
+            var asal = form.getAttribute('action') || window.location.pathname;
+            var tujuan = q.toString() ? asal + '?' + q.toString() : asal;
+
+            fetch(tujuan, { credentials: 'same-origin' })
+                .then(function (r) {
+                    if (! r.ok) {
+                        throw new Error('HTTP ' + r.status);
+                    }
+
+                    return r.text();
+                })
+                .then(function (html) {
+                    var baru = new DOMParser().parseFromString(html, 'text/html').querySelector('[data-saring-wadah]');
+
+                    if (! baru) {
+                        throw new Error('wadah hilang');
+                    }
+
+                    wadah.replaceWith(document.importNode(baru, true));
+                    window.history.replaceState({}, '', tujuan);
+
+                    // beri tahu halaman supaya aksi per-baris diikat ulang bila perlu
+                    document.dispatchEvent(new CustomEvent('saring:segar'));
+                })
+                .catch(function () {
+                    // gagal menukar di tempat: muat penuh supaya data tetap benar
+                    window.location.assign(tujuan);
+                });
+        });
+
     	var notifikasi = document.getElementById('notifikasi');
         if (! notifikasi) {
             return; // halaman ini tidak punya lonceng, tidak ada yang perlu diikat

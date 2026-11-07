@@ -128,6 +128,10 @@ class Invoices extends BaseController
         // pencarian
         $cari = $this->request->getGet('cari') ?? '';
 
+        // bagian tab Disewa: 'sudah' membuka daftar Sudah Kembali, selain itu
+        // (termasuk kosong) tetap bagian Masih Disewa
+        $sewa_sudah = $this->request->getGet('bagian') === 'sudah';
+
         // halaman
         $limit = config('Pager')->perPage;
         $page  = (int) $this->request->getGet('page');
@@ -142,13 +146,14 @@ class Invoices extends BaseController
 
         $data = [
             'title'               => 'Transaksi ' . $title,
-            'orderan'             => $invModel->getAll($hal, $id_juragan, $cari, $limit, $offset, $kategori, $hanya),
+            'orderan'             => $invModel->getAll($hal, $id_juragan, $cari, $limit, $offset, $kategori, $hanya, $sewa_sudah),
             'juragan'             => $juragan,
             'juragan_id'          => $id_juragan,
             'nama_toko'           => $title,
             'daftar_toko'         => $this->tokoPilihan(),
             'cari'                => $cari,
             'hal'                 => $hal,
+            'sewa_sudah'          => $sewa_sudah,
             'kategori'            => $kategori,
             'kategori_pembayaran' => $daftar_kategori,
             'jumlah_kategori'     => in_array($hal, ['pembayaran', 'belum-proses'], true) ? $invModel->countPembayaran($id_juragan, $hal, $hanya) : [],

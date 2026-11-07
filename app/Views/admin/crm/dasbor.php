@@ -109,6 +109,21 @@
         .kartu-kpi-sejajar {
             height: 100%;
         }
+
+        /* kartu naik: kurangi jarak atas container di layar sempit */
+        body.has-app-sidebar > .container-xxl.py-4 {
+            padding-top: 0.75rem !important;
+        }
+    }
+
+    /* kartu terakhir yang sendirian (jumlah kolom baris ganjil) melebar penuh
+       sampai ke tepi di ponsel & tablet; di desktop >=1200px grup kedua sudah
+       lima-sebaris lewat col-xl, jadi tidak perlu dipanjangkan */
+    @media (max-width: 1199.98px) {
+        .row.g-3 > .col-6:last-child:nth-child(odd) {
+            flex: 0 0 100%;
+            max-width: 100%;
+        }
     }
 
     /* Empat kartu pintasan di kolom kanan, layar sempit: judul dan keterangannya
@@ -153,7 +168,7 @@
 
 <div class="container-xxl py-4">
     <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
-        <div>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
             <h4 class="mb-0 fw-bold judul-dasbor">
                 <i class="fal fa-chart-pie text-primary me-2 d-none d-lg-inline"></i>
                 <?php /* ikonnya hanya tampil di layar lebar; di bawah breakpoint
@@ -161,11 +176,6 @@
                 <span class="d-lg-none">Dashboard CRM</span>
                 <span class="d-none d-lg-inline">Dashboard CRM</span>
             </h4>
-        </div>
-        <div class="d-flex align-items-center gap-2 flex-nowrap">
-            <a class="btn btn-sm btn-outline-secondary rounded-pill" href="<?= site_url('admin/tugas/catatan') ?>">
-                <i class="fal fa-note-sticky me-1"></i> Catat Percakapan
-            </a>
         </div>
     </div>
 
@@ -252,36 +262,46 @@
                 </div>
             </a>
         </div>
+
+        <!-- Total Pelanggan -->
+        <div class="col-xl col-md-4 col-6">
+            <a href="<?= site_url('admin/crm/pelanggan') ?>" class="text-decoration-none text-reset">
+                <div class="card border-0 shadow-sm h-100 border-start border-4 border-dark">
+                    <div class="card-body p-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="text-muted small fw-semibold">Total Pelanggan</span>
+                            <i class="fal fa-users text-dark fs-5"></i>
+                        </div>
+                        <h3 class="fw-bold mb-0 text-dark mt-1"><?= number_format($ringkasan['total_pelanggan']) ?></h3>
+                        <div class="text-muted small mt-1" style="font-size: 11px;">database kontak &amp; akun</div>
+                    </div>
+                </div>
+            </a>
+        </div>
+
     </div>
 
     <!-- Ringkasan Akumulasi & Finansial -->
     <div class="row g-3 mb-4">
-        <div class="col-md-3 col-6">
-            <div class="card border-0 shadow-sm bg-white p-3 kartu-kpi-sejajar">
-                <span class="text-muted small fw-semibold">Total Pelanggan<span class="d-none d-lg-inline"> Terdaftar</span></span>
-                <h4 class="fw-bold mb-0 text-dark mt-1"><?= number_format($ringkasan['total_pelanggan']) ?> customer</h4>
-                <div class="small text-muted" style="font-size: 11px;">database kontak & akun</div>
-            </div>
-        </div>
-        <div class="col-md-3 col-6">
+        <div class="col-xl col-md-3 col-6">
             <div class="card border-0 shadow-sm bg-white p-3 kartu-kpi-sejajar">
                 <span class="text-muted small fw-semibold">Akumulasi Omset POS</span>
                 <h4 class="fw-bold mb-0 text-success mt-1">Rp <?= number_format($ringkasan['total_omset'], 0, ',', '.') ?></h4>
                 <div class="small text-muted" style="font-size: 11px;">seluruh riwayat transaksi</div>
             </div>
         </div>
-        <div class="col-md-3 col-6">
-            <div class="card border-0 shadow-sm bg-white p-3 kartu-kpi-sejajar">
-                <span class="text-muted small fw-semibold"><span class="d-none d-lg-inline">Tagihan </span>Belum Lunas</span>
-                <h4 class="fw-bold mb-0 text-danger mt-1">Rp <?= number_format($ringkasan['total_piutang'], 0, ',', '.') ?></h4>
-                <div class="small text-muted" style="font-size: 11px;"><?= number_format($ringkasan['tagihan_pending']) ?> invoice pending</div>
-            </div>
-        </div>
-        <div class="col-md-3 col-6">
+        <div class="col-xl col-md-3 col-6">
             <div class="card border-0 shadow-sm bg-white p-3 kartu-kpi-sejajar">
                 <span class="text-muted small fw-semibold">Peluang Merge<span class="d-none d-lg-inline"> Akun Duplikat</span></span>
                 <h4 class="fw-bold mb-0 text-primary mt-1"><?= number_format($ringkasan['duplikat_terdeteksi']) ?> grup</h4>
                 <div class="small text-muted" style="font-size: 11px;"><a href="<?= site_url('admin/crm/duplikat') ?>" class="text-decoration-none">Periksa & gabungkan &rarr;</a></div>
+            </div>
+        </div>
+        <div class="col-xl col-md-3 col-6">
+            <div class="card border-0 shadow-sm bg-white p-3 kartu-kpi-sejajar">
+                <span class="text-muted small fw-semibold"><span class="d-none d-lg-inline">Tagihan </span>Belum Lunas</span>
+                <h4 class="fw-bold mb-0 text-danger mt-1">Rp <?= number_format($ringkasan['total_piutang'], 0, ',', '.') ?></h4>
+                <div class="small text-muted" style="font-size: 11px;"><?= number_format($ringkasan['tagihan_pending']) ?> invoice pending</div>
             </div>
         </div>
     </div>

@@ -11,7 +11,7 @@
  * @var array<int, string> $juragans  Pilihan toko pada filter (BaseController::juraganPilihan)
  * @var string $cakupan   Toko yang sedang dibaca, dipakai pesan daftar kosong
  * @var int $disewa       Unit sewa yang sedang di tangan penyewa pada cakupan aktif (StokModel::sedangDisewa)
- * @var string $tautan_disewa Alamat tab Masih Disewa di daftar transaksi untuk cakupan aktif
+ * @var string $tautan_disewa Alamat tab Disewa (bagian Masih Disewa) di daftar transaksi untuk cakupan aktif
  * @var string $cari         Kata kunci pencarian yang sedang dipakai
  * @var string $keadaan   Filter keadaan stok yang sedang dipakai
  * @var string $kolam      Kolam tab aktif: 'jual' atau 'sewa' (StokModel::kolam)
@@ -330,7 +330,7 @@ $kueriTab = array_filter([
                        jadi tooltipnya menyebut keduanya supaya tidak dibaca sebagai bug. */ ?>
                     <?php if ($disewa > 0) { ?>
                         <a class="pil-disewa mb-3" href="<?= esc($tautan_disewa) ?>"
-                            title="Unit yang sudah diikat nota sewa dan belum dicatat kembali — inilah pengurang kolom Tersedia. Tab Masih Disewa hanya memuat nota yang dananya sudah masuk (DP, dicicil, atau lunas), jadi angkanya bisa lebih sedikit daripada chip ini.">
+                            title="Unit yang sudah diikat nota sewa dan belum dicatat kembali — inilah pengurang kolom Tersedia. Bagian Masih Disewa di tab Disewa hanya memuat nota yang dananya sudah masuk (DP, dicicil, atau lunas), jadi angkanya bisa lebih sedikit daripada chip ini.">
                             <span class="pil-disewa__titik" aria-hidden="true"></span>
                             <?= formatRibuan($disewa) ?> unit terikat nota sewa
                             <i class="fal fa-arrow-alt-right text-ink-400" aria-hidden="true"></i>
