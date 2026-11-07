@@ -23,6 +23,7 @@
 
 # PHP
 *.log
+*.sql
 composer.lock
 vendor/
 /storage
