@@ -1897,6 +1897,13 @@ body.has-app-sidebar .h3.mt-5 {
   body.has-app-sidebar .h3.mt-5 {
     font-size: 1.25rem !important;
   }
+
+  /* Lambang di depan judul halaman (Cek Toko, Cek Email) makan tempat di layar
+     sempit sementara judulnya sudah cukup menjelaskan halamannya apa. Kelas ini
+     cuma dipakai ikon judul, jadi menunya sendiri tidak ikut hilang. */
+  .judul-ikon {
+    display: none !important;
+  }
 }
 
 body.has-app-sidebar h1.h3.mt-5:not(:has(+ nav)):not(:has(+ .breadcrumb)) {

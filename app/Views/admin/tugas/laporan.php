@@ -135,11 +135,13 @@ $dibaca = static function ($detik): string {
             <label>&nbsp;</label>
             <div class="d-inline-flex gap-2 align-items-center">
                 <button type="submit" class="btn btn-sm btn-dark"><i class="fal fa-search"></i> Terapkan</button>
-                <a class="btn btn-sm btn-link text-decoration-none" href="<?= esc(site_url('admin/tugas/laporan')) ?>">Ulangi</a>
+                <button type="button" class="btn btn-sm btn-dark d-inline-flex" data-saring-reset="batas"
+                    title="Kosongkan saringan" aria-label="Kosongkan saringan"><i class="fal fa-sync"></i></button>
             </div>
         </div>
     </form>
 
+    <div data-saring-wadah>
     <div class="lp-kartu">
         <div class="lp-judul">Rekap per orang &middot; <?= esc($s['hari_dari']) ?> &rarr; <?= esc($s['hari_sampai']) ?></div>
         <?php if ($beban === []) : ?>
@@ -240,6 +242,7 @@ $dibaca = static function ($detik): string {
                 </div>
             </div>
         <?php endif; ?>
+    </div>
     </div>
 
 </div>

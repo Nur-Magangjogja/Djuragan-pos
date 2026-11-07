@@ -5,6 +5,7 @@ namespace App\Controllers;
 use App\Models\InvoiceModel;
 use App\Models\JuraganModel;
 use App\Models\PengaturanModel;
+use App\Models\ReminderDikirimModel;
 
 /**
  * Reminder Penjahit — daftar orderan pembuatan/jual yang deadline-nya sudah dekat,
@@ -22,8 +23,16 @@ class Reminder extends BaseController
 
         $hari  = pengingat_penjahit_hari();
         $level = (string) session()->get('level');
+        $tab   = $this->request->getGet('tab') === 'sudah' ? 'sudah' : 'belum';
 
-        $reminder = (new InvoiceModel())->pengingatPenjahit($this->tokoBoleh(), $hari);
+        $model = new InvoiceModel();
+
+        // dua tab diambil sekaligus supaya angkanya bisa tampil di pil tab tanpa
+        // query tambahan; yang ditampilkan hanya tab aktif
+        $belum = $model->pengingatPenjahit($this->tokoBoleh(), $hari, 0, 0, false);
+        $sudah = $model->pengingatPenjahit($this->tokoBoleh(), $hari, 0, 0, true);
+
+        $reminder = $tab === 'sudah' ? $sudah : $belum;
 
         // tiap kartu mengarah ke layar transaksi yang sudah tersaring ke satu
         // nomor nota (cari[kolom]=faktur) lewat helper yang sama dengan lonceng
@@ -46,10 +55,41 @@ class Reminder extends BaseController
             'title'      => 'Reminder Pesanan',
             'hari'       => $hari,
             'reminder'   => $reminder,
+            'tab'        => $tab,
+            'angka'      => ['belum' => count($belum), 'sudah' => count($sudah)],
             'superadmin' => $level === 'superadmin',
         ];
 
         return view('reminder/index', $data);
+    }
+
+    /**
+     * Tandai satu reminder sudah diingatkan: pindah dari tab "Belum" ke "Sudah".
+     * Aksinya bisa diurungkan (lihat batal), jadi tidak perlu guard berat.
+     */
+    public function selesai()
+    {
+        $id = (int) $this->request->getPost('id_invoice');
+
+        if ($id > 0) {
+            (new ReminderDikirimModel())->tandai($id, (int) session()->get('id'));
+        }
+
+        return redirect()->to(site_url('admin/reminder?tab=belum'))
+            ->with('sukses', 'Reminder ditandai sudah diingatkan.');
+    }
+
+    /** Urungkan penanda: kembalikan satu reminder ke tab "Belum Diingatkan". */
+    public function batal()
+    {
+        $id = (int) $this->request->getPost('id_invoice');
+
+        if ($id > 0) {
+            (new ReminderDikirimModel())->copot($id);
+        }
+
+        return redirect()->to(site_url('admin/reminder?tab=sudah'))
+            ->with('sukses', 'Penanda dilepas; reminder kembali ke Belum Diingatkan.');
     }
 
     public function jumlah()

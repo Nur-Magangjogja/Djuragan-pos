@@ -97,8 +97,8 @@ $level = (string) session()->get('level');
                  FontAwesome memakai line-height:1, jadi keduanya direntangkan -->
             <div class="d-inline-flex gap-2 align-items-stretch">
                 <button type="submit" class="btn btn-sm btn-dark"><i class="fal fa-search"></i> Cari</button>
-                <a class="btn btn-sm btn-dark text-decoration-none" href="<?= esc(site_url('admin/sop')) ?>"
-                    title="Ulangi" aria-label="Ulangi"><i class="fal fa-sync"></i></a>
+                <button type="button" class="btn btn-sm btn-dark d-inline-flex" data-saring-reset
+                    title="Kosongkan saringan" aria-label="Kosongkan saringan"><i class="fal fa-sync"></i></button>
             </div>
         </div>
     </form>

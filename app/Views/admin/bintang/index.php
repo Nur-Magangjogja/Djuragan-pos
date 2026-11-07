@@ -259,16 +259,14 @@ $tanya = static function (array $ubah): string {
                     <button type="submit" class="btn btn-sm btn-dark" aria-label="Cari">
                         <i class="fal fa-search"></i><span class="d-none d-lg-inline"> Cari</span>
                     </button>
-                    <a class="btn btn-sm btn-dark text-decoration-none d-inline-flex d-lg-none"
-                        href="<?= esc(site_url('admin/tugas/bintang')) ?>" title="Ulangi" aria-label="Ulangi"><i class="fal fa-sync"></i></a>
-                    <a class="btn btn-sm btn-link text-decoration-none d-none d-lg-inline"
-                        href="<?= esc(site_url('admin/tugas/bintang')) ?>">Ulangi</a>
+                    <button type="button" class="btn btn-sm btn-dark d-inline-flex" data-saring-reset="tab,saya,batas"
+                        title="Kosongkan saringan" aria-label="Kosongkan saringan"><i class="fal fa-sync"></i></button>
                 </div>
             </div>
         </form>
     </div>
 
-    <div class="b5-kartu">
+    <div class="b5-kartu" data-saring-wadah>
         <?php if ($baris === []) : ?>
             <div class="b5-kosong">
                 <?php if ($s['tab'] === 'belum') : ?>

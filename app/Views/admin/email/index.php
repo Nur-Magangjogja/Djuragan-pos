@@ -81,6 +81,13 @@ $tanya = static function (array $ubah): string {
     .em-head p { margin: .4rem 0 0; font-size: .9rem; color: #64748b; max-width: 64ch; }
     .em-head-aksi { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
     .em-head-aksi .btn { display: inline-flex; align-items: center; gap: .35rem; }
+    /* lonceng notifikasi melayang di pojok kanan atas mulai 992px (lihat
+       .notif-melayang di template/notif_bar.php). Tanpa ruang ini tombol
+       "+ Tambah Email" tertutup lonceng — sama seperti yang sudah dilakukan
+       di kepala halaman Cek Toko */
+    @media (min-width: 992px) {
+        .em-head { padding-right: 4.5rem; }
+    }
 
     /* semua chip tab dipaksa satu baris lurus: tidak pernah melipat, digulir
        halus kalau layar lebih sempit daripada isinya */
@@ -120,6 +127,22 @@ $tanya = static function (array $ubah): string {
     .em-saring .form-control, .em-saring .form-select { width: 100%; max-width: none; }
     .em-saring-pemisah { display: none; }
     .em-saring-grup { display: contents; }
+    /* layar kecil: field toko/tanggal dilipat di balik tombol Filter, jadi baris
+       pertama tetap cuma "cari + filter". Di desktop kedua pembungkusnya tidak
+       terlihat (display: contents) sehingga tata letak lamanya tidak berubah */
+    .em-saring-lipat { display: contents; }
+    .em-saring-kotak { display: contents; }
+    .em-cari-baris { display: flex; gap: .3rem; align-items: stretch; }
+    .em-cari-baris .form-control { flex: 1 1 auto; min-width: 0; }
+    .em-saring-tombol { display: none; flex: 0 0 auto; align-items: center; gap: .3rem; }
+    .em-saring-angka {
+        display: inline-flex; align-items: center; justify-content: center;
+        min-width: 1.05rem; height: 1.05rem; padding: 0 .25rem; border-radius: 999px;
+        background: #fde047; color: #101828; font-size: .66rem; font-weight: 700;
+    }
+    .em-saring .em-tutup { display: none; }
+    .em-saring.buka .em-buka { display: none; }
+    .em-saring.buka .em-tutup { display: inline-flex; }
 
     .em-kartu { background: #fff; border: 1px solid #e2e8f0; border-radius: 1.15rem;
         box-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 8px 24px -12px rgba(15, 23, 42, .12); overflow: hidden; }
@@ -144,6 +167,11 @@ $tanya = static function (array $ubah): string {
     .em-teenggat { font-size: .78rem; white-space: nowrap; }
     .lewat { color: #b81c16; font-weight: 700; }
     .em-aksi { display: inline-flex; flex-wrap: nowrap; gap: .3rem; align-items: center; justify-content: flex-end; }
+    /* dua tombol di baris saringan dibuat sama ukurannya: Cari tidak mendominasi
+       dan ikon Ulangi tidak berdiri mungil sendiri. Hanya di sini — tombol aksi
+       di tiap baris daftar tidak boleh ikut berubah */
+    .lapangan-aksi .em-aksi { display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; align-items: stretch; }
+    .lapangan-aksi .em-aksi > .btn { justify-content: center; }
     .em-form-lepas { margin-top: .4rem; }
     .em-pager { padding: .8rem 1rem; background: #fff; border-top: 1px solid #eaecf0; }
     .em-tenggat-label { display: none; }
@@ -194,11 +222,37 @@ $tanya = static function (array $ubah): string {
         .em-tab a { flex: 1 1 0; justify-content: center; }
         .em-saring { flex-wrap: wrap; }
         .em-saring .lapangan,
-        .em-saring .lapangan-cari,
         .em-saring .lapangan-sempit { flex: 1 1 calc(50% - .3rem); min-width: 0; max-width: none; }
+        /* baris pertama cuma kolom cari dengan tombol filter di sampingnya;
+           sisanya baru muncul saat filternya dibuka */
+        .em-saring .lapangan-cari { flex: 1 1 100%; }
+        .em-saring-tombol { display: inline-flex; }
+        /* popus saringan: latar redup menutup layar dan kartunya duduk di
+           TENGAH, sama seperti popus yang lain — bukan panel yang menempel di
+           bawah kolom cari */
+        .em-saring-lipat {
+            display: none; position: fixed; inset: 0; z-index: 1050;
+            align-items: center; justify-content: center; padding: 1rem;
+            background: rgba(15, 23, 42, .35);
+        }
+        .em-saring.buka .em-saring-lipat { display: flex; }
+        .em-saring-kotak {
+            display: flex; flex-wrap: wrap; gap: .55rem .6rem;
+            width: 100%; max-width: 24rem; flex: 0 0 auto; padding: .9rem 1rem;
+            border: 1px solid #e2e8f0; border-radius: 1rem; background: #fff;
+            box-shadow: 0 1.2rem 2.4rem rgba(15, 23, 42, .22);
+        }
+        /* toko satu baris penuh (namanya panjang), dua tanggal berpasangan */
+        .em-saring-kotak .lapangan { flex: 1 1 100%; }
+        .em-saring-kotak .lapangan-sempit { flex: 1 1 calc(50% - .3rem); }
         .em-saring .lapangan-aksi { flex: 1 1 100%; }
+        /* baris label kosong di atas tombol aksi hanya diperlukan di desktop,
+           di layar kecil ia tinggal menyisakan jarak hampa */
+        .em-saring .lapangan-aksi label { display: none; }
         .em-daftar td { font-size: .82rem; }
         .em-aksi { justify-content: center; }
+        /* di dalam popus kedua tombol berbagi lebar kartu: sama besar, sama tinggi */
+        .em-saring-kotak .lapangan-aksi .em-aksi { width: 100%; }
 
         /* ---- mobile card layout untuk tab Catatan ---- */
         .em-kartu:not(.em-email-kartu) .table-responsive { overflow: visible; }
@@ -318,7 +372,7 @@ $tanya = static function (array $ubah): string {
 
     <div class="em-head">
         <div class="me-auto">
-            <h1 class="h3 mt-5"><i class="fal fa-envelope me-1 text-brand-500"></i> <?= esc($title) ?></h1>
+            <h1 class="h3 mt-5"><i class="fal fa-envelope me-1 text-brand-500 judul-ikon"></i> <?= esc($title) ?></h1>
             <p><?= $bagian === 'email'
                 ? 'Satu baris = satu alamat email dan orang yang memegangnya. Siapa yang memegang alamatnya, dia yang dapat tugas cek email di alamat itu.'
                 : 'Catatan ditugaskan ke salah satu alamat di tab Daftar Email — siapa yang memegang alamatnya, dia yang dapat tugasnya.' ?></p>
@@ -372,7 +426,21 @@ $tanya = static function (array $ubah): string {
         <?php endforeach; ?>
     </div>
 
-    <form class="em-saring" method="get" action="<?= esc(site_url('admin/tugas/email')) ?>">
+    <?php
+    // berapa saringan yang sedang aktif di balik tombol Filter (layar kecil)
+    $saringAktif = 0;
+
+    foreach ([$s['awal'], $s['akhir']] as $isi) {
+        if ((string) $isi !== '') {
+            $saringAktif++;
+        }
+    }
+
+    if ((int) $s['juragan_id'] > 0) {
+        $saringAktif++;
+    }
+    ?>
+    <form class="em-saring<?= $saringAktif > 0 ? ' buka' : '' ?>" method="get" action="<?= esc(site_url('admin/tugas/email')) ?>">
         <input type="hidden" name="tab" value="<?= esc($s['tab']) ?>">
         <?php if ($s['email_get'] !== '') : ?>
             <input type="hidden" name="email" value="<?= esc($s['email_get'], 'attr') ?>">
@@ -380,49 +448,66 @@ $tanya = static function (array $ubah): string {
 
         <div class="lapangan lapangan-cari">
             <label for="cari">Cari</label>
-            <input type="search" class="form-control form-control-sm" id="cari" name="cari" value="<?= esc($s['cari']) ?>"
-                placeholder="isi catatan">
-        </div>
-        <?php if (count($toko) > 1) : ?>
-            <div class="lapangan">
-                <label for="toko">Toko</label>
-                <select class="form-select form-select-sm" id="toko" name="toko">
-                    <option value="">Semua toko</option>
-                    <?php foreach ($toko as $id_toko => $nama_t) : ?>
-                        <option value="<?= (int) $id_toko ?>" <?= (int) $s['juragan_id'] === (int) $id_toko ? 'selected' : '' ?>><?= esc($nama_t) ?></option>
-                    <?php endforeach; ?>
-                </select>
+            <div class="em-cari-baris">
+                <input type="search" class="form-control form-control-sm" id="cari" name="cari" value="<?= esc($s['cari']) ?>"
+                    placeholder="isi catatan">
+                <button type="button" class="btn btn-sm btn-dark em-saring-tombol" id="em-saring-buka"
+                    aria-expanded="<?= $saringAktif > 0 ? 'true' : 'false' ?>" aria-controls="em-saring-lipat">
+                    <span class="em-buka"><i class="fal fa-filter"></i> Filter</span>
+                    <span class="em-tutup"><i class="fal fa-xmark"></i> Tutup</span>
+                    <?php if ($saringAktif > 0) : ?>
+                        <span class="em-saring-angka"><?= $saringAktif ?></span>
+                    <?php endif; ?>
+                </button>
             </div>
-        <?php endif; ?>
-
-        <div class="lapangan lapangan-sempit">
-            <label for="awal">Tenggat dari</label>
-            <input type="date" class="form-control form-control-sm" id="awal" name="awal"
-                value="<?= esc($s['awal']) ?>" max="<?= esc($s['akhir'] ?: '') ?>">
-        </div>
-        <div class="lapangan lapangan-sempit">
-            <label for="akhir">Sampai</label>
-            <input type="date" class="form-control form-control-sm" id="akhir" name="akhir"
-                value="<?= esc($s['akhir']) ?>" min="<?= esc($s['awal'] ?: '') ?>">
         </div>
 
-        <div class="lapangan lapangan-sempit">
-            <label for="batas">Baris</label>
-            <select class="form-select form-select-sm" id="batas" name="batas">
-                <?php foreach ([10, 25, 50] as $n) : ?>
-                    <option value="<?= $n ?>" <?= $batas === $n ? 'selected' : '' ?>><?= $n ?></option>
-                <?php endforeach; ?>
-            </select>
-        </div>
-        <div class="lapangan lapangan-aksi">
-            <label>&nbsp;</label>
-            <div class="em-aksi">
-                <button type="submit" class="btn btn-sm btn-dark"><i class="fal fa-search"></i> Cari</button>
-                <a class="btn btn-sm btn-link text-decoration-none" href="<?= esc(site_url('admin/tugas/email')) ?>">Ulangi</a>
+        <!-- popus saringan: pembungkus luarnya jadi latar redup yang menahan
+             kartu di tengah layar (sama seperti popus yang lain), kartu inilah
+             isinya. Di desktop keduanya display: contents sehingga field-nya
+             tetap duduk satu baris di baris saringan seperti sebelumnya -->
+        <div class="em-saring-lipat" id="em-saring-lipat">
+            <div class="em-saring-kotak">
+                <?php if (count($toko) > 1) : ?>
+                    <div class="lapangan">
+                        <label for="toko">Toko</label>
+                        <select class="form-select form-select-sm" id="toko" name="toko">
+                            <option value="">Semua toko</option>
+                            <?php foreach ($toko as $id_toko => $nama_t) : ?>
+                                <option value="<?= (int) $id_toko ?>" <?= (int) $s['juragan_id'] === (int) $id_toko ? 'selected' : '' ?>><?= esc($nama_t) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                <?php endif; ?>
+
+                <div class="lapangan lapangan-sempit">
+                    <label for="awal">Tenggat dari</label>
+                    <input type="date" class="form-control form-control-sm" id="awal" name="awal"
+                        value="<?= esc($s['awal']) ?>" max="<?= esc($s['akhir'] ?: '') ?>">
+                </div>
+                <div class="lapangan lapangan-sempit">
+                    <label for="akhir">Sampai</label>
+                    <input type="date" class="form-control form-control-sm" id="akhir" name="akhir"
+                        value="<?= esc($s['akhir']) ?>" min="<?= esc($s['awal'] ?: '') ?>">
+                </div>
+
+                <!-- tombol aksi ikut ke dalam popus: yang dibuka tinggal "Cari" dan
+                   "Kosongkan saringan" yang menyimpulkannya -->
+                <div class="lapangan lapangan-aksi">
+                    <label>&nbsp;</label>
+                    <div class="em-aksi">
+                        <button type="submit" class="btn btn-sm btn-dark"><i class="fal fa-search"></i> Cari</button>
+                        <button type="button" class="btn btn-sm btn-dark d-inline-flex" data-saring-reset="tab,batas"
+                            title="Kosongkan saringan" aria-label="Kosongkan saringan">
+                            <i class="fal fa-sync"></i>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </form>
 
+    <div data-saring-wadah>
     <?php if ((int) $s['email_id'] > 0) : ?>
         <?php
         $pil_saring = $email[(int) $s['email_id']] ?? '';
@@ -692,6 +777,7 @@ $tanya = static function (array $ubah): string {
         </div>
     </div>
     <?php endif; ?>
+    </div>
 
 </div>
 
@@ -855,6 +941,47 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // tombol Filter: di layar kecil saringan tambahan dilipat di baliknya, dan
+    // desktop tidak pernah melihat tombol ini karena display-nya diset di media
+    // query — jadi tidak perlu cek lebar layar di sini
+    var saring = document.querySelector('.em-saring');
+    var buka   = document.getElementById('em-saring-buka');
+    var kotak  = document.querySelector('.em-saring-kotak');
+
+    if (saring && buka && kotak) {
+        var tutup = function () {
+            saring.classList.remove('buka');
+            buka.setAttribute('aria-expanded', 'false');
+        };
+
+        buka.addEventListener('click', function () {
+            var kini = ! saring.classList.contains('buka');
+
+            saring.classList.toggle('buka', kini);
+            buka.setAttribute('aria-expanded', kini ? 'true' : 'false');
+        });
+
+        // popus menutup dirinya sendiri begitu yang diklik jatuh di luar
+        // kartunya — termasuk latar redupnya — atau begitu Esc ditekan
+        document.addEventListener('click', function (peristiwa) {
+            if (! saring.classList.contains('buka')) {
+                return;
+            }
+
+            if (kotak.contains(peristiwa.target) || buka.contains(peristiwa.target)) {
+                return;
+            }
+
+            tutup();
+        });
+
+        document.addEventListener('keydown', function (peristiwa) {
+            if (peristiwa.key === 'Escape') {
+                tutup();
+            }
+        });
+    }
+
     // chip tab tidak pernah melipat; kalau layar sempit barisnya digulir, dan
     // tepi yang masih punya sisa digelapkan supaya chip tersembunyi terbaca
     document.querySelectorAll('.em-tab').forEach(function (baris) {
@@ -892,17 +1019,19 @@ document.addEventListener('DOMContentLoaded', function() {
         return true;
     };
 
-    // delegasi: memilih nama langsung menyimpan, tanpa tombol Tautkan
-    document.querySelectorAll('select[data-taut]').forEach(function (pilih) {
-        pilih.addEventListener('change', function () {
-            if (pilih.value === '') {
-                return;
-            }
+    // delegasi: memilih nama langsung menyimpan, tanpa tombol Tautkan. Dipakai
+    // pendengar di document supaya baris hasil yang ditukar tanpa muat ulang
+    // (saat reset saringan) tetap ikut terikat.
+    document.addEventListener('change', function (e) {
+        var pilih = e.target.closest ? e.target.closest('select[data-taut]') : null;
 
-            if (! kirim(pilih.form)) {
-                pilih.selectedIndex = 0;
-            }
-        });
+        if (! pilih || pilih.value === '') {
+            return;
+        }
+
+        if (! kirim(pilih.form)) {
+            pilih.selectedIndex = 0;
+        }
     });
 
     // status email tidak lagi ditata tombol hidup/mati: ikon sampah membuka popup

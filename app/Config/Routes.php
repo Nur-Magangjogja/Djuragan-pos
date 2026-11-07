@@ -189,6 +189,9 @@ $routes->group('admin', static function ($routes) {
     $routes->group('reminder', ['filter' => 'auth:admin,superadmin,cs'], static function ($routes) {
         $routes->get('/', 'Reminder::index');
         $routes->get('jumlah', 'Reminder::jumlah');
+        // tandai sudah diingatkan (pindah ke tab Sudah) dan urungkan (kembali ke Belum)
+        $routes->post('selesai', 'Reminder::selesai');
+        $routes->post('batal', 'Reminder::batal');
 
         $routes->group('', ['filter' => 'auth:superadmin'], static function ($routes) {
             $routes->post('pengaturan', 'Reminder::simpan');

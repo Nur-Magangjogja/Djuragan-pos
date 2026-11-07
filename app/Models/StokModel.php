@@ -245,9 +245,10 @@ class StokModel extends Model
      * sewa — termasuk 15 ribu nota lama yang tidak punya tipe, jadi angka mereka
      * tidak berubah saat pemisahan ini dipasang.
      *
-     * Di sini sengaja TIDAK ada syarat pembayaran: tab Masih Disewa memang menandai
-     * fase pekerjaan (barang sudah di tangan penyewa dan dananya sudah masuk), tapi
-     * stok tidak boleh menunggu sejauh itu — lihat `klausaTersedia()`.
+     * Di sini sengaja TIDAK ada syarat pembayaran: bagian Masih Disewa di tab
+     * Disewa memang menandai fase pekerjaan (barang sudah di tangan penyewa dan
+     * dananya sudah masuk), tapi stok tidak boleh menunggu sejauh itu — lihat
+     * `klausaTersedia()`.
      */
     private static function tipeKolam(string $kolam): string
     {
