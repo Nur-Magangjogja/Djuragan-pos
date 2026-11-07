@@ -24,6 +24,11 @@ $sukses   = session()->getFlashdata('sukses');
 <?= $this->section('css') ?>
 <style>
     .reminder-halaman { max-width: 940px; }
+    /* lonceng notifikasi desktop melayang di pojok kanan atas; sisihkan ruang di
+       kanan supaya tombol "Selesai" / pil di ujung kanan kartu tidak tertutupnya */
+    @media (min-width: 992px) {
+        .reminder-halaman { padding-right: 4.5rem; }
+    }
     .reminder-head {
         margin-bottom: 1.25rem;
     }
@@ -221,6 +226,35 @@ $sukses   = session()->getFlashdata('sukses');
     .reminder-pill.normal { background: #e6f4fb; color: #0369a1; }
     .reminder-kosong { padding: 3rem 1rem; text-align: center; color: #94a3b8; }
     .reminder-kosong i { font-size: 2.2rem; display: block; margin-bottom: .6rem; }
+
+    /* dua pil status di atas daftar; angka di dalam pil ikut berubah */
+    .reminder-tab-bar { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1rem; }
+    .reminder-tab {
+        display: inline-flex; align-items: center; gap: .45rem;
+        padding: .4rem .9rem; border-radius: 999px; text-decoration: none;
+        font-size: .82rem; font-weight: 600; color: #475569;
+        background: #fff; border: 1px solid #e2e8f0;
+    }
+    .reminder-tab:hover { border-color: #cbd5e1; }
+    .reminder-tab.aktif { background: #101828; color: #fff; border-color: #101828; }
+    .reminder-tab span {
+        display: inline-flex; align-items: center; justify-content: center;
+        min-width: 1.35rem; height: 1.2rem; padding: 0 .35rem; border-radius: 999px;
+        font-size: .72rem; font-weight: 700; background: #eef1f6; color: #475569;
+    }
+    .reminder-tab.aktif span { background: rgba(255, 255, 255, .2); color: #fff; }
+
+    /* nomor nota kini tautan: tetap tegak & sewarna teks, hanya garis saat hover */
+    .reminder-seri { text-decoration: none; }
+    .reminder-seri:hover { color: #0f172a; text-decoration: underline; }
+
+    /* sisi kanan ditumpuk supaya pil + tombol aksi duduk rapi */
+    .reminder-kanan { display: flex; flex-direction: column; align-items: flex-end; gap: .35rem; }
+    /* tanggal + pil status sejajar satu baris; pil tidak lagi turun di bawah */
+    .reminder-kanan-atas { display: flex; align-items: center; gap: .5rem; }
+    .reminder-kanan-atas .reminder-pill { margin-top: 0; }
+    .reminder-selesai { font-size: .74rem; }
+    .reminder-item.sudah { opacity: .94; }
 </style>
 <?= $this->endSection() ?>
 
@@ -257,11 +291,24 @@ $sukses   = session()->getFlashdata('sukses');
         </div>
     <?php endif; ?>
 
+    <div class="reminder-tab-bar">
+        <a class="reminder-tab <?= $tab === 'belum' ? 'aktif' : '' ?>" href="<?= esc(site_url('admin/reminder?tab=belum')) ?>">
+            <i class="fal fa-bell"></i> Belum Diingatkan
+            <span><?= (int) ($angka['belum'] ?? 0) ?></span>
+        </a>
+        <a class="reminder-tab <?= $tab === 'sudah' ? 'aktif' : '' ?>" href="<?= esc(site_url('admin/reminder?tab=sudah')) ?>">
+            <i class="fal fa-check"></i> Sudah Diingatkan
+            <span><?= (int) ($angka['sudah'] ?? 0) ?></span>
+        </a>
+    </div>
+    
     <?php if ($reminder === []) : ?>
         <div class="reminder-kartu-kecil">
             <div class="reminder-kosong">
                 <i class="fal fa-circle-check text-success"></i>
-                Tidak ada orderan yang mendekati deadline. Aman!
+                <?= $tab === 'sudah'
+                    ? 'Belum ada reminder yang ditandai selesai.'
+                    : 'Tidak ada orderan yang mendekati deadline. Aman!' ?>
             </div>
         </div>
     <?php else : ?>
@@ -270,7 +317,7 @@ $sukses   = session()->getFlashdata('sukses');
                 <?php
                 $deadline = (string) ($r['deadline'] ?? '');
                 $selisih  = (int) round((strtotime($deadline) - strtotime($hari_ini)) / 86400); // hitung hari kalender
-
+    
                 if ($selisih < 0) {
                     $kelas = 'lewat';
                     $label = 'Lewat ' . abs($selisih) . ' hari';
@@ -284,13 +331,13 @@ $sukses   = session()->getFlashdata('sukses');
                     $kelas = 'normal';
                     $label = $selisih . ' hari lagi';
                 }
-
+    
                 $sudah_lunas = in_array((string) ($r['status_pembayaran'] ?? ''), $lunas, true);
+                $id_inv      = (int) ($r['id_invoice'] ?? 0);
                 ?>
-                <a class="reminder-kartu-kecil reminder-item <?= $kelas ?>"
-                    href="<?= esc((string) ($r['tautan'] ?? '')) ?>">
+                <div class="reminder-kartu-kecil reminder-item <?= $kelas ?><?= $tab === 'sudah' ? ' sudah' : '' ?>">
                     <div class="reminder-kiri">
-                        <div class="reminder-seri"><?= esc($r['seri']) ?></div>
+                        <a class="reminder-seri" href="<?= esc((string) ($r['tautan'] ?? '')) ?>"><?= esc($r['seri']) ?></a>
                         <div class="reminder-meta">
                             <span><i class="fal fa-user"></i> <?= esc($r['nama_pelanggan'] ?: 'Tanpa nama') ?></span>
                             <span><i class="fal fa-store"></i> <?= esc($r['nama_juragan'] ?: '-') ?></span>
@@ -301,11 +348,52 @@ $sukses   = session()->getFlashdata('sukses');
                         </div>
                     </div>
                     <div class="reminder-kanan">
-                        <div class="reminder-tanggal"><i class="fal fa-calendar-day me-1"></i><?= esc(tanggal_rincian($deadline)) ?></div>
-                        <span class="reminder-pill <?= $kelas ?>"><?= esc($label) ?></span>
+                        <div class="reminder-kanan-atas">
+                            <span class="reminder-pill <?= $kelas ?>"><?= esc($label) ?></span>
+                            <div class="reminder-tanggal"><i class="fal fa-calendar-day me-1"></i><?= esc(tanggal_rincian($deadline)) ?></div>
+                        </div>
+                        <?php if ($tab === 'belum') : ?>
+                            <button type="button" class="btn btn-sm btn-success reminder-selesai"
+                                data-invoice="<?= $id_inv ?>" data-seri="<?= esc($r['seri'], 'attr') ?>">
+                                <i class="fal fa-check me-1"></i> Selesai
+                            </button>
+                        <?php else : ?>
+                            <?= form_open('admin/reminder/batal', ['class' => 'd-inline reminder-aksi']) ?>
+                                <input type="hidden" name="id_invoice" value="<?= $id_inv ?>">
+                                <button type="submit" class="btn btn-sm btn-link text-muted text-decoration-none" title="Kembalikan ke Belum Diingatkan">
+                                    <i class="fal fa-undo me-1"></i> Urungkan
+                                </button>
+                            <?= form_close() ?>
+                        <?php endif; ?>
                     </div>
-                </a>
+                </div>
             <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+    
+    <?php if ($tab === 'belum' && $reminder !== []) : ?>
+        <!-- satu modal konfirmasi untuk semua tombol Selesai: nomor nota diisi dari
+             tombol yang diklik, jadi tidak ada satu popup per baris -->
+        <div class="modal fade" id="modalReminderSelesai" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <?= form_open('admin/reminder/selesai') ?>
+                        <input type="hidden" name="id_invoice" value="">
+                        <div class="modal-header">
+                            <h5 class="modal-title"><i class="fal fa-bell me-1 text-brand-500"></i> Tandai sudah diingatkan</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="mb-1">Sudah direminder untuk orderan <strong class="reminder-selesai-seri">&mdash;</strong>?</p>
+                            <p class="text-muted small mb-0">Setelah ditandai, reminder ini pindah ke tab "Sudah Diingatkan" dan bisa diurungkan kapan pun.</p>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-sm btn-link text-decoration-none" data-bs-dismiss="modal">Batal</button>
+                            <button type="submit" class="btn btn-sm btn-success"><i class="fal fa-check me-1"></i> Ya, sudah direminder</button>
+                        </div>
+                    <?= form_close() ?>
+                </div>
+            </div>
         </div>
     <?php endif; ?>
 
@@ -315,4 +403,30 @@ $sukses   = session()->getFlashdata('sukses');
 
 <?= $this->section('js') ?>
 <script defer src="https://kit.fontawesome.com/22a9d93fa2.js" data-auto-replace-svg="nest" crossorigin="anonymous"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // tombol "Selesai" mengisi satu modal konfirmasi: id invoice + nomor nota
+        // diambil dari tombol yang diklik, jadi popup tidak dibuat per baris
+        document.addEventListener('click', function (e) {
+            var tombol = e.target.closest ? e.target.closest('.reminder-selesai') : null;
+
+            if (! tombol) {
+                return;
+            }
+
+            var modal = document.getElementById('modalReminderSelesai');
+
+            if (! modal) {
+                return;
+            }
+
+            modal.querySelector('[name="id_invoice"]').value = tombol.getAttribute('data-invoice') || '';
+            modal.querySelector('.reminder-selesai-seri').textContent = tombol.getAttribute('data-seri') || '';
+
+            if (window.bootstrap) {
+                bootstrap.Modal.getOrCreateInstance(modal).show();
+            }
+        });
+    });
+</script>
 <?= $this->endSection() ?>

@@ -1055,7 +1055,7 @@ class InvoiceModel extends Model
      * @param list<int> $hanya id juragan yang boleh dibaca akun ini
      * @return array<int, array<string, mixed>>
      */
-    public function pengingatPenjahit(array $hanya, int $hari, int $limit = 0, int $offset = 0): array
+    public function pengingatPenjahit(array $hanya, int $hari, int $limit = 0, int $offset = 0, ?bool $dikirim = null): array
     {
         $tabel = $this->db->prefixTable('invoice');
         $batas = date('Y-m-d', strtotime('today +' . max(0, $hari) . ' days'));
@@ -1066,11 +1066,19 @@ class InvoiceModel extends Model
                 . ' invoice.keterangan, j.nama_juragan, pl.nama_pelanggan')
             ->join('juragan j', 'j.id_juragan = invoice.juragan_id', 'left')
             ->join('pelanggan pl', 'pl.id_pelanggan = invoice.pemesan_id', 'left')
+            ->join('reminder_penjahit_dikirim rd', 'rd.id_invoice = invoice.id_invoice', 'left')
             ->where('invoice.deleted_at', null)
             ->where(self::klausulPengingatPenjahit($tabel), null, false)
             ->where('invoice.deadline <=', $batas)
             ->orderBy('invoice.deadline', 'ASC')
             ->orderBy('invoice.id_invoice', 'ASC');
+
+        // $dikirim: null = semua, true = hanya yang sudah ditandai, false = belum
+        if ($dikirim === true) {
+            $builder->where('rd.id_dikirim IS NOT NULL', null, false);
+        } elseif ($dikirim === false) {
+            $builder->where('rd.id_dikirim IS NULL', null, false);
+        }
 
         $this->batasiToko($builder, $hanya);
 
@@ -1092,9 +1100,12 @@ class InvoiceModel extends Model
         $batas = date('Y-m-d', strtotime('today +' . max(0, $hari) . ' days'));
 
         $builder = $this->db->table('invoice')
+            ->join('reminder_penjahit_dikirim rd', 'rd.id_invoice = invoice.id_invoice', 'left')
             ->where('invoice.deleted_at', null)
             ->where(self::klausulPengingatPenjahit($tabel), null, false)
-            ->where('invoice.deadline <=', $batas);
+            ->where('invoice.deadline <=', $batas)
+            // badge hanya menghitung yang belum diingatkan (masih perlu tindakan)
+            ->where('rd.id_dikirim IS NULL', null, false);
 
         $this->batasiToko($builder, $hanya);
 

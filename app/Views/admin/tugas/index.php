@@ -44,7 +44,6 @@ $kelola = in_array($level, ['admin', 'superadmin'], true);
 
 $menu = [
     ['url' => 'admin/tugas/dasbor', 'ikon' => 'fa-gauge', 'label' => 'Dasbor Kerja', 'boleh' => true],
-    ['url' => 'admin/tugas/catatan', 'ikon' => 'fa-comments', 'label' => 'Catatan percakapan', 'boleh' => true],
     ['url' => 'admin/tugas/pengaturan', 'ikon' => 'fa-bell', 'label' => 'Aturan reminder', 'boleh' => $kelola],
     ['url' => 'admin/tugas/shift', 'ikon' => 'fa-clock', 'label' => 'Jam shift', 'boleh' => $kelola],
     ['url' => 'admin/tugas/template', 'ikon' => 'fa-layer-group', 'label' => 'Templat Tugas', 'boleh' => $kelola],

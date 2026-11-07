@@ -69,7 +69,7 @@ $tanya = static function (array $ubah): string {
         text-transform: uppercase; letter-spacing: .05em;
     }
 
-    .ckl-saring { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .55rem; padding: 1rem 1rem 1.6rem; border-bottom: 1px solid #eaecf0; }
+    .ckl-saring { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .55rem; padding: 1rem 1.15rem 1.6rem; border-bottom: 1px solid #eaecf0; }
     .ckl-saring .lapangan { display: flex; flex-direction: column; gap: .2rem; }
     .ckl-saring label { font-size: .7rem; font-weight: 700; color: #667085; text-transform: uppercase; letter-spacing: .04em; }
     .ckl-saring .form-control, .ckl-saring .form-select { max-width: 180px; }
@@ -104,7 +104,7 @@ $tanya = static function (array $ubah): string {
     /* dua keadaan kerja, bukan filter bertumpuk: garis bawah tipis seperti tab
        rumah, bukan kotak Bootstrap. Tombol "Buat catatan" duduk sejajar dengan
        tab di ujung kanan baris yang sama */
-    .ckl-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .5rem; padding: .9rem 1rem .2rem; }
+    .ckl-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .5rem; padding: 0 0 1rem; }
     .ckl-tab {
         padding: .3rem .85rem; border-radius: 999px; font-size: .78rem; font-weight: 700;
         color: #475569; text-decoration: none;
@@ -295,7 +295,7 @@ $tanya = static function (array $ubah): string {
         .ckl-tabs { padding-left: .75rem; padding-right: .75rem; }
         .ckl-tabs > .btn { flex: 1 1 100%; }
         .ckl-tab { flex: 1 1 auto; text-align: center; padding-left: .4rem; padding-right: .4rem; }
-        .ckl-saring > .lapangan { flex: 1 1 auto; min-width: 0; }
+        .ckl-saring > .lapangan { flex: 0 1 auto; min-width: 0; }
         .ckl-saring .form-control, .ckl-saring .form-select { max-width: none; }
 
         /* tab kelola toko adalah seluruh isi kartu saat itu dibuka, jadi tidak
@@ -335,23 +335,18 @@ $tanya = static function (array $ubah): string {
         <div class="alert alert-danger py-2" data-flash><?= esc($galat) ?></div>
     <?php endif; ?>
 
+    <div class="ckl-tabs">
+        <a class="ckl-tab <?= ! $tabKelola && $s['kerja'] === 'belum' ? 'aktif' : '' ?>"
+            href="<?= esc($tanya(['kerja' => 'belum', 'tab' => ''])) ?>">Belum dikerjakan</a>
+        <a class="ckl-tab <?= ! $tabKelola && $s['kerja'] === 'sudah' ? 'aktif' : '' ?>"
+            href="<?= esc($tanya(['kerja' => 'sudah', 'tab' => ''])) ?>">Sudah dikerjakan</a>
+        <?php if ($kelolaToko) : ?>
+            <a class="ckl-tab <?= $tabKelola ? 'aktif' : '' ?>"
+                href="<?= esc($tanya(['tab' => 'kelola'])) ?>">Kelola Toko</a>
+        <?php endif; ?>
+    </div>
+
     <div class="ckl-kartu">
-        <div class="ckl-tabs">
-            <a class="ckl-tab <?= ! $tabKelola && $s['kerja'] === 'belum' ? 'aktif' : '' ?>"
-                href="<?= esc($tanya(['kerja' => 'belum', 'tab' => ''])) ?>">Belum dikerjakan</a>
-            <a class="ckl-tab <?= ! $tabKelola && $s['kerja'] === 'sudah' ? 'aktif' : '' ?>"
-                href="<?= esc($tanya(['kerja' => 'sudah', 'tab' => ''])) ?>">Sudah dikerjakan</a>
-            <?php if ($kelolaToko) : ?>
-                <a class="ckl-tab <?= $tabKelola ? 'aktif' : '' ?>"
-                    href="<?= esc($tanya(['tab' => 'kelola'])) ?>">Kelola Toko</a>
-            <?php endif; ?>
-            <?php if ($toko !== [] && ! $tabKelola) : ?>
-                <button type="button" class="btn btn-sm btn-dark ms-auto" id="tombolCatatan"
-                    data-bs-toggle="modal" data-bs-target="#modalCatatan">
-                    <i class="fal fa-plus me-1"></i> Buat catatan
-                </button>
-            <?php endif; ?>
-        </div>
         <?php if ($tabKelola) : ?>
             <!-- isi tab kelola toko hanya dirender saat tabnya dibuka: daftar
                tokonya panjang dan bukan sesuatu yang perlu dilihat orang yang
@@ -484,15 +479,20 @@ $tanya = static function (array $ubah): string {
                 </select>
             </div>
             <div class="lapangan">
-                <label>&nbsp;</label>
                 <div class="d-inline-flex gap-2 align-items-stretch ckl-saring-aksi">
-                    <button type="submit" class="btn btn-sm btn-dark"><i class="fal fa-search"></i> Cari</button>
+                    <button type="submit" class="btn btn-sm btn-dark d-inline-flex align-items-center"><i class="fal fa-search"></i> <span class="d-none d-lg-inline ms-1">Cari</span></button>
                     <button type="button" class="btn btn-sm btn-dark d-inline-flex" data-saring-reset="kerja,batas"
                         title="Kosongkan saringan" aria-label="Kosongkan saringan">
                         <i class="fal fa-sync"></i>
                     </button>
                 </div>
             </div>
+            <?php if ($toko !== []) : ?>
+                <button type="button" class="btn btn-sm btn-dark ms-lg-auto" id="tombolCatatan"
+                    data-bs-toggle="modal" data-bs-target="#modalCatatan">
+                    <i class="fal fa-plus me-1"></i> Buat catatan
+                </button>
+            <?php endif; ?>
         </form>
 
         <div data-saring-wadah>
